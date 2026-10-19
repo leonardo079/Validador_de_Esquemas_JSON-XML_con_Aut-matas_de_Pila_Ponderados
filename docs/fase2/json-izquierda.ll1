@@ -1,0 +1,8 @@
+# GLC de JSON tal como se escribe naturalmente (recursión izquierda).
+# Sirve para mostrar que NO es LL(1) antes de transformarla.
+value    -> object | array | STRING | NUMBER | true | false | null
+object   -> { } | { members }
+members  -> members , pair | pair
+pair     -> STRING : value
+array    -> [ ] | [ elements ]
+elements -> elements , value | value

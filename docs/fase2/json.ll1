@@ -1,0 +1,10 @@
+# GLC de JSON (RFC 8259) en forma LL(1), sobre los tokens del lexer.
+# Terminales: { } [ ] : , STRING NUMBER true false null
+value         -> object | array | STRING | NUMBER | true | false | null
+object        -> { members }
+members       -> pair members_tail | ε
+members_tail  -> , pair members_tail | ε
+pair          -> STRING : value
+array         -> [ elements ]
+elements      -> value elements_tail | ε
+elements_tail -> , value elements_tail | ε

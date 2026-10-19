@@ -1,0 +1,15 @@
+# GLC de XML bien formado (subconjunto) en forma LL(1), sobre los tokens del
+# lexer agrupados así:
+#   STAG    = StartTagOpen NameChar+          (p. ej. "<pedido")
+#   ATTR    = AttrBegin NameChar+ AttrValue…  (p. ej. id="7")
+#   >       = StartTagClose     />  = EmptyTagClose
+#   ETAG    = EndTagOpen NameChar+ EndTagClose (p. ej. "</pedido>")
+#   TEXT    = TextChar+ maximal (el lexer ya descartó comentarios e instrucciones)
+# La igualdad entre el nombre de STAG y el de ETAG NO está en esta gramática:
+# ver gramatica-xml.md.
+document     -> misc element misc
+misc         -> TEXT misc | ε
+element      -> STAG attrs element_rest
+element_rest -> /> | > content ETAG
+attrs        -> ATTR attrs | ε
+content      -> TEXT content | element content | ε

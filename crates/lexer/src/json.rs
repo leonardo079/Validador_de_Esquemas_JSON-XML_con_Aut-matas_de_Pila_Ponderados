@@ -13,6 +13,7 @@
 //! eso la entrada puede llegar en bloques de cualquier tamaño, incluso de un
 //! byte, y un token puede quedar partido entre dos bloques.
 
+use crate::table::{fill, set, tr, Tr};
 use crate::utf8::{Step, Utf8Decoder};
 use crate::{Error, LexError, LexErrorKind, Pos, Sink, Span};
 
@@ -271,40 +272,11 @@ const A_HEX_LAST: u8 = 15;
 const A_LOW_HEX_LAST: u8 = 16;
 const A_UTF8: u8 = 17;
 
-#[derive(Clone, Copy)]
-struct Tr {
-    next: u8,
-    action: u8,
-}
-
-const fn tr(next: usize, action: u8) -> Tr {
-    Tr {
-        next: next as u8,
-        action,
-    }
-}
-
 const ERR: Tr = tr(S_ERR, A_ERR);
 
 type Table = [[Tr; NUM_CLASSES]; NUM_STATES];
 
 static TABLE: Table = build_table();
-
-const fn set(t: &mut Table, s: usize, classes: &[usize], x: Tr) {
-    let mut i = 0;
-    while i < classes.len() {
-        t[s][classes[i]] = x;
-        i += 1;
-    }
-}
-
-const fn fill(t: &mut Table, s: usize, x: Tr) {
-    let mut c = 0;
-    while c < NUM_CLASSES {
-        t[s][c] = x;
-        c += 1;
-    }
-}
 
 const fn build_table() -> Table {
     let mut t = [[ERR; NUM_CLASSES]; NUM_STATES];

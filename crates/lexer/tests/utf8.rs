@@ -83,3 +83,27 @@ proptest! {
         prop_assert_eq!(chars, s);
     }
 }
+
+/// El estado de cada tokenizador cabe en un tamaño fijo, independiente de la
+/// entrada: memoria O(1) en la fase léxica.
+#[test]
+fn memoria_constante() {
+    use std::mem::size_of;
+    assert_eq!(size_of::<Utf8Decoder>(), 8);
+    assert!(
+        size_of::<lexer::json::JsonLexer>() <= 128,
+        "{}",
+        size_of::<lexer::json::JsonLexer>()
+    );
+    assert!(
+        size_of::<lexer::xml::XmlLexer>() <= 128,
+        "{}",
+        size_of::<lexer::xml::XmlLexer>()
+    );
+    println!(
+        "Utf8Decoder: {} B, JsonLexer: {} B, XmlLexer: {} B",
+        size_of::<Utf8Decoder>(),
+        size_of::<lexer::json::JsonLexer>(),
+        size_of::<lexer::xml::XmlLexer>()
+    );
+}

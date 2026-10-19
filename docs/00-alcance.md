@@ -67,7 +67,7 @@ La columna **Cat.** indica la categoría de reconocibilidad:
 
 | Palabra clave | Soporte | Cat. |
 |---|---|---|
-| `minLength`, `maxLength` | En puntos de código. | (a) |
+| `minLength`, `maxLength` | Contador de puntos de código en el marco de la cadena. | (b) |
 | `pattern` | Subconjunto de ECMA-262 compilado a AFD **sin backtracking**: literales, clases `[...]`, `.`, `\d \w \s`, anclas `^ $`, alternancia, grupos, cuantificadores `* + ? {m,n}`. **Rechazados:** retrorreferencias, *lookahead*/*lookbehind*, cuantificadores perezosos o posesivos (mitigación de ReDoS). | (c) |
 | `format` | Solo anotación: se ignora (no se valida). | — |
 
@@ -86,7 +86,7 @@ La columna **Cat.** indica la categoría de reconocibilidad:
 |---|---|---|
 | `properties` | Despacho por nombre de clave mediante trie. | (a) |
 | `required` | Máscara de bits en el marco del objeto; se comprueba al leer `}`. | (b) |
-| `additionalProperties` | `false`, `true` o un esquema. | (b) |
+| `additionalProperties` | `false`, `true` o un esquema: una clave que no está en el trie de `properties` toma la rama por defecto (rechazo o subautómata). | (a) |
 | `minProperties`, `maxProperties` | Contador en el marco del objeto. | (b) |
 | `dependentRequired` | Comprobación al cerrar el objeto con la máscara de bits. | (c) |
 | `dependentSchemas` | Verificación diferida. | (c) |
@@ -125,7 +125,7 @@ Las construcciones XSD se traducen al **mismo AST intermedio** que JSON Schema (
 | `minOccurs`, `maxOccurs` | Contador acotado en el marco de pila (no se expande el modelo). | (b) |
 | `xs:attribute` | `name`, `type`, `use` (`required`/`optional`), `default`, `fixed`. Los requeridos usan máscara de bits. | (b) |
 | `xs:simpleContent` + `xs:extension` | Texto de tipo simple más atributos. | (a) |
-| `xs:simpleType` + `xs:restriction` | Facetas: `enumeration`, `minInclusive`, `maxInclusive`, `minExclusive`, `maxExclusive`, `length`, `minLength`, `maxLength`. | (a) |
+| `xs:simpleType` + `xs:restriction` | Facetas: `enumeration`, `minInclusive`, `maxInclusive`, `minExclusive`, `maxExclusive`, `length`, `minLength`, `maxLength`. | (a); facetas de longitud (b) |
 | Faceta `pattern` | Igual que `pattern` de JSON Schema (sintaxis de regex XSD equivalente al subconjunto de §2.4). | (c) |
 
 ### 3.2 Tipos predefinidos

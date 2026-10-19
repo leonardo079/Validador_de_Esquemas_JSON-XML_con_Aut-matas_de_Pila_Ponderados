@@ -6,8 +6,8 @@ const USO: &str = "\
 uso: schemac <comando>
 
 comandos:
-  dot <utf8|json>   escribe el AFD indicado en formato DOT (Graphviz)
-  version           muestra la versión";
+  dot <utf8|json|xml>  escribe el AFD indicado en formato DOT (Graphviz)
+  version              muestra la versión";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -18,6 +18,7 @@ fn main() -> ExitCode {
             let res = match *afd {
                 "utf8" => lexer::utf8::write_dot(&mut out),
                 "json" => lexer::json::write_dot(&mut out),
+                "xml" => lexer::xml::write_dot(&mut out),
                 _ => return error(&format!("AFD desconocido: {afd}")),
             };
             res.expect("escribir en un String no falla");

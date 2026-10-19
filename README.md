@@ -119,7 +119,7 @@ En Windows sin `make`: `powershell -File scripts/lint.ps1`. La CI (GitHub Action
 
 - Subconjunto soportado de JSON Schema y XSD: [docs/00-alcance.md](docs/00-alcance.md)
 - Formato de los casos de prueba: [tests/README.md](tests/README.md)
-- Issues del plan: `python scripts/crear_issues.py --plan <ruta al plan>` (simulación; `--crear` con `GITHUB_TOKEN` para crearlos)
+- Issues del plan: `python3 scripts/crear_issues.py` muestra un issue por tarea del cronograma (etiquetas `semana-N`); con `--crear` y `GITHUB_TOKEN` los crea, y las tareas ya marcadas quedan cerradas
 
 ## Casos de prueba
 

@@ -1,7 +1,7 @@
 # Tareas comunes del proyecto. En Windows sin `make`, usar scripts/lint.ps1.
 C_SOURCES := $(shell find crates/runtime-c -name '*.c' -o -name '*.h' 2>/dev/null)
 
-.PHONY: all build test fmt fmt-check clippy c-fmt-check lint coverage clean
+.PHONY: all build test fmt fmt-check clippy c-fmt-check lint coverage docs clean
 
 all: build
 
@@ -29,6 +29,16 @@ lint: fmt-check clippy c-fmt-check
 
 coverage:
 	cargo llvm-cov --workspace --lcov --output-path lcov.info
+
+# Diagramas y tablas generados desde el código (requiere Graphviz).
+docs:
+	for a in utf8 json xml; do \
+		cargo run -q -p cli -- dot $$a > docs/fase1/afd-$$a.dot && \
+		dot -Tsvg docs/fase1/afd-$$a.dot -o docs/fase1/afd-$$a.svg; \
+	done
+	python3 scripts/ll1.py docs/fase2/json.ll1 > docs/fase2/ll1-json.md
+	python3 scripts/ll1.py docs/fase2/xml.ll1 > docs/fase2/ll1-xml.md
+	python3 scripts/ll1.py docs/fase2/json-izquierda.ll1 > docs/fase2/ll1-json-izquierda.md || true
 
 clean:
 	cargo clean

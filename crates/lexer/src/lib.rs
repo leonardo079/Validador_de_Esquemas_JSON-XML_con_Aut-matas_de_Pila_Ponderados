@@ -13,7 +13,9 @@
 
 pub mod dot;
 pub mod json;
+mod table;
 pub mod utf8;
+pub mod xml;
 
 /// Posición de un byte en la entrada.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,6 +82,16 @@ pub enum LexErrorKind {
     InvalidUtf8,
     /// La entrada terminó en medio de un token.
     UnexpectedEof,
+    /// XML: `<!DOCTYPE` (DTD prohibida; mitigación de XXE y *billion laughs*).
+    DoctypeForbidden,
+    /// XML: referencia mal formada (`&;`, `&#;`, `&#x;`, `& `).
+    InvalidReference,
+    /// XML: entidad que no es una de las 5 predefinidas (`&foo;`).
+    UndefinedEntity,
+    /// XML: referencia de carácter fuera de la producción `Char` (`&#0;`).
+    InvalidCharRef,
+    /// XML: carácter prohibido por la producción `Char` (controles, U+FFFE, U+FFFF).
+    InvalidXmlChar,
 }
 
 /// Error devuelto por el lexer: léxico, o propagado desde el [`Sink`].
