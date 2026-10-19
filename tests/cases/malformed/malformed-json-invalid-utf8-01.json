@@ -1,0 +1,21 @@
+{
+  "_id": "malformed-json-invalid-utf8-01",
+  "category": "malformed",
+  "format": "json",
+  "description": "Byte 0xFF (nunca válido en UTF-8) dentro de una cadena: error léxico en ese byte.",
+  "phase": 1,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "n": {
+        "type": "string"
+      }
+    }
+  },
+  "payloadBase64": "eyJuIjogIv8ifQ==",
+  "expected": {
+    "valid": false,
+    "errorKind": "lexical",
+    "offset": 7
+  }
+}

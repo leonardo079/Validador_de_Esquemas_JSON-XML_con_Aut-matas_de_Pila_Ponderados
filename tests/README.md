@@ -13,7 +13,7 @@ tests/
 │   ├── non-dpda/    # anyOf/oneOf ambiguos, pattern, uniqueItems…
 │   ├── pumping/     # u·vᵏ·x·yᵏ·z con k creciente
 │   └── extreme/     # payloads enormes, números gigantes, billion laughs…
-└── large/           # payloads generados (ignorado por git)
+└── large/           # caché local de payloads generados (ignorado por git; ningún caso la referencia)
 ```
 
 Un caso = un archivo `cases/<categoría>/<_id>.json`. El nombre del archivo debe coincidir con `_id`.
@@ -49,9 +49,9 @@ Un caso = un archivo `cases/<categoría>/<_id>.json`. El nombre del archivo debe
 | `schema` | sí* | JSON Schema como objeto JSON, o XSD como cadena. |
 | `schemaFile` | sí* | Alternativa a `schema`: ruta relativa a este archivo (p. ej. `pedido.xsd`). |
 | `payload` | sí† | El documento a validar, como cadena (se valida byte a byte en UTF-8). |
-| `payloadFile` | sí† | Alternativa: ruta relativa a este archivo, o `large/…` para payloads generados. |
+| `payloadFile` | sí† | Alternativa: ruta relativa a la carpeta del caso (sin `..`), a un archivo **versionado**. Útil para payloads medianos o binarios legibles. |
 | `payloadBase64` | sí† | Alternativa para bytes que no son UTF-8 válido (casos `malformed`). |
-| `generator` | sí† | Alternativa para `pumping`/`extreme`: `{ "name": "...", "params": { ... } }`; el ejecutor genera el payload. |
+| `generator` | sí† | Alternativa para `pumping`/`extreme` y todo payload grande: `{ "name": "...", "params": { ... } }`; el ejecutor genera el payload. Los payloads grandes nunca se versionan ni se referencian por archivo. |
 | `strategy` | no | Solo `non-dpda`: estrategia de respaldo esperada (`product`, `bounded-determinization`, `deferred`). |
 | `limits` | no | Límites a usar en lugar de los por defecto de `docs/00-alcance.md` §4. |
 | `expected` | sí | Resultado esperado (ver abajo). |
@@ -78,4 +78,4 @@ Las métricas (`metrics`: MB/s, ciclos/byte, memoria, asignaciones, profundidad)
 
 1. Copiar un caso existente de la misma categoría.
 2. Ajustar `_id` (y el nombre del archivo), `description`, `schema`, `payload` y `expected`.
-3. Verificar a mano `pointer` y `offset`; si el caso es grande, usar `payloadFile` o `generator` en lugar de incrustar el payload.
+3. Verificar a mano `pointer` y `offset`; si el caso es grande, usar `generator` en lugar de incrustar el payload.
