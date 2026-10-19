@@ -1,0 +1,32 @@
+digraph utf8 {
+  rankdir=LR;
+  label="AFD UTF-8 (RFC 3629)\n(las transiciones omitidas van al estado de error)";
+  labelloc=t;
+  node [shape=circle, fontname="Helvetica"];
+  edge [fontname="Helvetica", fontsize=10];
+  __start [shape=point, label=""];
+  s0 [shape=doublecircle, label="inicio"];
+  s2 [shape=circle, label="falta 1"];
+  s3 [shape=circle, label="falta 2"];
+  s4 [shape=circle, label="falta 3"];
+  s5 [shape=circle, label="E0·"];
+  s6 [shape=circle, label="ED·"];
+  s7 [shape=circle, label="F0·"];
+  s8 [shape=circle, label="F4·"];
+  __start -> s0;
+  s0 -> s0 [label="00–7F"];
+  s0 -> s2 [label="C2–DF"];
+  s0 -> s3 [label="E1–EC EE EF"];
+  s0 -> s4 [label="F1–F3"];
+  s0 -> s5 [label="E0"];
+  s0 -> s6 [label="ED"];
+  s0 -> s7 [label="F0"];
+  s0 -> s8 [label="F4"];
+  s2 -> s0 [label="80–8F, 90–9F, A0–BF"];
+  s3 -> s2 [label="80–8F, 90–9F, A0–BF"];
+  s4 -> s3 [label="80–8F, 90–9F, A0–BF"];
+  s5 -> s2 [label="A0–BF"];
+  s6 -> s2 [label="80–8F, 90–9F"];
+  s7 -> s3 [label="90–9F, A0–BF"];
+  s8 -> s3 [label="80–8F"];
+}
