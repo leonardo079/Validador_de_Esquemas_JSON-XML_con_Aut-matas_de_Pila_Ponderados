@@ -63,10 +63,12 @@ Un caso = un archivo `cases/<categoría>/<_id>.json`. El nombre del archivo debe
 | Campo | Descripción |
 |---|---|
 | `valid` | `true` si el payload es conforme. |
-| `violations` | Número de violaciones en modo de conformidad total (peso del recorrido en el semianillo tropical). `0` ⇔ `valid`. |
+| `violations` | Número de violaciones en modo de conformidad total (peso del recorrido en el semianillo tropical). `0` ⇔ `valid`. Se omite con `errorKind` `lexical` o `syntax`: esos errores detienen el análisis. |
 | `errorKind` | Solo si `valid` es `false`: `lexical`, `syntax`, `schema` o `limit`. |
 | `pointer` | JSON Pointer (o XPath simple para XML) del **primer** error. |
 | `offset` | Posición en bytes (desde 0) donde se **detecta** el primer error. Por ejemplo, un `required` faltante se detecta en la `}` que cierra el objeto. |
+
+Las pruebas del lexer recorren todo el corpus: tokenizan cada payload entero y en bloques de 1, 7 y 4096 bytes, exigen el mismo resultado, y si `errorKind` es `lexical` comprueban que el error ocurra exactamente en `offset`.
 
 ### Métricas
 

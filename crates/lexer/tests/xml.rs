@@ -7,6 +7,8 @@ use lexer::xml::{Event, XmlLexer};
 use lexer::{Error, LexError, LexErrorKind, Sink, Span};
 use proptest::prelude::*;
 
+mod common;
+
 #[derive(Default)]
 struct Collect(Vec<(Event, Span)>);
 
@@ -383,6 +385,35 @@ fn rangos_y_posiciones() {
     );
     let e = error("<r>\n  <ñ a='1' b=2/>\n</r>".as_bytes());
     assert_eq!((e.at.line, e.at.column), (2, 14));
+}
+
+#[test]
+fn corpus_en_bloques() {
+    let cases = common::corpus();
+    assert!(cases
+        .iter()
+        .any(|c| c.format == "xml" && c.payload.is_some()));
+    for case in cases.iter().filter(|c| c.format == "xml") {
+        if let Some(p) = &case.payload {
+            por_bloques(p, case.lexical_offset, &case.path.display().to_string());
+        }
+    }
+}
+
+/// Tokeniza `bytes` entero y en bloques de 1, 7 y 4096 bytes: los cuatro
+/// resultados deben ser idénticos. Si el caso declara un error léxico, debe
+/// ocurrir en el offset declarado; si no, no debe haber error léxico.
+fn por_bloques(bytes: &[u8], lexical_offset: Option<u64>, what: &str) {
+    let whole = lex_chunked(bytes, usize::MAX);
+    assert_eq!(
+        whole.1.map(|e| e.at.offset),
+        lexical_offset,
+        "{what}: {:?}",
+        whole.1
+    );
+    for size in [1, 7, 4096] {
+        assert_eq!(lex_chunked(bytes, size), whole, "{what}, bloques de {size}");
+    }
 }
 
 #[test]

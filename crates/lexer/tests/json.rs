@@ -6,6 +6,8 @@ use lexer::json::{Event, JsonLexer};
 use lexer::{Error, LexError, LexErrorKind, Sink, Span};
 use proptest::prelude::*;
 
+mod common;
+
 #[derive(Default)]
 struct Collect(Vec<(Event, Span)>);
 
@@ -331,25 +333,36 @@ fn error_detiene_el_lexer() {
 }
 
 #[test]
-fn corpus_de_casos() {
-    for path in std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/cases"))
-        .unwrap()
-        .flat_map(|d| std::fs::read_dir(d.unwrap().path()).unwrap())
-    {
-        let path = path.unwrap().path();
-        if path.extension().is_some_and(|e| e == "json") {
-            let bytes = std::fs::read(&path).unwrap();
-            assert_eq!(
-                lex_chunked(&bytes, usize::MAX).1,
-                None,
-                "{}",
-                path.display()
-            );
-            let case: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-            if let Some(p) = case["payload"].as_str() {
-                assert_eq!(lex(p).1, None, "payload de {}", path.display());
+fn corpus_en_bloques() {
+    let cases = common::corpus();
+    assert!(cases
+        .iter()
+        .any(|c| c.format == "json" && c.payload.is_some()));
+    for case in &cases {
+        let name = case.path.display().to_string();
+        // El archivo de todo caso es JSON, sea cual sea el formato del payload.
+        por_bloques(&case.file, None, &name);
+        if case.format == "json" {
+            if let Some(p) = &case.payload {
+                por_bloques(p, case.lexical_offset, &format!("payload de {name}"));
             }
         }
+    }
+}
+
+/// Tokeniza `bytes` entero y en bloques de 1, 7 y 4096 bytes: los cuatro
+/// resultados deben ser idénticos. Si el caso declara un error léxico, debe
+/// ocurrir en el offset declarado; si no, no debe haber error léxico.
+fn por_bloques(bytes: &[u8], lexical_offset: Option<u64>, what: &str) {
+    let whole = lex_chunked(bytes, usize::MAX);
+    assert_eq!(
+        whole.1.map(|e| e.at.offset),
+        lexical_offset,
+        "{what}: {:?}",
+        whole.1
+    );
+    for size in [1, 7, 4096] {
+        assert_eq!(lex_chunked(bytes, size), whole, "{what}, bloques de {size}");
     }
 }
 

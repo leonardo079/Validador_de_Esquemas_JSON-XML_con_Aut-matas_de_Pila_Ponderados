@@ -1,0 +1,14 @@
+{
+  "_id": "malformed-xml-billion-laughs-01",
+  "category": "malformed",
+  "format": "xml",
+  "description": "Ataque billion laughs: se rechaza en la D de <!DOCTYPE, antes de declarar ninguna entidad.",
+  "phase": 1,
+  "schema": "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\n  <xs:element name=\"lolz\" type=\"xs:string\"/>\n</xs:schema>",
+  "payload": "<?xml version=\"1.0\"?>\n<!DOCTYPE lolz [\n  <!ENTITY lol \"lol\">\n  <!ENTITY lol2 \"&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;\">\n]>\n<lolz>&lol2;</lolz>",
+  "expected": {
+    "valid": false,
+    "errorKind": "lexical",
+    "offset": 24
+  }
+}

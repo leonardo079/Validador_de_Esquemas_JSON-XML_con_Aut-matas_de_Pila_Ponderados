@@ -28,6 +28,42 @@ Clases del tokenizador JSON (`json::CLASS_NAMES`):
 | control | `0x00–0x1F` salvo `\t \n \r` | otro ASCII | resto de `0x21–0x7F` |
 | 80–FF | bytes no ASCII (los procesa el AFD UTF-8) | | |
 
+Clases del AFD UTF-8 (`utf8::CLASS_NAMES`). Separan los bytes iniciales según la longitud de la secuencia y los bytes de continuación según el rango que exige cada caso especial de la sección 2. Del tercer byte en adelante, las tres clases de continuación son válidas siempre:
+
+| Clase | Bytes | Papel |
+|---|---|---|
+| `00–7F` | ASCII | carácter de 1 byte |
+| `80–8F` | continuación | válida como segundo byte salvo tras `E0` y `F0` (sobrelargas) |
+| `90–9F` | continuación | válida como segundo byte salvo tras `E0` (sobrelarga) y `F4` (> U+10FFFF) |
+| `A0–BF` | continuación | válida como segundo byte salvo tras `ED` (sustitutos) y `F4` (> U+10FFFF) |
+| `C0 C1 F5–FF` | prohibidos | nunca aparecen en UTF-8 válido |
+| `C2–DF` | inicial de 2 bytes | |
+| `E0` | inicial de 3 bytes | exige `A0–BF` (evita sobrelargas) |
+| `E1–EC EE EF` | inicial de 3 bytes | |
+| `ED` | inicial de 3 bytes | exige `80–9F` (evita sustitutos) |
+| `F0` | inicial de 4 bytes | exige `90–BF` (evita sobrelargas) |
+| `F1–F3` | inicial de 4 bytes | |
+| `F4` | inicial de 4 bytes | exige `80–8F` (evita > U+10FFFF) |
+
+Clases del tokenizador XML (`xml::CLASS_NAMES`):
+
+| Clase | Bytes | Papel |
+|---|---|---|
+| ␠, `\t \n \r` | espacio | separador en etiquetas; los tres de control se permiten en el texto |
+| `<` `>` `/` `?` `!` `=` | una clase por símbolo | marcado |
+| `"` `'` | una clase por símbolo | delimitan valores de atributo |
+| `&` `#` `;` | una clase por símbolo | referencias |
+| `-` `.` | una clase por símbolo | comentarios; caracteres de nombre no iniciales |
+| `[` `]` | una clase por símbolo | CDATA y la prohibición de `]]>` |
+| `0–9` | dígitos | nombre (no inicial), referencias decimales y hexadecimales |
+| `x` | letra | `&#x` |
+| `a–f B E F` | letras hexadecimales | nombre y referencia hexadecimal |
+| `A` `C` `D` `T` | una clase por letra | `<![CDATA[`; `A C D` también son hexadecimales y `<!D` delata un DOCTYPE |
+| letra `_ :` | resto de letras ASCII, `_`, `:` | inicio de nombre |
+| control | `0x00–0x1F` salvo `\t \n \r` | prohibidos en todo documento XML |
+| otro ASCII | resto de `0x21–0x7F` | texto y valores |
+| 80–FF | bytes no ASCII | los procesa el AFD UTF-8; en nombres se aceptan |
+
 ---
 
 ## 2. UTF-8 (RFC 3629)
@@ -213,6 +249,7 @@ Como el lexer no reserva memoria ni guarda bytes de la entrada, es `no_std` y se
 |---|---|
 | `tests/utf8.rs` | Casos límite de UTF-8; igualdad con `core::str::from_utf8` (propiedad); memoria constante |
 | `tests/json.rs` | Números, escapes, sustitutos, UTF-8, errores con posición, rangos de bytes; bloques de 1, 7 y 4096 bytes; trozos aleatorios (propiedad); **oráculo**: todo JSON serializado por `serde_json` produce los mismos átomos en el mismo orden (propiedad) |
+| `tests/*.rs` (`corpus_en_bloques`) | Cada payload de `tests/cases` (JSON y XML) tokenizado entero y en bloques de 1, 7 y 4096 bytes da el mismo resultado; los casos con error léxico declarado fallan en el offset declarado |
 | `tests/xml.rs` | Etiquetas, atributos, referencias, CDATA, comentarios, DOCTYPE/XXE/*billion laughs*, errores con posición; bloques de 1, 7 y 4096 bytes; trozos aleatorios (propiedad); **oráculo**: documentos generados al azar, con y sin referencias de carácter, producen exactamente sus nombres, atributos y textos (propiedad) |
 
 El oráculo de XML encontró un error real durante el desarrollo: un documento cuyo primer carácter empieza por el byte `0xEF` se confundía con un BOM. Proptest guarda ese caso en `tests/xml.proptest-regressions` y lo reejecuta siempre.

@@ -1,0 +1,13 @@
+{
+  "_id": "valid-xml-pedido-01",
+  "category": "valid",
+  "format": "xml",
+  "description": "Pedido con declaración, comentario, atributo requerido, entidad, CDATA y elemento opcional presente.",
+  "phase": 1,
+  "schema": "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\n  <xs:element name=\"pedido\">\n    <xs:complexType>\n      <xs:sequence>\n        <xs:element name=\"cliente\" type=\"xs:string\"/>\n        <xs:element name=\"nota\" type=\"xs:string\" minOccurs=\"0\"/>\n        <xs:element name=\"total\" type=\"xs:decimal\"/>\n      </xs:sequence>\n      <xs:attribute name=\"id\" type=\"xs:positiveInteger\" use=\"required\"/>\n    </xs:complexType>\n  </xs:element>\n</xs:schema>",
+  "payload": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- pedido de prueba -->\n<pedido id=\"7\">\n  <cliente>Ñandú &amp; Cía</cliente>\n  <nota><![CDATA[entregar <antes> de las 5]]></nota>\n  <total>105.50</total>\n</pedido>",
+  "expected": {
+    "valid": true,
+    "violations": 0
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "_id": "malformed-json-leading-zero-01",
+  "category": "malformed",
+  "format": "json",
+  "description": "Número con cero a la izquierda (01): error léxico en el segundo dígito.",
+  "phase": 1,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "edad": {
+        "type": "integer"
+      }
+    }
+  },
+  "payload": "{\"edad\": 01}",
+  "expected": {
+    "valid": false,
+    "errorKind": "lexical",
+    "offset": 10
+  }
+}
