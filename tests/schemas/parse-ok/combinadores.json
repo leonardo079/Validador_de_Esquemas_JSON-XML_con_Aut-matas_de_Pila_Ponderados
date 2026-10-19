@@ -1,0 +1,28 @@
+{
+  "allOf": [
+    { "type": "object", "minProperties": 1, "maxProperties": 10 },
+    true
+  ],
+  "anyOf": [
+    { "required": ["id"] },
+    { "required": ["codigo"] }
+  ],
+  "oneOf": [],
+  "not": { "required": ["borrado"] },
+  "properties": {
+    "tupla": {
+      "type": "array",
+      "prefixItems": [{ "type": "string" }, { "type": "integer" }],
+      "items": false,
+      "uniqueItems": true
+    },
+    "tarjeta": { "type": "string" }
+  },
+  "dependentRequired": {
+    "tarjeta": ["titular", "vencimiento"],
+    "otro": []
+  },
+  "dependentSchemas": {
+    "tarjeta": { "required": ["cvv"] }
+  }
+}

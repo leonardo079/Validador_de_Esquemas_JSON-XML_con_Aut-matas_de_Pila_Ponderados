@@ -1,0 +1,16 @@
+{
+  "$comment": "Todas las anotaciones de la lista blanca (docs/00-alcance.md §2.1).",
+  "title": "Producto",
+  "description": "Un producto del catálogo",
+  "default": { "nombre": "sin nombre" },
+  "examples": [{ "nombre": "Café" }, "cualquier cosa", 3],
+  "deprecated": false,
+  "readOnly": true,
+  "writeOnly": false,
+  "definitions": {
+    "nombre": { "type": "string", "$comment": "alias de $defs" }
+  },
+  "properties": {
+    "nombre": { "$ref": "#/definitions/nombre" }
+  }
+}

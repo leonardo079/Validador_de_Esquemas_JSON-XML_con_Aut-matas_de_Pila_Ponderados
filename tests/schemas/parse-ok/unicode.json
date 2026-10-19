@@ -1,0 +1,8 @@
+{
+  "description": "Claves y cadenas no ASCII, escapes ñ y un par sustituto 😀",
+  "properties": {
+    "año": { "type": "integer" },
+    "niño": { "type": "string", "pattern": "^[a-záéíóúñ]+$" },
+    "emoji 😀": { "const": "\"\\\/\b\f\n\r\t" }
+  }
+}

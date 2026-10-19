@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "if": { "properties": { "pais": { "const": "CO" } } },
+  "then": { "required": ["nit"] },
+  "x-extension": [1, { "a": null }],
+  "properties": {
+    "if": { "type": "string" }
+  }
+}

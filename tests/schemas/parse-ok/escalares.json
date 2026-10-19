@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "precio": { "type": "number", "minimum": 0, "maximum": 1e6, "multipleOf": 0.01 },
+    "temperatura": { "exclusiveMinimum": -273.15, "exclusiveMaximum": 1E+4 },
+    "codigo": { "type": "string", "pattern": "^[A-Z]{3}-\\d{4}$" },
+    "estado": { "enum": ["activo", "inactivo", null, 0, -1.5, true, [1, 2], {"x": "y"}] },
+    "version": { "const": { "mayor": 2, "menor": 0, "etiquetas": [] } },
+    "nota": { "type": "string", "maxLength": 0 }
+  }
+}

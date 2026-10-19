@@ -38,6 +38,7 @@ docs:
 	done
 	python3 scripts/ll1.py docs/fase2/json.ll1 > docs/fase2/ll1-json.md
 	python3 scripts/ll1.py docs/fase2/xml.ll1 > docs/fase2/ll1-xml.md
+	python3 scripts/ll1.py docs/fase2/esquema.ll1 > docs/fase2/ll1-esquema.md
 	python3 scripts/ll1.py docs/fase2/json-izquierda.ll1 > docs/fase2/ll1-json-izquierda.md || true
 
 clean:

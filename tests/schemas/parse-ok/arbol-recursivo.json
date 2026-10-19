@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "node": {
+      "$anchor": "nodo",
+      "type": "object",
+      "properties": {
+        "value": { "type": "integer" },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/node" } }
+      },
+      "required": ["value"],
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/node"
+}

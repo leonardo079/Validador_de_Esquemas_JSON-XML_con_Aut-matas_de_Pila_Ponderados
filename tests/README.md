@@ -13,6 +13,7 @@ tests/
 │   ├── non-dpda/    # anyOf/oneOf ambiguos, pattern, uniqueItems…
 │   ├── pumping/     # u·vᵏ·x·yᵏ·z con k creciente
 │   └── extreme/     # payloads enormes, números gigantes, billion laughs…
+├── schemas/         # esquemas sueltos para el parser de la Fase 2 (ver abajo)
 └── large/           # caché local de payloads generados (ignorado por git; ningún caso la referencia)
 ```
 
@@ -73,6 +74,15 @@ Las pruebas del lexer recorren todo el corpus: tokenizan cada payload entero y e
 ### Métricas
 
 Las métricas (`metrics`: MB/s, ciclos/byte, memoria, asignaciones, profundidad) **no se guardan en el repositorio**: el ejecutor (T8.9) las añade al documento en la base NoSQL en cada corrida.
+
+## Corpus de esquemas (`schemas/`)
+
+Prueba el parser del metalenguaje (Fase 2, `crates/schema-parser/tests/corpus.rs`) con el texto exacto de cada esquema, para poder fijar línea y columna:
+
+- `schemas/parse-ok/*.json`: deben parsear.
+- `schemas/parse-error/*.json`: deben fallar. Cada archivo tiene una entrada en `schemas/errores.json` con `file`, `code` (`lexical`, `syntax`, `duplicate-key` o `limit`), `line` y `column` (base 1, columnas en puntos de código), un fragmento opcional del mensaje (`contains`) y `description`. La prueba falla si sobra o falta una entrada.
+
+Los esquemas JSON de `cases/` también pasan por el parser.
 
 ## Cómo agregar un caso
 

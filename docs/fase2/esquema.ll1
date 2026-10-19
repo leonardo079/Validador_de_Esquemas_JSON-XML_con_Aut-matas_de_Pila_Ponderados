@@ -1,0 +1,46 @@
+# GLC del metalenguaje de esquemas (subconjunto de JSON Schema 2020-12) en
+# forma LL(1), sobre los tokens del lexer JSON de la Fase 1.
+#
+# Terminales: { } [ ] : , STRING NUMBER true false null, más las clases de
+# palabra clave K_*. Una K_* es un token STRING en posición de clave de un
+# objeto-esquema, clasificado por su valor (ver gramatica-esquema.md §1):
+#   K_STRING   $schema $id $anchor $ref $comment title description format pattern
+#   K_NUMBER   minimum maximum exclusiveMinimum exclusiveMaximum multipleOf
+#              minLength maxLength minItems maxItems minProperties maxProperties
+#   K_BOOL     uniqueItems deprecated readOnly writeOnly
+#   K_SCHEMA   items additionalProperties not
+#   K_MAP      $defs definitions properties dependentSchemas
+#   K_LIST     prefixItems allOf anyOf oneOf
+#   K_VALUE    const default
+#   K_VALUES   enum examples
+#   K_TYPE     type
+#   K_REQUIRED required
+#   K_DEPREQ   dependentRequired
+#   K_OTHER    cualquier otra cadena (fuera del subconjunto; la Fase 3 la rechaza)
+schema           -> { keywords } | true | false
+keywords         -> keyword keywords_tail | ε
+keywords_tail    -> , keyword keywords_tail | ε
+keyword          -> K_STRING : STRING | K_NUMBER : NUMBER | K_BOOL : boolean | K_SCHEMA : schema | K_MAP : schema_map | K_LIST : [ schemas ] | K_VALUE : value | K_VALUES : array | K_TYPE : type_value | K_REQUIRED : string_array | K_DEPREQ : dep_map | K_OTHER : value
+boolean          -> true | false
+type_value       -> STRING | string_array
+string_array     -> [ strings ]
+strings          -> STRING strings_tail | ε
+strings_tail     -> , STRING strings_tail | ε
+schema_map       -> { entries }
+entries          -> STRING : schema entries_tail | ε
+entries_tail     -> , STRING : schema entries_tail | ε
+schemas          -> schema schemas_tail | ε
+schemas_tail     -> , schema schemas_tail | ε
+dep_map          -> { deps }
+deps             -> STRING : string_array deps_tail | ε
+deps_tail        -> , STRING : string_array deps_tail | ε
+# JSON genérico (igual que json.ll1) para const, default, enum, examples y
+# las palabras clave K_OTHER.
+value            -> object | array | STRING | NUMBER | true | false | null
+object           -> { members }
+members          -> pair members_tail | ε
+members_tail     -> , pair members_tail | ε
+pair             -> STRING : value
+array            -> [ elements ]
+elements         -> value elements_tail | ε
+elements_tail    -> , value elements_tail | ε
