@@ -118,3 +118,6 @@ _minted*/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ===== Cobertura =====
+lcov.info

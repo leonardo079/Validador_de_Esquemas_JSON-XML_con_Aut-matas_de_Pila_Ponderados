@@ -1,0 +1,31 @@
+{
+  "_id": "invalid-missing-required-01",
+  "category": "invalid",
+  "format": "json",
+  "description": "Falta la propiedad requerida \"email\" en el segundo usuario.",
+  "phase": 4,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "users": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "email": { "type": "string" }
+          },
+          "required": ["name", "email"]
+        }
+      }
+    }
+  },
+  "payload": "{\"users\": [{\"name\": \"Ana\", \"email\": \"ana@x.co\"}, {\"name\": \"Luis\"}]}",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "pointer": "/users/1",
+    "offset": 64
+  }
+}

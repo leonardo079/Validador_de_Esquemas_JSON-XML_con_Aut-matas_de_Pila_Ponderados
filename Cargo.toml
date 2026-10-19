@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/lexer",
+    "crates/schema-parser",
+    "crates/semantic",
+    "crates/automaton",
+    "crates/codegen",
+    "crates/runtime-rs",
+    "crates/bench",
+    "crates/cli",
+    "server",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT"
+authors = ["Leonardo Mariño"]
+repository = "https://github.com/leonardo079/Validador_de_Esquemas_JSON-XML_con_Aut-matas_de_Pila_Ponderados"
+
+[workspace.dependencies]
+lexer = { path = "crates/lexer" }
+schema-parser = { path = "crates/schema-parser" }
+semantic = { path = "crates/semantic" }
+automaton = { path = "crates/automaton" }
+codegen = { path = "crates/codegen" }
+runtime-rs = { path = "crates/runtime-rs" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[profile.bench]
+debug = true

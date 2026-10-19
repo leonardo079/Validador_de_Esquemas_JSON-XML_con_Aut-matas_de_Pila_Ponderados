@@ -107,6 +107,20 @@ cargo run -p cli -- compile esquema.json --lang c --out build/
 docker compose up
 ```
 
+## Desarrollo
+
+```bash
+make lint        # rustfmt --check + clippy -D warnings + clang-format
+make test        # cargo test --workspace
+make coverage    # cargo llvm-cov (requiere `cargo install cargo-llvm-cov`)
+```
+
+En Windows sin `make`: `powershell -File scripts/lint.ps1`. La CI (GitHub Actions) ejecuta lint, tests en Linux y Windows, comprobación de MSRV y cobertura en cada PR.
+
+- Subconjunto soportado de JSON Schema y XSD: [docs/00-alcance.md](docs/00-alcance.md)
+- Formato de los casos de prueba: [tests/README.md](tests/README.md)
+- Issues del plan: `python scripts/crear_issues.py --plan <ruta al plan>` (simulación; `--crear` con `GITHUB_TOKEN` para crearlos)
+
 ## Casos de prueba
 
 Cada caso guarda esquema, payload, resultado esperado y métricas, y se almacena en la base NoSQL en la nube. Las categorías son:

@@ -1,0 +1,23 @@
+[package]
+name = "cli"
+description = "schemac: compila esquemas JSON Schema / XSD a validadores nativos"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "schemac"
+path = "src/main.rs"
+
+[dependencies]
+lexer.workspace = true
+schema-parser.workspace = true
+semantic.workspace = true
+automaton.workspace = true
+codegen.workspace = true
+
+[lints]
+workspace = true

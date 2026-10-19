@@ -1,0 +1,24 @@
+{
+  "_id": "valid-recursive-tree-01",
+  "category": "valid",
+  "format": "json",
+  "description": "Árbol recursivo vía $ref con dos niveles de hijos.",
+  "phase": 3,
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+      "node": {
+        "type": "object",
+        "properties": {
+          "value": { "type": "integer" },
+          "children": { "type": "array", "items": { "$ref": "#/$defs/node" } }
+        },
+        "required": ["value"],
+        "additionalProperties": false
+      }
+    },
+    "$ref": "#/$defs/node"
+  },
+  "payload": "{\"value\": 1, \"children\": [{\"value\": 2}, {\"value\": 3, \"children\": [{\"value\": 4}]}]}",
+  "expected": { "valid": true, "violations": 0 }
+}
