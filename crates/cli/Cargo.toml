@@ -3,7 +3,6 @@ name = "cli"
 description = "schemac: compila esquemas JSON Schema / XSD a validadores nativos"
 version.workspace = true
 edition.workspace = true
-rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true

@@ -83,7 +83,7 @@ Esquema (JSON Schema / XSD)
 
 ## Requisitos
 
-- [Rust](https://rustup.rs/) estable (1.80+)
+- [Rust](https://rustup.rs/) estable
 - GCC o Clang con soporte C11
 - Node.js 20+ y npm
 - Docker y Docker Compose
@@ -115,7 +115,7 @@ make test        # cargo test --workspace
 make coverage    # cargo llvm-cov (requiere `cargo install cargo-llvm-cov`)
 ```
 
-En Windows sin `make`: `powershell -File scripts/lint.ps1`. La CI (GitHub Actions) ejecuta lint, tests en Linux y Windows, comprobación de MSRV y cobertura en cada PR.
+En Windows sin `make`: `powershell -File scripts/lint.ps1`. La CI (GitHub Actions) ejecuta lint, tests en Linux y Windows, y cobertura en cada PR.
 
 - Subconjunto soportado de JSON Schema y XSD: [docs/00-alcance.md](docs/00-alcance.md)
 - Formato de los casos de prueba: [tests/README.md](tests/README.md)

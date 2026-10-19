@@ -3,7 +3,6 @@ name = "schema-parser"
 description = "Fase 2: parser LL(1) del esquema (JSON Schema / XSD) a AST"
 version.workspace = true
 edition.workspace = true
-rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true

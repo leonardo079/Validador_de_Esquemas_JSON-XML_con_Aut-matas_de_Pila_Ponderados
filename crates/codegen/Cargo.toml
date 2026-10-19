@@ -3,7 +3,6 @@ name = "codegen"
 description = "Fase 5: emisores de validadores C y Rust, y generador de payloads"
 version.workspace = true
 edition.workspace = true
-rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true

@@ -3,7 +3,6 @@ name = "semantic"
 description = "Fase 3: meta-esquema, resolución de $ref/$defs y clasificación de palabras clave"
 version.workspace = true
 edition.workspace = true
-rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
