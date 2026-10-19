@@ -92,6 +92,10 @@ pub enum LexErrorKind {
     InvalidCharRef,
     /// XML: carácter prohibido por la producción `Char` (controles, U+FFFE, U+FFFF).
     InvalidXmlChar,
+    /// XML: instrucción de procesamiento sin nombre (`<??>`, `<? x?>`).
+    InvalidPi,
+    /// El [`Sink`] detuvo el análisis; el lexer no admite más entrada.
+    Aborted,
 }
 
 /// Error devuelto por el lexer: léxico, o propagado desde el [`Sink`].
@@ -103,7 +107,9 @@ pub enum Error<E> {
 
 /// Consumidor de los eventos del lexer.
 ///
-/// Devolver `Err` detiene el análisis (fallo temprano del validador).
+/// Devolver `Err` detiene el análisis (fallo temprano del validador): la
+/// llamada devuelve [`Error::Sink`] y, desde entonces, `feed` y `finish`
+/// devuelven un error léxico [`LexErrorKind::Aborted`].
 pub trait Sink<Ev> {
     type Error;
     fn event(&mut self, ev: Ev, span: Span) -> Result<(), Self::Error>;

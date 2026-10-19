@@ -12,18 +12,19 @@ La gramática trabaja sobre los eventos del lexer de la Fase 1, agrupados en sei
 | `/>` | `EmptyTagClose` | `/>` |
 | `ETAG` | `EndTagOpen` + `NameChar`⁺ + `EndTagClose` | `</pedido>` |
 | `TEXT` | `TextChar`⁺ (máximo) | `Ñandú &amp; Cía` |
+| `PI` | `PiOpen` + `NameChar`⁺ + `PiChar`* + `PiClose` | `<?xml version="1.0"?>` |
 
-Los comentarios, las instrucciones de procesamiento y la declaración `<?xml …?>` no producen eventos: el lexer los reconoce y los descarta, así que no aparecen en la gramática.
+Los comentarios no producen eventos: el lexer los reconoce y los descarta. Las instrucciones de procesamiento, incluida la declaración `<?xml …?>`, sí: forman el terminal `PI`.
 
 ## 2. Gramática LL(1)
 
 ```
 document     → misc element misc
-misc         → TEXT misc | ε
+misc         → TEXT misc | PI misc | ε
 element      → STAG attrs element_rest
 element_rest → /> | > content ETAG
 attrs        → ATTR attrs | ε
-content      → TEXT content | element content | ε
+content      → TEXT content | PI content | element content | ε
 ```
 
 Archivo fuente: [xml.ll1](xml.ll1). FIRST, FOLLOW y la tabla LL(1) están en **[ll1-xml.md](ll1-xml.md)**; el script no encuentra conflictos.
@@ -34,12 +35,12 @@ Comprobación de las condiciones LL(1):
 
 | No terminal | FIRST de cada alternativa | FOLLOW | ¿Disjuntos? |
 |---|---|---|---|
-| `misc` | {`TEXT`} · ε | {`STAG`, `$`} | Sí |
+| `misc` | {`TEXT`} · {`PI`} · ε | {`STAG`, `$`} | Sí |
 | `element_rest` | {`/>`} · {`>`} | — | Sí |
 | `attrs` | {`ATTR`} · ε | {`/>`, `>`} | Sí |
-| `content` | {`TEXT`} · {`STAG`} · ε | {`ETAG`} | Sí |
+| `content` | {`TEXT`} · {`PI`} · {`STAG`} · ε | {`ETAG`} | Sí |
 
-**Restricciones que no expresa la gramática** y que se verifican aparte: el texto de `misc` (fuera del elemento raíz) solo puede tener espacios, y dos atributos de la misma etiqueta no pueden llamarse igual.
+**Restricciones que no expresa la gramática** y que se verifican aparte: el texto de `misc` (fuera del elemento raíz) solo puede tener espacios; dos atributos de la misma etiqueta no pueden llamarse igual; una `PI` de nombre `xml` (la declaración) solo puede ser el primer token del documento y, si trae `encoding`, debe ser `UTF-8`.
 
 ## 3. El emparejamiento de nombres no es libre de contexto
 

@@ -6,7 +6,7 @@ Este documento define formalmente los tokens de JSON y XML como lenguajes regula
 |---|---|---|---|---|
 | UTF-8 | 9 (1 de error) | 12 | [afd-utf8.svg](afd-utf8.svg) | [`utf8.rs`](../../crates/lexer/src/utf8.rs) |
 | Tokenizador JSON | 32 (1 de error) | 31 | [afd-json.svg](afd-json.svg) | [`json.rs`](../../crates/lexer/src/json.rs) |
-| Tokenizador XML | 39 (1 de error) | 28 | [afd-xml.svg](afd-xml.svg) | [`xml.rs`](../../crates/lexer/src/xml.rs) |
+| Tokenizador XML | 42 (1 de error) | 28 | [afd-xml.svg](afd-xml.svg) | [`xml.rs`](../../crates/lexer/src/xml.rs) |
 
 ---
 
@@ -153,7 +153,7 @@ Con `S = [ \t\n\r]+`, `Char` = caracteres permitidos por XML 1.0 (`\t \n \r`, U+
 | Texto | `([^<&] \| Ref)*`, sin contener `]]>` |
 | Comentario | `<!-- ((Char − -) \| -(Char − -))* -->` |
 | CDATA | `<![CDATA[` (Char* sin contener `]]>`) `]]>` |
-| Instrucción de procesamiento | `<?` (Char* sin contener `?>`) `?>` (incluye `<?xml …?>`) |
+| Instrucción de procesamiento | `<?` Nombre (S (Char* sin contener `?>`))? `?>` (incluye `<?xml …?>`) |
 
 Las etiquetas completas son regulares porque son planas: un número arbitrario de atributos se reconoce con un ciclo (`etiqueta␠ → atributo → … → fin valor → etiqueta␠`). Lo que **no** es regular es el anidamiento y el emparejamiento de `<a>` con `</a>`; eso es tarea de la gramática libre de contexto y de la pila (ver [`../fase2/gramatica-xml.md`](../fase2/gramatica-xml.md)).
 
@@ -181,6 +181,10 @@ Las restricciones de valor (la entidad es una de las 5 predefinidas; el número 
 - **`<!DOCTYPE`**: el autómata lo rechaza en el byte `D` de `<!D` (error `DoctypeForbidden`). Sin DTD no se pueden declarar entidades, y sin entidades declaradas no existen la **inyección de entidades externas (XXE)** ni la **expansión recursiva (*billion laughs*)**. La prueba `doctype_y_entidades_prohibidas` incluye los dos ataques.
 - **Entidades no predefinidas** (`&x;`): error `UndefinedEntity`.
 
+### Instrucciones de procesamiento
+
+El lexer exige el nombre (`<??>` es error `InvalidPi`) y entrega el nombre y el contenido como eventos (`PiOpen`, `NameChar`, `PiChar`, `PiClose`) en lugar de descartarlos. Así el parser puede rechazar una declaración `<?xml …?>` que no esté al inicio o cuyo `encoding` no sea UTF-8: la posición de la declaración es una propiedad sintáctica, no léxica. Los comentarios sí se descartan en el lexer porque no afectan la validación.
+
 ---
 
 ## 5. Streaming y complejidad
@@ -195,7 +199,7 @@ Las restricciones de valor (la entidad es una de las 5 predefinidas; el número 
 | `JsonLexer` | 96 bytes |
 | `XmlLexer` | 112 bytes |
 
-Como el lexer no reserva memoria ni guarda bytes de la entrada, es `no_std` y se puede incrustar en el validador generado (se comprueba compilándolo para `wasm32-unknown-unknown`).
+Como el lexer no reserva memoria ni guarda bytes de la entrada, es `no_std` y se puede incrustar en el validador generado (la CI lo comprueba compilándolo para `wasm32-unknown-unknown`).
 
 **Reanudable.** Al terminar un bloque el estado (estado del AFD, registros, posición) queda en la estructura y el siguiente bloque continúa donde iba, aunque un token, un escape `\uXXXX` o una secuencia UTF-8 queden partidos. Las pruebas de propiedad `trozos_arbitrarios` (JSON y XML) verifican que tokenizar la entrada entera y tokenizarla partida en trozos aleatorios da exactamente los mismos eventos y errores.
 

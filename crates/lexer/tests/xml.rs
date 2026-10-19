@@ -87,6 +87,21 @@ fn render(events: &[(Event, Span)]) -> Vec<String> {
                 cur.push('>');
                 flush(&mut out, &mut cur);
             }
+            Event::PiOpen => {
+                flush(&mut out, &mut cur);
+                cur.push_str("<?");
+            }
+            Event::PiChar(c) => {
+                // El nombre no tiene espacios: el primero separa el contenido.
+                if !cur.contains(' ') {
+                    cur.push(' ');
+                }
+                cur.push(c);
+            }
+            Event::PiClose => {
+                cur.push_str("?>");
+                flush(&mut out, &mut cur);
+            }
             Event::TextChar(c) => {
                 if !cur.starts_with('"') {
                     flush(&mut out, &mut cur);
@@ -159,7 +174,21 @@ fn texto_y_espacios() {
 fn declaracion_comentarios_e_instrucciones() {
     assert_eq!(
         tokens("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- comentario - con guion -->\n<?pi a?b ??><r/>"),
-        ["\"\n\n", "<r", "/>"]
+        [
+            r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+            "\"\n\n",
+            "<?pi a?b ??>",
+            "<r",
+            "/>"
+        ]
+    );
+    // El espacio tras el nombre es separador, no contenido.
+    assert_eq!(tokens("<?a?><?b ?>"), ["<?a?>", "<?b?>"]);
+    // La declaración y su contenido llegan al parser, que puede rechazar
+    // un `encoding` distinto de UTF-8 o una declaración tras la raíz.
+    assert_eq!(
+        tokens("<a/><?xml encoding=\"ISO-8859-1\"?>"),
+        ["<a", "/>", "<?xml encoding=\"ISO-8859-1\"?>"]
     );
     assert_eq!(tokens("<!---->"), Vec::<String>::new());
     assert_eq!(tokens("<!-- ñ <a> & -->"), Vec::<String>::new());
@@ -225,6 +254,34 @@ fn referencias_invalidas() {
 }
 
 #[test]
+fn instrucciones_invalidas() {
+    assert_error(b"<??><a/>", LexErrorKind::InvalidPi, 2);
+    assert_error(b"<? x?>", LexErrorKind::InvalidPi, 2);
+    assert_error(b"<?a?b?>", LexErrorKind::InvalidPi, 4);
+    assert_error(b"<?1?>", LexErrorKind::InvalidPi, 2);
+}
+
+#[test]
+fn error_del_sink_detiene_el_lexer() {
+    struct Falla;
+    impl Sink<Event> for Falla {
+        type Error = ();
+        fn event(&mut self, _: Event, _: Span) -> Result<(), ()> {
+            Err(())
+        }
+    }
+    let mut lx = XmlLexer::new();
+    assert_eq!(lx.feed(b"<a", &mut Falla), Err(Error::Sink(())));
+    assert!(matches!(
+        lx.feed(b"/>", &mut Falla),
+        Err(Error::Lex(LexError {
+            kind: LexErrorKind::Aborted,
+            ..
+        }))
+    ));
+}
+
+#[test]
 fn errores_de_marcado() {
     assert_error(b"<a>]]></a>", LexErrorKind::UnexpectedByte, 5);
     assert_error(b"<!-- a -- b -->", LexErrorKind::UnexpectedByte, 9);
@@ -285,6 +342,11 @@ fn fin_de_entrada() {
 fn bom_inicial() {
     assert_eq!(tokens("\u{feff}<a/>"), ["<a", "/>"]);
     assert_eq!(error(b"\xef\xbb").kind, LexErrorKind::InvalidUtf8);
+    // El BOM no ocupa columna.
+    let e = error(b"\xef\xbb\xbf<\x01");
+    assert_eq!((e.at.offset, e.at.column), (4, 2));
+    // Una referencia a U+FEFF en el byte 0 no es un BOM: se conserva.
+    assert_eq!(tokens("&#xFEFF;<a/>"), ["\"\u{feff}", "<a", "/>"]);
     // Texto inicial que empieza por 0xEF y no es BOM.
     assert_eq!(tokens("\u{f000}<a/>"), ["\"\u{f000}", "<a", "/>"]);
 }

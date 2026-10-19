@@ -6,8 +6,10 @@
 //! Subconjunto (`docs/00-alcance.md` §1.2):
 //!
 //! - Etiquetas de apertura, cierre y vacías; atributos con comillas dobles o
-//!   simples; texto; comentarios; secciones CDATA; instrucciones de
-//!   procesamiento (incluida la declaración `<?xml …?>`), que se ignoran.
+//!   simples; texto; comentarios (se descartan); secciones CDATA;
+//!   instrucciones de procesamiento, incluida la declaración `<?xml …?>`.
+//!   De estas se emiten el nombre y el contenido: validar la declaración
+//!   (que vaya al inicio, `encoding` UTF-8) es tarea sintáctica.
 //! - Las 5 entidades predefinidas y las referencias de carácter `&#N;` y
 //!   `&#xN;`. Cualquier otra entidad es error.
 //! - **`<!DOCTYPE` es un error léxico**: sin DTD no hay entidades externas
@@ -54,6 +56,13 @@ pub enum Event {
     EndTagClose,
     /// Carácter de texto o de una sección CDATA, con las referencias resueltas.
     TextChar(char),
+    /// `<?` de una instrucción de procesamiento (se emite con el primer
+    /// carácter del nombre, que llega como `NameChar`).
+    PiOpen,
+    /// Carácter del contenido de la instrucción (tras el espacio que sigue al nombre).
+    PiChar(char),
+    /// `?>`; el `Span` cubre la instrucción completa.
+    PiClose,
 }
 
 // ---------------------------------------------------------------- clases ---
@@ -219,8 +228,8 @@ const S_EMPTY: usize = 12; // `/` dentro de una etiqueta de apertura
 const S_ETAG: usize = 13; // `</`
 const S_ETAG_NAME: usize = 14;
 const S_ETAG_WS: usize = 15;
-const S_PI: usize = 16; // `<?…`
-const S_PI_Q: usize = 17; // `<?…?`
+const S_PI: usize = 16; // contenido de `<?nombre …`
+const S_PI_Q: usize = 17; // contenido seguido de `?`
 const S_BANG: usize = 18; // `<!`
 const S_BANG_DASH: usize = 19; // `<!-`
 const S_COMMENT: usize = 20; // `<!--…`
@@ -241,9 +250,12 @@ const S_REF_HASH: usize = 34; // `&#`
 const S_REF_DEC: usize = 35;
 const S_REF_X: usize = 36; // `&#x`
 const S_REF_HEX: usize = 37;
-const S_ERR: usize = 38;
+const S_PI_START: usize = 38; // `<?`: se exige un nombre
+const S_PI_TARGET: usize = 39; // nombre de la instrucción
+const S_PI_TQ: usize = 40; // `<?nombre?`: solo puede seguir `>`
+const S_ERR: usize = 41;
 
-pub const NUM_STATES: usize = 39;
+pub const NUM_STATES: usize = 42;
 
 pub const STATE_NAMES: [&str; NUM_STATES] = [
     "contenido",
@@ -262,8 +274,8 @@ pub const STATE_NAMES: [&str; NUM_STATES] = [
     "</",
     "nombre cierre",
     "cierre␠",
-    "<?",
-    "<?…?",
+    "<?nombre …",
+    "<?… ?",
     "<!",
     "<!-",
     "comentario",
@@ -284,6 +296,9 @@ pub const STATE_NAMES: [&str; NUM_STATES] = [
     "&#dec",
     "&#x",
     "&#xhex",
+    "<?",
+    "<?nombre",
+    "<?nombre?",
     "error",
 ];
 
@@ -321,6 +336,12 @@ const A_CD_RB: u8 = 18;
 const A_CD_FLUSH1: u8 = 19;
 /// En CDATA, `]]x`: los dos `]` pendientes eran texto; luego `x`.
 const A_CD_FLUSH2: u8 = 20;
+const A_PI_OPEN: u8 = 21;
+/// En el contenido de una instrucción, `??`: el primer `?` era contenido.
+const A_PI_Q: u8 = 22;
+/// En el contenido, `?x`: el `?` retenido era contenido; luego `x`.
+const A_PI_FLUSH: u8 = 23;
+const A_PI_CLOSE: u8 = 24;
 
 const ERR: Tr = tr(S_ERR, A_ERR);
 
@@ -344,7 +365,7 @@ const fn build_table() -> Table {
 
     // Tras `<`.
     set(&mut t, S_LT, &[C_SLASH], tr(S_ETAG, A_ETAG_OPEN));
-    set(&mut t, S_LT, &[C_QMARK], tr(S_PI, A_SKIP));
+    set(&mut t, S_LT, &[C_QMARK], tr(S_PI_START, A_SKIP));
     set(&mut t, S_LT, &[C_BANG], tr(S_BANG, A_SKIP));
     set(&mut t, S_LT, &NAME_START, tr(S_STAG_NAME, A_STAG_OPEN));
 
@@ -394,13 +415,19 @@ const fn build_table() -> Table {
     set(&mut t, S_ETAG_WS, &WSP, tr(S_ETAG_WS, A_SKIP));
     set(&mut t, S_ETAG_WS, &[C_GT], tr(S_CONTENT, A_ETAG_CLOSE));
 
-    // Instrucciones de procesamiento: se validan y se ignoran.
+    // Instrucciones de procesamiento: `<?nombre?>` o `<?nombre S contenido?>`.
+    // El `?` del contenido se retiene hasta saber si cierra.
+    set(&mut t, S_PI_START, &NAME_START, tr(S_PI_TARGET, A_PI_OPEN));
+    set(&mut t, S_PI_TARGET, &NAME_CHAR, tr(S_PI_TARGET, A_CHAR));
+    set(&mut t, S_PI_TARGET, &WSP, tr(S_PI, A_SKIP));
+    set(&mut t, S_PI_TARGET, &[C_QMARK], tr(S_PI_TQ, A_SKIP));
+    set(&mut t, S_PI_TQ, &[C_GT], tr(S_CONTENT, A_PI_CLOSE));
     fill(&mut t, S_PI, tr(S_PI, A_CHAR));
     set(&mut t, S_PI, &[C_QMARK], tr(S_PI_Q, A_SKIP));
     set(&mut t, S_PI, &[C_CTRL], ERR);
-    fill(&mut t, S_PI_Q, tr(S_PI, A_CHAR));
-    set(&mut t, S_PI_Q, &[C_QMARK], tr(S_PI_Q, A_SKIP));
-    set(&mut t, S_PI_Q, &[C_GT], tr(S_CONTENT, A_SKIP));
+    fill(&mut t, S_PI_Q, tr(S_PI, A_PI_FLUSH));
+    set(&mut t, S_PI_Q, &[C_QMARK], tr(S_PI_Q, A_PI_Q));
+    set(&mut t, S_PI_Q, &[C_GT], tr(S_CONTENT, A_PI_CLOSE));
     set(&mut t, S_PI_Q, &[C_CTRL], ERR);
 
     // `<!`: comentario o CDATA. `<!D…` (DOCTYPE) y todo lo demás es error.
@@ -455,6 +482,7 @@ fn error_kind(state: usize, class: usize) -> LexErrorKind {
     match (state, class) {
         (_, C_CTRL) => LexErrorKind::InvalidXmlChar,
         (S_BANG, C_UD) => LexErrorKind::DoctypeForbidden,
+        (S_PI_START | S_PI_TARGET | S_PI_TQ, _) => LexErrorKind::InvalidPi,
         (S_REF..=S_REF_HEX, _) => LexErrorKind::InvalidReference,
         _ => LexErrorKind::UnexpectedByte,
     }
@@ -556,6 +584,13 @@ impl XmlLexer {
         if self.utf8.is_pending() {
             return match self.utf8.step(b) {
                 Step::Pending => Ok(()),
+                // BOM inicial: lo decodifica el AFD UTF-8 como cualquier
+                // carácter y se descarta aquí (no ocupa columna). Una
+                // referencia `&#xFEFF;` al inicio no pasa por aquí y se conserva.
+                Step::Char('\u{feff}') if self.char_start.offset == 0 => {
+                    self.pos.column = 1;
+                    Ok(())
+                }
                 Step::Char(c) => self.emit_char(sink, c),
                 Step::Invalid => self.fail_at(LexErrorKind::InvalidUtf8, self.char_start),
             };
@@ -646,6 +681,17 @@ impl XmlLexer {
                 self.emit_until(sink, Event::TextChar(']'), back(here, 1), here.offset)?;
                 self.char(sink, b)
             }
+            A_PI_OPEN => {
+                let lt = self.tok_start;
+                self.emit_until(sink, Event::PiOpen, lt, lt.offset + 2)?;
+                self.char(sink, b)
+            }
+            A_PI_Q => self.emit_until(sink, Event::PiChar('?'), back(here, 1), here.offset),
+            A_PI_FLUSH => {
+                self.emit_until(sink, Event::PiChar('?'), back(here, 1), here.offset)?;
+                self.char(sink, b)
+            }
+            A_PI_CLOSE => self.emit(sink, Event::PiClose, self.tok_start),
             A_CD_FLUSH2 => {
                 self.emit_until(sink, Event::TextChar(']'), back(here, 2), here.offset - 1)?;
                 self.emit_until(sink, Event::TextChar(']'), back(here, 1), here.offset)?;
@@ -671,21 +717,16 @@ impl XmlLexer {
     }
 
     /// Emite un carácter completo según el estado: nombre, valor de atributo,
-    /// texto, o nada dentro de comentarios e instrucciones de procesamiento.
+    /// texto, contenido de instrucción, o nada dentro de comentarios.
     fn emit_char<S: Sink<Event>>(&mut self, sink: &mut S, c: char) -> Res<S> {
         if !is_xml_char(c.into()) {
             return self.fail_at(LexErrorKind::InvalidXmlChar, self.char_start);
         }
-        // BOM inicial: lo decodifica el AFD UTF-8 como cualquier carácter y se
-        // descarta aquí. Así un texto inicial que empiece por 0xEF no se
-        // confunde con un BOM.
-        if c == '\u{feff}' && self.char_start.offset == 0 {
-            return Ok(());
-        }
         let ev = match usize::from(self.state) {
-            S_STAG_NAME | S_ATTR_NAME | S_ETAG_NAME => Event::NameChar(c),
+            S_STAG_NAME | S_ATTR_NAME | S_ETAG_NAME | S_PI_TARGET => Event::NameChar(c),
             S_VAL_DQ | S_VAL_SQ => Event::AttrValueChar(c),
-            S_PI | S_PI_Q | S_COMMENT | S_COM_D1 => return Ok(()),
+            S_PI | S_PI_Q => Event::PiChar(c),
+            S_COMMENT | S_COM_D1 => return Ok(()),
             _ => Event::TextChar(c),
         };
         self.emit(sink, ev, self.char_start)
@@ -703,7 +744,13 @@ impl XmlLexer {
         start: Pos,
         end: u64,
     ) -> Res<S> {
-        sink.event(ev, Span { start, end }).map_err(Error::Sink)
+        sink.event(ev, Span { start, end }).map_err(|e| {
+            self.failed = Some(LexError {
+                kind: LexErrorKind::Aborted,
+                at: self.pos,
+            });
+            Error::Sink(e)
+        })
     }
 
     fn fail<E>(&mut self, kind: LexErrorKind) -> Result<(), Error<E>> {

@@ -2,7 +2,7 @@
 
 > Versión inicial (T0.6). Se refina en la Fase 3 (T3.5, T3.10) y se consolida en la documentación técnica (T9.1).
 
-Este documento fija la **lista blanca** de palabras clave y construcciones que acepta `schemac`. Todo lo que no aparece aquí está fuera de alcance: en **modo estricto** el compilador lo rechaza con error; en modo normal lo ignora y emite una advertencia (T3.9).
+Este documento fija la **lista blanca** de palabras clave y construcciones que acepta `schemac`. Todo lo que no aparece aquí está fuera de alcance y el compilador lo **rechaza** con un error que nombra la palabra clave y su posición. No hay un modo que la ignore: ignorar, por ejemplo, `if`/`then` haría aceptar payloads que el esquema rechaza sin que el usuario lo note. Las anotaciones de §2.1 sí se aceptan porque no cambian el resultado de la validación.
 
 La columna **Cat.** indica la categoría de reconocibilidad:
 
@@ -24,10 +24,10 @@ La columna **Cat.** indica la categoría de reconocibilidad:
 
 ### 1.2 XML
 
-- XML 1.0 bien formado, **solo UTF-8**. Se acepta la declaración `<?xml version="1.0" encoding="UTF-8"?>`.
+- XML 1.0 bien formado, **solo UTF-8**; un BOM inicial se ignora. Se acepta la declaración `<?xml version="1.0" encoding="UTF-8"?>` únicamente al inicio del documento; un `encoding` distinto de UTF-8 es error. Lo verifica el parser XML (la posición es una propiedad sintáctica): el lexer le entrega el nombre y el contenido de cada instrucción de procesamiento.
 - **Prohibido:** `<!DOCTYPE>`, DTD interna o externa, entidades generales o de parámetro declaradas por el usuario (mitigación de XXE y *billion laughs*). Un `<!DOCTYPE` es error léxico.
 - Se aceptan las cinco entidades predefinidas (`&lt; &gt; &amp; &quot; &apos;`) y referencias de carácter `&#N;` / `&#xN;`.
-- Se aceptan comentarios y secciones CDATA. Otras instrucciones de procesamiento se ignoran.
+- Se aceptan comentarios, secciones CDATA e instrucciones de procesamiento con nombre (`<?nombre …?>`); el validador ignora su contenido. `<??>` sin nombre es error léxico.
 - Espacios de nombres: un único `targetNamespace` (o ninguno). Las declaraciones `xmlns` se aceptan; los elementos se comparan por nombre local dentro de ese espacio de nombres.
 - El texto formado solo por espacios entre elementos se ignora en contenido de solo elementos. No se admite contenido mixto.
 

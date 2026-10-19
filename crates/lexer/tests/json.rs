@@ -144,7 +144,10 @@ fn numeros_invalidos() {
     }
     assert_eq!(error(b"01").kind, LexErrorKind::InvalidNumber);
     assert_eq!(error(b"01").at.offset, 1);
-    assert_eq!(error(b"1.").kind, LexErrorKind::UnexpectedEof);
+    // Un número incompleto al final es un número inválido, igual que `[1.]`.
+    assert_eq!(error(b"1.").kind, LexErrorKind::InvalidNumber);
+    assert_eq!(error(b"-").kind, LexErrorKind::InvalidNumber);
+    assert_eq!(error(b"1e+").kind, LexErrorKind::InvalidNumber);
     assert_eq!(error(b"[1.]").kind, LexErrorKind::InvalidNumber);
     assert_eq!(error(b"+1").kind, LexErrorKind::UnexpectedByte);
 }
@@ -240,7 +243,10 @@ fn bytes_fuera_de_cadena() {
 #[test]
 fn bom_inicial() {
     assert_eq!(tokens("\u{feff}[1]"), ["[", "1", "]"]);
-    assert_eq!(error(b"\xef\xbb").kind, LexErrorKind::UnexpectedEof);
+    assert_eq!(error(b"\xef\xbb").kind, LexErrorKind::InvalidUtf8);
+    // El BOM no ocupa columna.
+    let e = error(b"\xef\xbb\xbf@");
+    assert_eq!((e.at.offset, e.at.column), (3, 1));
     assert_eq!(error(b"\xef\xbbx").kind, LexErrorKind::InvalidUtf8);
     // Un BOM fuera del inicio no se acepta.
     assert_eq!(error(b" \xef\xbb\xbf").kind, LexErrorKind::UnexpectedByte);
@@ -278,6 +284,35 @@ fn rangos_de_los_tokens() {
         .map(|(_, s)| text(s))
         .collect();
     assert_eq!(e_spans, ["\u{e9}", "\\u00e9"]);
+}
+
+#[test]
+fn utf8_truncado_al_final() {
+    // Mismo error que en XML: la secuencia está incompleta.
+    let e = error(b"\"\xe2\x82");
+    assert_eq!((e.kind, e.at.offset), (LexErrorKind::InvalidUtf8, 1));
+}
+
+#[test]
+fn error_del_sink_detiene_el_lexer() {
+    struct Falla;
+    impl Sink<Event> for Falla {
+        type Error = &'static str;
+        fn event(&mut self, _: Event, _: Span) -> Result<(), &'static str> {
+            Err("basta")
+        }
+    }
+    let mut lx = JsonLexer::new();
+    assert_eq!(lx.feed(b"[", &mut Falla), Err(Error::Sink("basta")));
+    let siguiente = lx.feed(b"]", &mut Falla);
+    assert!(matches!(
+        siguiente,
+        Err(Error::Lex(LexError {
+            kind: LexErrorKind::Aborted,
+            ..
+        }))
+    ));
+    assert!(lx.finish(&mut Falla).is_err());
 }
 
 #[test]

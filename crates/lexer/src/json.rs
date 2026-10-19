@@ -482,8 +482,13 @@ impl JsonLexer {
         if let Some(e) = self.failed {
             return Err(Error::Lex(e));
         }
+        // Una secuencia UTF-8 truncada (también un BOM a medias) es un error
+        // de codificación, igual que en XML.
         if (1..3).contains(&self.bom) {
-            return self.fail(LexErrorKind::UnexpectedEof);
+            return self.fail_at(LexErrorKind::InvalidUtf8, Pos::START);
+        }
+        if self.utf8.is_pending() {
+            return self.fail_at(LexErrorKind::InvalidUtf8, self.char_start);
         }
         match usize::from(self.state) {
             S_VALUE => Ok(()),
@@ -491,6 +496,7 @@ impl JsonLexer {
                 self.state = S_VALUE as u8;
                 self.emit_until(sink, Event::NumberEnd, self.tok_start, self.pos.offset)
             }
+            S_MINUS | S_DOT | S_EXP | S_EXP_SIGN => self.fail(LexErrorKind::InvalidNumber),
             _ => self.fail(LexErrorKind::UnexpectedEof),
         }
     }
@@ -499,6 +505,10 @@ impl JsonLexer {
         if self.bom < 3 {
             if b == BOM[usize::from(self.bom)] {
                 self.bom += 1;
+                if self.bom == 3 {
+                    // El BOM no ocupa columna: lo que sigue está en la columna 1.
+                    self.pos.column = 1;
+                }
                 return Ok(());
             }
             if self.bom > 0 {
@@ -631,7 +641,13 @@ impl JsonLexer {
         start: Pos,
         end: u64,
     ) -> Res<S> {
-        sink.event(ev, Span { start, end }).map_err(Error::Sink)
+        sink.event(ev, Span { start, end }).map_err(|e| {
+            self.failed = Some(LexError {
+                kind: LexErrorKind::Aborted,
+                at: self.pos,
+            });
+            Error::Sink(e)
+        })
     }
 
     fn emit_char<S: Sink<Event>>(&mut self, sink: &mut S, c: char) -> Res<S> {
