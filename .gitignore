@@ -121,3 +121,6 @@ desktop.ini
 
 # ===== Cobertura =====
 lcov.info
+
+# ===== Claude Code =====
+.claude/
