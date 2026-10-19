@@ -47,13 +47,31 @@ La gramática anterior acepta `<a></b>`: no exige que el nombre de `ETAG` sea el
 
 **Proposición.** Sea L el lenguaje de los documentos XML bien formados sobre caracteres. L no es libre de contexto.
 
-**Demostración.** Supongamos que L es libre de contexto. Los lenguajes libres de contexto son cerrados bajo intersección con lenguajes regulares y bajo homomorfismos.
+**Herramientas.**
 
-1. Sea R el lenguaje regular `<(a|b)⁺></(a|b)⁺>`. Entonces L ∩ R = { `<w></w>` : w ∈ {a,b}⁺ }, porque en un documento bien formado el nombre de cierre es igual al de apertura.
-2. Sea h el homomorfismo que borra `<` y `>` y lleva `/` a `#` (y deja `a`, `b` igual). Entonces h(L ∩ R) = { w#w : w ∈ {a,b}⁺ }.
-3. El lenguaje de copia { w#w } **no** es libre de contexto. Por el lema de bombeo: dada la constante p, se toma z = aᵖbᵖ#aᵖbᵖ. Cualquier partición z = uvxyz' con |vxy| ≤ p y |vy| ≥ 1 deja vxy dentro de una sola mitad o a caballo del `#` tocando solo bᵖ#aᵖ; en el primer caso bombear desequilibra una mitad respecto de la otra, en el segundo cambia los b de la izquierda y los a de la derecha de forma que las mitades ya no coinciden (o desaparece el `#`). En ningún caso uv²xy²z' pertenece al lenguaje.
+- *Cierre bajo intersección con regulares.* Si L es libre de contexto y R es regular, L ∩ R es libre de contexto (un autómata de pila para L y un AFD para R corren en producto; la pila es la del primero).
+- *Lema de bombeo para lenguajes libres de contexto.* Si M es libre de contexto, existe p ≥ 1 tal que toda z ∈ M con |z| ≥ p se escribe z = u v w x y con |vwx| ≤ p y |vx| ≥ 1, y u vⁱ w xⁱ y ∈ M para todo i ≥ 0.
 
-Como 3 contradice 1 y 2, L no es libre de contexto. ∎
+**Demostración.** Supongamos que L es libre de contexto. Sea R el lenguaje regular `<(a|b)⁺></(a|b)⁺>`. Un documento de R es bien formado exactamente cuando el nombre de cierre es igual al de apertura, así que
+
+  M = L ∩ R = { `<w></w>` : w ∈ {a, b}⁺ }
+
+y M es libre de contexto por la propiedad de cierre. Sea p la constante del lema de bombeo para M y tomemos
+
+  z = `<` aᵖbᵖ `></` aᵖbᵖ `>` ∈ M,
+
+con |z| = 4p + 5 ≥ p. Llamemos A al nombre de apertura y B al de cierre (los dos son aᵖbᵖ). Sea z = u v w x y una descomposición cualquiera con |vwx| ≤ p y |vx| ≥ 1. Hay cuatro casos:
+
+1. **v o x contienen un símbolo `<`, `/` o `>`.** Toda cadena de R tiene exactamente dos `<`, un `/` y dos `>`. Con i = 0 se borra al menos uno, así que u w y ∉ R y por tanto u w y ∉ M.
+2. **v y x están dentro de A** (alguno puede ser vacío). Con i = 0, A pierde |v| + |x| ≥ 1 símbolos y B no cambia: los nombres tienen longitudes distintas y u w y ∉ M.
+3. **v y x están dentro de B.** Simétrico al caso 2.
+4. **v ≠ ε está dentro de A y x ≠ ε está dentro de B.** Entonces vwx contiene la subcadena `></` que separa los nombres. Como |vwx| ≤ p, v está dentro de los últimos p símbolos de A, que son todos b, y x está dentro de los primeros p símbolos de B, que son todos a. Con i = 0 queda A' = aᵖ b^(p−|v|) y B' = a^(p−|x|) bᵖ. A' empieza con p letras a y B' con menos de p, así que A' ≠ B' y u w y ∉ M.
+
+Como v y x no contienen marcas (caso 1 descartado), cada uno está completamente dentro de A o completamente dentro de B, y los casos 2 a 4 agotan las posibilidades. En todos, u v⁰ w x⁰ y ∉ M, lo que contradice el lema de bombeo. Luego M no es libre de contexto, y tampoco lo es L. ∎
+
+**Por qué la cadena es aᵖbᵖ y no aᵖ.** Con z = `<aᵖ></aᵖ>` la demostración falla: tomando v = aᵏ al final de A y x = aᵏ al principio de B, la cadena bombeada es `<a^(p+(i−1)k)></a^(p+(i−1)k)>`, que pertenece a M para todo i, y no hay contradicción. Las b obligan a que, en el caso 4, lo que se bombea a cada lado caiga en bloques distintos (b a la izquierda, a a la derecha), y eso rompe la igualdad de los nombres.
+
+**Por qué se interseca con R.** Bombear directamente sobre L no funciona: con v = `>` se obtiene `<w>></w>`, que **es** XML bien formado porque `>` está permitido en el texto. La intersección con R descarta esas cadenas y deja un lenguaje con forma fija.
 
 Intuitivamente: una pila puede recordar un nombre, pero lo devuelve **al revés** (es una pila), así que sirve para reconocer palíndromos `w#wᴿ` y no copias `w#w`.
 
