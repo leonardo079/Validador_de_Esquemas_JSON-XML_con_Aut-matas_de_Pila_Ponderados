@@ -348,40 +348,92 @@ fn celdas_vacias_dentro_de_los_valores() {
     assert_eq!(where_(r#"{"not": "x"}"#), (1, 9, "syntax"));
 }
 
-/// La detección de claves repetidas es lineal: 10⁵ claves en un objeto se
-/// analizan rápido (con la versión cuadrática anterior, ~18 s en release), y
-/// una repetida al final se sigue detectando en su posición.
+/// Texto de la entrada i-ésima de un objeto (`"p7": true`).
+type Entrada = fn(usize) -> String;
+
+/// Objeto `{"<kw>": {k0: v, k1: v, …}}` con `n` claves.
+fn objeto_con_claves(kw: &str, n: usize, entrada: Entrada) -> String {
+    let claves: Vec<String> = (0..n).map(entrada).collect();
+    format!("{{\"{kw}\": {{{}}}}}", claves.join(","))
+}
+
+/// Tiempo de analizar `veces` veces `src` (que debe aceptarse).
+fn tiempo(src: &str, veces: u32) -> std::time::Duration {
+    let t = std::time::Instant::now();
+    for _ in 0..veces {
+        assert!(parse(src.as_bytes()).is_ok());
+    }
+    t.elapsed()
+}
+
+/// Una estimación de t(4N)/t(N).
+///
+/// - Una pasada de calentamiento de 4N fija el tamaño del lote: cada muestra
+///   dura al menos ~50 ms (en release un análisis de 4N dura unos 16 ms), para
+///   que un corte del planificador sea una fracción pequeña de la muestra.
+/// - La muestra de N analiza 4 veces más textos que la de 4N, así que las dos
+///   duran lo mismo y una expropiación pesa igual en ambas.
+/// - Las muestras se intercalan y se toma el mínimo de cada lado (una
+///   interrupción solo puede alargar una muestra, nunca acortarla).
+fn razon(chico: &str, grande: &str) -> (f64, std::time::Duration, std::time::Duration) {
+    const MUESTRAS: u32 = 3;
+    const DURACION_MIN: f64 = 0.05;
+    let calentamiento = tiempo(grande, 1).as_secs_f64();
+    let lote = (DURACION_MIN / calentamiento.max(1e-6))
+        .ceil()
+        .clamp(1.0, 64.0) as u32;
+    let (mut t1, mut t4) = (std::time::Duration::MAX, std::time::Duration::MAX);
+    for _ in 0..MUESTRAS {
+        t1 = t1.min(tiempo(chico, 4 * lote) / (4 * lote));
+        t4 = t4.min(tiempo(grande, lote) / lote);
+    }
+    (t4.as_secs_f64() / t1.as_secs_f64().max(1e-9), t1, t4)
+}
+
+/// La detección de claves repetidas es lineal en el número de claves de un
+/// objeto. No se compara contra un tope absoluto (dependería de la máquina),
+/// sino la razón t(4N)/t(N): ≈ 4 si es lineal, ≈ 16 si es cuadrática (la
+/// versión con una búsqueda lineal por clave midió 16,8 en debug y entre 26,4 y 27,9 en
+/// release). El umbral 10 queda lejos de las dos.
+///
+/// Con la CPU muy sobresuscrita una estimación suelta puede salir de rango
+/// (ventanas largas de expropiación), así que se repite hasta `INTENTOS` veces
+/// y la prueba falla solo si todas superan el umbral: una versión cuadrática
+/// las supera siempre, y el ruido rara vez se repite. Con el parser lineal
+/// basta el primer intento. N = 10⁴ para que t(N) sea de milisegundos.
 #[test]
 fn muchas_claves_en_tiempo_lineal() {
-    const N: usize = 100_000;
-    let claves =
-        |plantilla: &dyn Fn(usize) -> String| (0..N).map(plantilla).collect::<Vec<_>>().join(",");
-    let t = std::time::Instant::now();
-    ok(&format!(
-        "{{\"properties\": {{{}}}}}",
-        claves(&|i| format!("\"p{i}\": true"))
-    ));
-    ok(&format!(
-        "{{\"const\": {{{}}}}}",
-        claves(&|i| format!("\"p{i}\": 0"))
-    ));
-    ok(&format!(
-        "{{\"$defs\": {{{}}}}}",
-        claves(&|i| format!("\"d{i}\": {{}}"))
-    ));
-    ok(&format!(
-        "{{\"dependentRequired\": {{{}}}}}",
-        claves(&|i| format!("\"r{i}\": []"))
-    ));
-    // Margen amplio para máquinas lentas y compilación sin optimizar; la
-    // versión cuadrática tardaba mucho más que esto incluso optimizada.
-    let dt = t.elapsed();
-    assert!(dt.as_secs() < 10, "demasiado lento: {dt:?}");
+    const N: usize = 10_000;
+    const UMBRAL: f64 = 10.0;
+    const INTENTOS: usize = 3;
+    let casos: [(&str, Entrada); 4] = [
+        ("properties", |i| format!("\"p{i}\": true")),
+        ("const", |i| format!("\"p{i}\": 0")),
+        ("$defs", |i| format!("\"d{i}\": {{}}")),
+        ("dependentRequired", |i| format!("\"r{i}\": []")),
+    ];
+    for (kw, entrada) in casos {
+        let chico = objeto_con_claves(kw, N, entrada);
+        let grande = objeto_con_claves(kw, 4 * N, entrada);
+        let mut medidas = Vec::new();
+        for _ in 0..INTENTOS {
+            let (r, t1, t4) = razon(&chico, &grande);
+            eprintln!("{kw}: t(N) = {t1:?}, t(4N) = {t4:?}, razón = {r:.2}");
+            medidas.push(r);
+            if r < UMBRAL {
+                break;
+            }
+        }
+        assert!(
+            medidas.iter().any(|&r| r < UMBRAL),
+            "{kw}: t(4N)/t(N) = {medidas:.2?} en los {INTENTOS} intentos; \
+             lineal ≈ 4, cuadrático ≈ 16 o más"
+        );
+    }
 
-    let src = format!(
-        "{{\"properties\": {{{}, \"p0\": true}}}}",
-        claves(&|i| format!("\"p{i}\": true"))
-    );
+    // Una clave repetida al final de un objeto grande se detecta en su offset.
+    let src = objeto_con_claves("properties", 4 * N, |i| format!("\"p{i}\": true"));
+    let src = format!("{}, \"p0\": true}}}}", &src[..src.len() - 2]);
     let e = err(&src);
     assert_eq!(e.kind, ErrorKind::DuplicateKey("p0".into()));
     assert_eq!(e.at.offset as usize, src.len() - "\"p0\": true}}".len());

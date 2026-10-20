@@ -5,14 +5,15 @@ de `crates/schema-parser`, ordenadas por prioridad.
 
 ## Corregir ahora
 
-### 1. Prueba de rendimiento que depende del reloj
+### 1. Prueba de rendimiento que depende del reloj — RESUELTO (mitigado)
 
+- **Resuelto (mitigado, no garantizado):** la prueba compara t(4N)/t(N) < 10 con N = 10⁴ en `properties`, `const`, `$defs` y `dependentRequired`, con lotes calibrados de ≥ ~50 ms por muestra y el mínimo de 3 muestras intercaladas, y repite la estimación hasta 3 veces: falla solo si las tres superan el umbral. Con 4× de sobresuscripción (32 `yes` en 8 núcleos): 0/30 fallos en release y 0/10 en debug, aunque las razones sueltas van de 1,1 a 15,9. La búsqueda cuadrática reintroducida sigue fallando (26,4–27,2 en los tres intentos, release). Con carga mayor aún puede fallar sin regresión, con baja probabilidad.
 - **Dónde:** `crates/schema-parser/tests/parser.rs`, prueba `muchas_claves_en_tiempo_lineal`.
-- **Problema:** exige un tope absoluto de 10 s. Hoy tarda unos 1,2 s en debug, pero
-  en una CI muy cargada puede fallar sin que haya un error real.
-- **Corrección:** medir el tiempo con N y con 4N claves y comprobar que la razón es
-  menor que 8. Si el algoritmo es lineal, la razón ronda 4; si es cuadrático, ronda 16.
-  Así la prueba no depende de la velocidad de la máquina.
+- **Problema (original):** exigía un tope absoluto de 10 s; en una CI muy cargada
+  podía fallar sin que hubiera un error real.
+- **Corrección propuesta originalmente:** medir el tiempo con N y con 4N claves y
+  comprobar que la razón es menor que 8. La segunda auditoría mostró que una sola
+  estimación no aguanta carga alta; de ahí los lotes, el umbral 10 y los reintentos.
 
 ## Decidir antes del commit
 
