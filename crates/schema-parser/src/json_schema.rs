@@ -30,6 +30,26 @@ use crate::token::{Tok, Token, Tokens};
 /// payloads (`docs/00-alcance.md` §4).
 pub const DEFAULT_MAX_DEPTH: u32 = 256;
 
+/// Tope de la profundidad configurable con [`parse_with_max_depth`].
+///
+/// Es la mayor profundidad cuyo peor caso se midió y cabe en los 2 MiB de
+/// pila que Rust y tokio dan por defecto a cada hilo, también sin optimizar
+/// (~5,4 KiB por nivel: 256 niveles ≈ 1,34 MiB; ver
+/// `docs/fase2/gramatica-esquema.md` §6). Con 384 niveles el modo `dev` ya
+/// pasaría de 2 MiB, así que no hay margen para subirlo sin cambiar la
+/// recursión por una pila explícita (`docs/fase2/pendientes.md` §5).
+///
+/// La garantía vale en hilos con **al menos 2 MiB de pila**. El hilo
+/// principal de Windows tiene 1 MiB: ahí, sin optimizar, un esquema cercano a
+/// 256 niveles puede desbordar la pila. `schemac` y el servidor (y cualquier
+/// llamador cuyo hilo no tenga una pila conocida de ≥ 2 MiB) deben llamar al
+/// parser en un hilo creado con `std::thread::Builder::stack_size` de 2 MiB o
+/// más (regla D7 del plan).
+///
+/// Solo limita la recursión del compilador sobre el esquema; la profundidad
+/// de los payloads (`SV_MAX_DEPTH`, Fase 5) es independiente.
+pub const MAX_DEPTH_LIMIT: u32 = DEFAULT_MAX_DEPTH;
+
 /// Analiza un esquema JSON completo. Devuelve el AST o el primer error, con
 /// su línea y columna.
 pub fn parse(input: &[u8]) -> Result<Schema, ParseError> {
@@ -37,8 +57,17 @@ pub fn parse(input: &[u8]) -> Result<Schema, ParseError> {
 }
 
 /// Como [`parse`], con otra profundidad máxima de anidamiento de `{`/`[`.
+///
+/// `max_depth` se recorta a [`MAX_DEPTH_LIMIT`]: un valor mayor no puede
+/// garantizar que la recursión quepa en la pila de un hilo, y dejarlo pasar
+/// convertiría un esquema muy anidado en un desbordamiento de pila (caída del
+/// proceso) en lugar de un error. El recorte no es silencioso: si la entrada
+/// lo supera, el error [`ErrorKind::TooDeep`] informa el máximo efectivo.
+///
+/// Garantizado en hilos con ≥ 2 MiB de pila (ver [`MAX_DEPTH_LIMIT`]); lo
+/// mismo vale para [`parse`].
 pub fn parse_with_max_depth(input: &[u8], max_depth: u32) -> Result<Schema, ParseError> {
-    parse_boxed(input, max_depth).map_err(|e| *e)
+    parse_boxed(input, max_depth.min(MAX_DEPTH_LIMIT)).map_err(|e| *e)
 }
 
 fn parse_boxed(input: &[u8], max_depth: u32) -> Res<Schema> {

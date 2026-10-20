@@ -227,6 +227,29 @@ pub fn write_dot(w: &mut impl core::fmt::Write) -> core::fmt::Result {
             accepting: &|s| s == ACCEPT,
             error: REJECT,
             guarded: &[],
+            register_errors: &[],
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+    use super::*;
+    use crate::table::{distintas, en_lexico_md};
+    use std::format;
+
+    /// Cifras de `docs/fase1/lexico.md` (tabla inicial y §1): las 12 clases
+    /// son δ-distintas.
+    #[test]
+    fn particion_de_clases() {
+        let delta = distintas(NUM_CLASSES, |c| {
+            core::array::from_fn::<_, NUM_STATES, _>(|s| TABLE[s][c])
+        });
+        assert_eq!((NUM_CLASSES, delta), (12, 12));
+        en_lexico_md(&format!(
+            "| UTF-8 | {NUM_STATES} (1 de error) | {NUM_CLASSES} |"
+        ));
+        en_lexico_md(&format!("| UTF-8 | {NUM_CLASSES} | {delta} | — | — |"));
+    }
 }

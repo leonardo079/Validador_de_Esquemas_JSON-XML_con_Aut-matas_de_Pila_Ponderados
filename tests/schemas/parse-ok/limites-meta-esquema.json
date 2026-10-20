@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ejemplo.co/limites.json#",
+  "$anchor": "_raiz-1.0",
+  "$comment": "Valores en el borde de lo que admite el meta-esquema restringido (docs/fase3/meta-esquema.md).",
+  "type": ["object", "array"],
+  "minProperties": 0,
+  "maxProperties": 1.0,
+  "minItems": -0,
+  "maxItems": 1e2,
+  "multipleOf": 1e-3,
+  "required": [],
+  "dependentRequired": { "a": ["b", "c"], "b": [] },
+  "enum": [1, 1.0, "uno"],
+  "format": "ipv4",
+  "$ref": "#/$defs/x",
+  "$defs": {
+    "x": { "$ref": "#ancla" },
+    "y": { "$anchor": "ancla", "minLength": 10.0e-1, "maxLength": 1.50e1 }
+  },
+  "prefixItems": [true],
+  "allOf": [{}],
+  "anyOf": [false],
+  "oneOf": [true],
+  "properties": { "if": { "type": "string" }, "$id": { "$comment": "una propiedad, no $id" } }
+}

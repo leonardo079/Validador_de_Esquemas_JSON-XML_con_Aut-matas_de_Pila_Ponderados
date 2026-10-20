@@ -1,5 +1,7 @@
 # Fase 2 — Gramática libre de contexto de JSON
 
+> **Cifras manuales.** Los archivos `ll1-*.md` los genera `scripts/ll1.py` (`make docs`) y la CI los comprueba (`make docs-check`). En cambio, la tabla de §3 (alternativas, FIRST y FOLLOW) de este documento es un resumen escrito a mano de esa salida: quien cambie la gramática (`json.ll1`) debe actualizarla en el mismo cambio y compararlos con el `ll1-json.md` regenerado.
+
 La sintaxis de JSON no es regular: el lenguaje de los arreglos balanceados `[ᵏ ]ᵏ` ya exige contar, y por el lema de bombeo ningún AFD lo reconoce. Se describe con una gramática libre de contexto (GLC) sobre los **tokens** que entrega el lexer de la Fase 1, no sobre caracteres.
 
 Terminales: `{ } [ ] : ,` `STRING` `NUMBER` `true` `false` `null`.

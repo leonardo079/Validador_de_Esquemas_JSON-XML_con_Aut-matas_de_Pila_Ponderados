@@ -230,6 +230,34 @@ fn doctype_y_entidades_prohibidas() {
         2,
     );
     assert_error(b"<!ENTITY x 'y'>", LexErrorKind::UnexpectedByte, 2);
+    // `<!DOCTYPE` se rechaza en mayúsculas, minúsculas y combinaciones, en el
+    // byte que sigue a `<!`, con cualquier tamaño de bloque.
+    for (doc, off) in [
+        (&b"<!DOCTYPE r><r/>"[..], 2),
+        (b"<!doctype r><r/>", 2),
+        (b"<!DocType r><r/>", 2),
+        (b"<!dOCTYPE r><r/>", 2),
+        (b"<?xml version=\"1.0\"?>\n<!doctype r [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><r>&x;</r>", 24),
+    ] {
+        for chunk in [1, 7, 4096] {
+            let e = lex_chunked(doc, chunk).1.expect("se esperaba error");
+            assert_eq!(
+                (e.kind, e.at.offset),
+                (LexErrorKind::DoctypeForbidden, off),
+                "{:?} en bloques de {chunk}",
+                String::from_utf8_lossy(doc)
+            );
+        }
+    }
+    // Otras letras tras `<!` no son DOCTYPE; `d` sigue siendo hexadecimal y
+    // letra de nombre.
+    assert_error(b"<!e>", LexErrorKind::UnexpectedByte, 2);
+    assert_error(b"<!x>", LexErrorKind::UnexpectedByte, 2);
+    assert_eq!(
+        tokens("<dd d=\"&#xd;&#xDd;\">d</dd>"),
+        ["<dd", "@d=\r\u{dd}", ">", "\"d", "</dd>"]
+    );
+    assert_eq!(tokens("<!--d--><![CDATA[d]]><d/>"), ["\"d", "<d", "/>"]);
     assert_error(b"<a>&x;</a>", LexErrorKind::UndefinedEntity, 3);
     assert_error(b"<a>&lol2;</a>", LexErrorKind::UndefinedEntity, 3);
     assert_error(b"<a>&quote;</a>", LexErrorKind::UndefinedEntity, 3);

@@ -1,7 +1,8 @@
 //! Exportación de AFD de tabla a DOT (Graphviz).
 //!
 //! Los diagramas de la documentación se generan desde las mismas tablas que
-//! ejecuta el lexer, así que no pueden desincronizarse del código.
+//! ejecuta el lexer (`make docs`; la CI comprueba los `.dot` con
+//! `make docs-check`).
 
 use core::fmt::{self, Write};
 
@@ -22,6 +23,10 @@ pub struct Dfa<'a> {
     /// Transiciones que no están en la tabla porque dependen de un registro
     /// (`desde`, `hacia`, etiqueta con la guarda). Se dibujan punteadas.
     pub guarded: &'a [(usize, usize, &'a str)],
+    /// Transiciones al error que tampoco están en la tabla porque dependen de
+    /// un registro (valor de `\uXXXX`, nombre de entidad…). No se dibujan: se
+    /// enumeran en la leyenda, una por línea.
+    pub register_errors: &'a [&'a str],
 }
 
 impl fmt::Debug for Dfa<'_> {
@@ -42,10 +47,22 @@ pub fn write(w: &mut impl Write, dfa: &Dfa<'_>) -> fmt::Result {
     writeln!(w, "  rankdir=LR;")?;
     write!(w, "  label=\"")?;
     escape(w, dfa.title)?;
-    writeln!(
-        w,
-        "\\n(las transiciones omitidas van al estado de error)\";"
-    )?;
+    write!(w, "\\n(las transiciones omitidas van al estado de error")?;
+    if !dfa.guarded.is_empty() {
+        write!(w, "; las punteadas dependen de un registro")?;
+    }
+    write!(w, ")")?;
+    if !dfa.register_errors.is_empty() {
+        write!(
+            w,
+            "\\nTambién van al error, según un registro y sin dibujarse:"
+        )?;
+        for e in dfa.register_errors {
+            write!(w, "\\n• ")?;
+            escape(w, e)?;
+        }
+    }
+    writeln!(w, "\";")?;
     writeln!(w, "  labelloc=t;")?;
     writeln!(w, "  node [shape=circle, fontname=\"Helvetica\"];")?;
     writeln!(w, "  edge [fontname=\"Helvetica\", fontsize=10];")?;

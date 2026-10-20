@@ -1,0 +1,7 @@
+{
+  "properties": {
+    "a": { "if": true }
+  },
+  "minLength": -1,
+  "contains": {}
+}

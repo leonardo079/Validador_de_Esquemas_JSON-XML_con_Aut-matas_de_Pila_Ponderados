@@ -1,0 +1,4 @@
+{
+  "properties": { "pais": { "const": { "codigo": "CO" } } },
+  "$ref": "#/properties/pais/const/codigo"
+}

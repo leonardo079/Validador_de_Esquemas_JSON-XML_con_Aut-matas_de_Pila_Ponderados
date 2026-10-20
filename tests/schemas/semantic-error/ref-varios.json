@@ -1,0 +1,8 @@
+{
+  "properties": {
+    "a": { "$ref": "#/$defs/falta" },
+    "b": { "$ref": "#/$defs/x/minLength" }
+  },
+  "$defs": { "x": { "minLength": 1, "$anchor": "x" } },
+  "allOf": [{ "$anchor": "x" }]
+}

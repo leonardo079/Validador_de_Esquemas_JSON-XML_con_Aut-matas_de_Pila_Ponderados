@@ -39,11 +39,11 @@ La columna **Cat.** indica la categoría de reconocibilidad:
 
 | Palabra clave | Soporte | Cat. |
 |---|---|---|
-| `$schema` | Solo `https://json-schema.org/draft/2020-12/schema` (o ausente). Otro valor → error. | — |
+| `$schema` | Solo `https://json-schema.org/draft/2020-12/schema` (o ausente), y solo en la raíz. Se admite también con un `#` final vacío (`…/schema#`), que según la RFC 3986 es el mismo recurso. Otro valor → error. | — |
 | `$id` | Solo en la raíz, como URI base. No se descargan recursos remotos. | — |
 | `$defs` (y `definitions` como alias) | Tabla de símbolos de subesquemas. | — |
-| `$ref` | Solo referencias **locales**: `#`, `#/$defs/x`, JSON Pointer dentro del documento, `#ancla`. Recursión permitida si es productiva (T3.4). | (a) |
-| `$anchor` | Anclas locales. | — |
+| `$ref` | Solo referencias **locales**: `#`, `#/$defs/x`, JSON Pointer dentro del documento, `#ancla` (la cadena vacía equivale a `#`). El destino debe ser un subesquema, no un literal (`const`, `enum`, `default`…). Recursión permitida si es productiva (T3.4). | (a) |
+| `$anchor` | Anclas locales, únicas en el documento. | — |
 | `$comment`, `title`, `description`, `default`, `examples`, `deprecated`, `readOnly`, `writeOnly` | Anotaciones: se aceptan y se ignoran. | — |
 | Esquemas booleanos `true` / `false` | `true` acepta cualquier valor; `false` rechaza. | (a) |
 
@@ -104,13 +104,15 @@ La columna **Cat.** indica la categoría de reconocibilidad:
 
 `if`/`then`/`else`, `contains`/`minContains`/`maxContains`, `patternProperties`, `propertyNames`, `unevaluatedProperties`, `unevaluatedItems`, `$dynamicRef`, `$dynamicAnchor`, `$vocabulary`, `contentEncoding`, `contentMediaType`, `contentSchema`, `$ref` remotos, validación de `format`, la forma booleana de `exclusiveMinimum`/`exclusiveMaximum` y la forma de arreglo de `items` (Draft 2019-09 y anteriores).
 
+El compilador rechaza cada una de estas palabras clave (y cualquier otra que no esté en la lista blanca) con un mensaje que dice su categoría y por qué no se soporta; las reglas exactas de valor de las soportadas (rangos, nombres de `type`, repetidos…) están en [fase3/meta-esquema.md](fase3/meta-esquema.md).
+
 Candidatos a añadirse si sobra tiempo: `contains` (contador + producto), `patternProperties` y `propertyNames` (AFD sobre las claves).
 
 ---
 
 ## 3. XSD (subconjunto de XML Schema 1.0)
 
-Las construcciones XSD se traducen al **mismo AST intermedio** que JSON Schema (T2.8). La regla *Unique Particle Attribution* de XSD obliga a que los modelos de contenido sean expresiones regulares deterministas, lo que encaja directamente con la construcción de un AFD por modelo de contenido.
+Las construcciones XSD se analizan a un **AST propio de XSD** y bajan a la **misma IR** que JSON Schema (T2.8; decisión D3 del plan): el parser XSD no reutiliza el AST de JSON Schema. La regla *Unique Particle Attribution* de XSD obliga a que los modelos de contenido sean expresiones regulares deterministas, lo que encaja directamente con la construcción de un AFD por modelo de contenido.
 
 ### 3.1 Construcciones soportadas
 
@@ -160,4 +162,4 @@ Todos son configurables en tiempo de compilación o en `sv_limits_t` (T5.2, T6.4
 
 - Si `not` sobre subesquemas de categoría (a)/(b) se implementa como complemento real del autómata o siempre como verificación diferida.
 - Semántica exacta de `additionalProperties` combinado con `allOf` (en 2020-12 no "ve" las `properties` de las ramas).
-- Correspondencia exacta entre `xs:sequence` (orden fijo) y los objetos JSON (sin orden) en el AST común.
+- Correspondencia exacta entre `xs:sequence` (orden fijo) y los objetos JSON (sin orden) en la IR común.

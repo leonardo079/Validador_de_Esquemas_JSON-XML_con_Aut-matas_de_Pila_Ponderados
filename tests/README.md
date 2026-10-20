@@ -13,11 +13,11 @@ tests/
 │   ├── non-dpda/    # anyOf/oneOf ambiguos, pattern, uniqueItems…
 │   ├── pumping/     # u·vᵏ·x·yᵏ·z con k creciente
 │   └── extreme/     # payloads enormes, números gigantes, billion laughs…
-├── schemas/         # esquemas sueltos para el parser de la Fase 2 (ver abajo)
+├── schemas/         # esquemas sueltos para el parser (Fase 2) y el análisis semántico (Fase 3) (ver abajo)
 └── large/           # caché local de payloads generados (ignorado por git; ningún caso la referencia)
 ```
 
-Un caso = un archivo `cases/<categoría>/<_id>.json`. El nombre del archivo debe coincidir con `_id`.
+Un caso = un archivo `cases/<categoría>/<_id>.json`. El nombre del archivo debe coincidir con `_id`. Todo `.json` del primer nivel de una carpeta de categoría se lee como un caso; los archivos que referencian `schemaFile`/`payloadFile` con extensión `.json` van en una subcarpeta (p. ej. `cases/valid/esquemas/`), que el recorrido ignora. En `cases/` solo hay carpetas de categoría.
 
 ## Formato de un caso
 
@@ -47,10 +47,10 @@ Un caso = un archivo `cases/<categoría>/<_id>.json`. El nombre del archivo debe
 | `format` | sí | `json` o `xml`. |
 | `description` | sí | Qué prueba el caso, en una frase. |
 | `phase` | no | Fase del plan que introdujo el caso (para filtrar). |
-| `schema` | sí* | JSON Schema como objeto JSON, o XSD como cadena. |
-| `schemaFile` | sí* | Alternativa a `schema`: ruta relativa a este archivo (p. ej. `pedido.xsd`). |
+| `schema` | sí* | JSON Schema como objeto o booleano (`true`/`false`), o XSD como cadena. |
+| `schemaFile` | sí* | Alternativa a `schema`: ruta relativa a la carpeta del caso, formada solo por nombres (sin `./`, `..` ni rutas absolutas), a un archivo que debe existir (p. ej. `pedido.xsd`). Si es `.json`, va en una subcarpeta (p. ej. `esquemas/arbol.json`). |
 | `payload` | sí† | El documento a validar, como cadena (se valida byte a byte en UTF-8). |
-| `payloadFile` | sí† | Alternativa: ruta relativa a la carpeta del caso (sin `..`), a un archivo **versionado**. Útil para payloads medianos o binarios legibles. |
+| `payloadFile` | sí† | Alternativa: ruta relativa a la carpeta del caso, formada solo por nombres (sin `./`, `..` ni rutas absolutas), a un archivo **versionado**. Útil para payloads medianos o binarios legibles. Si es `.json`, va en una subcarpeta. |
 | `payloadBase64` | sí† | Alternativa para bytes que no son UTF-8 válido (casos `malformed`). |
 | `generator` | sí† | Alternativa para `pumping`/`extreme` y todo payload grande: `{ "name": "...", "params": { ... } }`; el ejecutor genera el payload. Los payloads grandes nunca se versionan ni se referencian por archivo. |
 | `strategy` | no | Solo `non-dpda`: estrategia de respaldo esperada (`product`, `bounded-determinization`, `deferred`). |
@@ -69,6 +69,8 @@ Un caso = un archivo `cases/<categoría>/<_id>.json`. El nombre del archivo debe
 | `pointer` | JSON Pointer (o XPath simple para XML) del **primer** error. |
 | `offset` | Posición en bytes (desde 0) donde se **detecta** el primer error. Por ejemplo, un `required` faltante se detecta en la `}` que cierra el objeto. |
 
+**Comprobación automática del formato.** Al leer el corpus (`crates/lexer/tests/common/mod.rs`, función `validar_formato`, que corre en cada `cargo test`), cada caso debe cumplir: `_id` igual al nombre del archivo sin `.json` y con la forma `<categoría>-<tema>-<NN>` (minúsculas, dígitos y guiones; NN de al menos dos dígitos); `category` una de las seis e igual a su carpeta; `format` `json` o `xml`; `description` no vacía; `phase` entero si aparece; exactamente uno de `schema`/`schemaFile` (objeto o booleano para `json`, cadena XSD para `xml`); `schemaFile` y `payloadFile` relativas y formadas solo por nombres (sin `./`, `..` ni rutas absolutas), en una subcarpeta si son `.json`, y existentes; exactamente una forma de payload; `strategy` solo en `non-dpda` y con uno de sus tres valores; las reglas de la tabla `expected` anterior (`valid` booleano, `errorKind` solo con `valid: false` y en su dominio, `violations` 0 ⇔ `valid` y omitido con `lexical`/`syntax`, `offset` entero, `pointer` cadena); ningún campo fuera de las tablas, ni en el primer nivel ni dentro de `expected`; `_id` único, y en `cases/` solo las seis carpetas de categoría. Un incumplimiento hace fallar la prueba con el archivo y el campo. Lo que exige ejecutar el caso (que `pointer` y `offset` sean correctos salvo el `offset` léxico) lo comprueban las fases que lo validan.
+
 Las pruebas del lexer recorren todo el corpus: tokenizan cada payload entero y en bloques de 1, 7 y 4096 bytes, exigen el mismo resultado, y si `errorKind` es `lexical` comprueban que el error ocurra exactamente en `offset`.
 
 ### Métricas
@@ -77,12 +79,17 @@ Las métricas (`metrics`: MB/s, ciclos/byte, memoria, asignaciones, profundidad)
 
 ## Corpus de esquemas (`schemas/`)
 
-Prueba el parser del metalenguaje (Fase 2, `crates/schema-parser/tests/corpus.rs`) con el texto exacto de cada esquema, para poder fijar línea y columna:
+Prueba el parser del metalenguaje (Fase 2, `crates/schema-parser/tests/corpus.rs`) y el análisis semántico (Fase 3: meta-esquema y referencias) con el texto exacto de cada esquema, para poder fijar línea y columna:
 
 - `schemas/parse-ok/*.json`: deben parsear.
 - `schemas/parse-error/*.json`: deben fallar. Cada archivo tiene una entrada en `schemas/errores.json` con `file`, `code` (`lexical`, `syntax`, `duplicate-key` o `limit`), `line` y `column` (base 1, columnas en puntos de código), un fragmento opcional del mensaje (`contains`) y `description`. La prueba falla si sobra o falta una entrada.
 
 Los esquemas JSON de `cases/` también pasan por el parser.
+
+La Fase 3 (`crates/semantic/tests/corpus.rs`: meta-esquema y, si pasa, tabla de símbolos con la resolución de `$ref`) usa el mismo corpus:
+
+- `schemas/parse-ok/*.json` y los esquemas JSON de `cases/` deben pasarla, salvo dos esquemas de `parse-ok` que existen para probar el parser y fallan a propósito en la Fase 3 (`combinadores.json` y `fuera-del-subconjunto.json`; sus errores exactos están fijados en la prueba).
+- `schemas/semantic-error/*.json`: parsean pero deben fallar en la Fase 3. Cada archivo tiene una entrada en `schemas/errores-semanticos.json` con los mismos campos que `errores.json` (`code` es `unsupported`, `meta-schema`, `reference` o `duplicate-anchor`; `line` y `column` son las del **primer** error por posición) y, opcional, `count`: el número total de errores que se esperan (la Fase 3 los informa todos).
 
 ## Cómo agregar un caso
 

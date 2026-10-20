@@ -1,0 +1,6 @@
+{
+  "$defs": {
+    "a": { "$anchor": "nodo" },
+    "b": { "$anchor": "nodo" }
+  }
+}

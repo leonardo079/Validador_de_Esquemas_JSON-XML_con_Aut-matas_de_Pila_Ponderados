@@ -1,0 +1,4 @@
+{
+  "properties": { "p": { "$anchor": "x" } },
+  "$anchor": "x"
+}

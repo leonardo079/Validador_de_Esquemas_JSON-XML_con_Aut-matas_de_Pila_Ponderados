@@ -376,7 +376,9 @@ dependencies = [
 name = "semantic"
 version = "0.1.0"
 dependencies = [
+ "proptest",
  "schema-parser",
+ "serde_json",
 ]
 
 [[package]]

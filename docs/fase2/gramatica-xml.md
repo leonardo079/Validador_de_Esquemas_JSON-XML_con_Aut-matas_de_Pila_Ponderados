@@ -1,8 +1,10 @@
 # Fase 2 — Gramática de XML bien formado
 
+> **Cifras manuales.** Los archivos `ll1-*.md` los genera `scripts/ll1.py` (`make docs`) y la CI los comprueba (`make docs-check`). En cambio, el número de terminales de §1 y la tabla de §2 (FIRST y FOLLOW) de este documento son un resumen escrito a mano de esa salida: quien cambie la gramática (`xml.ll1`) debe actualizarlos en el mismo cambio y compararlos con el `ll1-xml.md` regenerado.
+
 ## 1. Tokens
 
-La gramática trabaja sobre los eventos del lexer de la Fase 1, agrupados en seis terminales:
+La gramática trabaja sobre los eventos del lexer de la Fase 1, agrupados en siete terminales:
 
 | Terminal | Eventos del lexer | Ejemplo |
 |---|---|---|

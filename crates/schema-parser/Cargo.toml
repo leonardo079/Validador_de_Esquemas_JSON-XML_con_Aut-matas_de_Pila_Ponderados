@@ -1,6 +1,6 @@
 [package]
 name = "schema-parser"
-description = "Fase 2: parser LL(1) del esquema (JSON Schema / XSD) a AST"
+description = "Fase 2: parser LL(1) de JSON Schema a su AST (un AST por lenguaje; XSD tendrá el suyo)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

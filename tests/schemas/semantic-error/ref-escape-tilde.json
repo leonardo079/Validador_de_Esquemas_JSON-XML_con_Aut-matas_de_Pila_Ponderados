@@ -1,0 +1,4 @@
+{
+  "$defs": { "a~b": true },
+  "$ref": "#/$defs/a~b"
+}

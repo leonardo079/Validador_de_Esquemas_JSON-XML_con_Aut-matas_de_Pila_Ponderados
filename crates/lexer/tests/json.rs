@@ -249,9 +249,47 @@ fn bom_inicial() {
     // El BOM no ocupa columna.
     let e = error(b"\xef\xbb\xbf@");
     assert_eq!((e.at.offset, e.at.column), (3, 1));
-    assert_eq!(error(b"\xef\xbbx").kind, LexErrorKind::InvalidUtf8);
+    // D10: un prefijo de BOM seguido de otro byte es un byte no ASCII fuera
+    // de cadena (antes de D10, este caso era `InvalidUtf8`).
+    assert_eq!(error(b"\xef\xbbx").kind, LexErrorKind::UnexpectedByte);
     // Un BOM fuera del inicio no se acepta.
     assert_eq!(error(b" \xef\xbb\xbf").kind, LexErrorKind::UnexpectedByte);
+}
+
+/// D10 (`docs/fase1/lexico.md` §7): al inicio, un prefijo de BOM (`EF`,
+/// `EF BB`) seguido de otro byte es `UnexpectedByte` en el offset 0, línea 1,
+/// columna 1, igual que cualquier byte no ASCII fuera de cadena, aunque la
+/// secuencia sea UTF-8 válido (`EF BC 81` = U+FF01). Si la entrada termina
+/// justo después del prefijo, el error es `InvalidUtf8` en el offset 0
+/// (UTF-8 truncado, como en `finish`).
+#[test]
+fn prefijo_de_bom_seguido_de_otro_byte() {
+    use LexErrorKind::{InvalidUtf8, UnexpectedByte};
+    let casos: [(&[u8], LexErrorKind, u64, u32, u32); 8] = [
+        (b"\xef\xbc\x81", UnexpectedByte, 0, 1, 1),
+        (b"\xef\xbb\x81[1]", UnexpectedByte, 0, 1, 1),
+        (b"\xef1", UnexpectedByte, 0, 1, 1),
+        (b"[1,\xef\xbc\x81]", UnexpectedByte, 3, 1, 4),
+        (b"\xc3\xb1", UnexpectedByte, 0, 1, 1),
+        // Prefijo al final de la entrada: UTF-8 truncado.
+        (b"\xef", InvalidUtf8, 0, 1, 1),
+        (b"\xef\xbb", InvalidUtf8, 0, 1, 1),
+        // Diferencia conocida: `C3` solo, al inicio, no pasa por el contador
+        // del BOM y es un byte no ASCII fuera de cadena.
+        (b"\xc3", UnexpectedByte, 0, 1, 1),
+    ];
+    for (input, kind, offset, line, column) in casos {
+        for size in [1, 7, 4096] {
+            let e = lex_chunked(input, size)
+                .1
+                .unwrap_or_else(|| panic!("se esperaba error en {input:?}"));
+            assert_eq!(
+                (e.kind, e.at.offset, e.at.line, e.at.column),
+                (kind, offset, line, column),
+                "{input:?} en bloques de {size}"
+            );
+        }
+    }
 }
 
 #[test]

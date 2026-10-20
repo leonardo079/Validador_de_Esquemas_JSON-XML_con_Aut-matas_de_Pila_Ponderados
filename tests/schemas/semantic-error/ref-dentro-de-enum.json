@@ -1,0 +1,1 @@
+{ "enum": [{ "type": "string" }], "not": { "$ref": "#/enum/0" } }

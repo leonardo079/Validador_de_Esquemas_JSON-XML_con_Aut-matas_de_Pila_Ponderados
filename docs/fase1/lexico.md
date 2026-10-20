@@ -1,12 +1,14 @@
 # Fase 1 — Análisis léxico
 
-Este documento define formalmente los tokens de JSON y XML como lenguajes regulares, da sus expresiones regulares y gramáticas regulares, y explica cómo se construyen los AFD que implementa el crate [`lexer`](../../crates/lexer). Los diagramas de esta carpeta se generan desde las mismas tablas que ejecuta el código (`make docs`), así que no pueden desincronizarse.
+Este documento define formalmente los tokens de JSON y XML como lenguajes regulares, da sus expresiones regulares y gramáticas regulares, y explica cómo se construyen los AFD que implementa el crate [`lexer`](../../crates/lexer). Los diagramas de esta carpeta se generan desde las mismas tablas que ejecuta el código (`make docs`). La CI (`make docs-check`) regenera los `.dot` y falla si difieren de los versionados, así que los `.dot` no pueden desincronizarse del código sin que la CI lo detecte. Los `.svg` se dibujan con Graphviz a partir de esos `.dot` y no se verifican en la CI, porque su salida cambia con la versión de Graphviz y las fuentes instaladas; tras cambiar un autómata hay que ejecutar `make docs` para actualizarlos.
 
 | Autómata | Estados | Clases | Diagrama | Código |
 |---|---|---|---|---|
 | UTF-8 | 9 (1 de error) | 12 | [afd-utf8.svg](afd-utf8.svg) | [`utf8.rs`](../../crates/lexer/src/utf8.rs) |
 | Tokenizador JSON | 32 (1 de error) | 31 | [afd-json.svg](afd-json.svg) | [`json.rs`](../../crates/lexer/src/json.rs) |
-| Tokenizador XML | 42 (1 de error) | 28 | [afd-xml.svg](afd-xml.svg) | [`xml.rs`](../../crates/lexer/src/xml.rs) |
+| Tokenizador XML | 42 (1 de error) | 29 | [afd-xml.svg](afd-xml.svg) | [`xml.rs`](../../crates/lexer/src/xml.rs) |
+
+**Qué cifras se comprueban y cuáles son manuales.** Las cifras de estados y clases de esta tabla, la tabla de particiones de §1 y la frase «de 256 a 31 columnas en JSON y a 29 en XML» las comprueba `cargo test`: la prueba `particion_de_clases` de cada módulo las calcula desde las tablas y falla si el documento no contiene la fila exacta. Son **manuales**, y debe actualizarlas quien cambie el AFD correspondiente en el mismo cambio: las tablas de clases de §1 (bytes y papel de cada clase), las tablas de tamaños de §5 (medidas en x86-64; la prueba `memoria_constante` solo exige un tope) y las descripciones de estados y transiciones de §2–§4.
 
 ---
 
@@ -14,7 +16,18 @@ Este documento define formalmente los tokens de JSON y XML como lenguajes regula
 
 El alfabeto de entrada es **Σ = {0x00, …, 0xFF}**, los 256 valores de un byte. El validador consume bytes, no caracteres: así la decodificación UTF-8 también es parte del autómata y no un paso previo que reserve memoria.
 
-Una tabla de transiciones sobre Σ tendría 256 columnas por estado. Para reducirla se agrupan los bytes en **clases de equivalencia**: dos bytes `a` y `b` están en la misma clase si δ(q, a) = δ(q, b) para todo estado q. Esa relación es una congruencia y el AFD sobre las clases reconoce exactamente el mismo lenguaje; la tabla pasa de 256 a 31 columnas en JSON y a 28 en XML. El cálculo de la clase de un byte es un acceso a un arreglo `CLASS[256]`, así que no cuesta nada en tiempo de ejecución.
+Una tabla de transiciones sobre Σ tendría 256 columnas por estado. Para reducirla se agrupan los bytes en **clases**. La relación de partida es la equivalencia por δ: a ≡ b si δ(q, a) = δ(q, b) para todo estado q. Es una congruencia, y un AFD sobre sus clases reconoce exactamente el mismo lenguaje. Las clases que usa el código son un **refinamiento** de esa equivalencia: si a y b están en la misma clase, entonces a ≡ b, pero no al revés. Se separan además clases δ-equivalentes por dos motivos:
+
+- **La salida de la máquina de Mealy.** Los tokenizadores no solo aceptan: en cada transición ejecutan una acción (saltar, emitir un token, entregar un carácter al decodificador UTF-8) y, si van al error, informan un tipo de error. El **tipo de acción** y el tipo de error deben ser función de (estado, clase); el **dato** que emite la acción puede leer el byte o un registro (qué token de puntuación, qué carácter, el valor de un `\uXXXX`). Dónde se traza esa línea es una decisión de modelado: con otra elección, las seis de puntuación de JSON contarían como separadas por la salida y no por legibilidad. Por eso en JSON ␠ va aparte de `{ } [ ] : ,` (se salta, ellos se emiten) y «otro ASCII» aparte de 80–FF (estos van al AFD UTF-8), y en XML `d` va aparte de `a–c e f B E F` (`<!d` es `DoctypeForbidden`; `<!a`, `UnexpectedByte`).
+- **Legibilidad.** Algunas clases tienen el mismo δ y la misma acción, y van separadas solo para que la tabla y los diagramas se lean mejor: en JSON, las seis de puntuación `{ } [ ] : ,` (la acción lee el byte para elegir el token); en XML, ␠ frente a `\t \n \r`, que se nombran igual que en JSON. La línea y la columna no influyen: `Pos::advance` las calcula a partir del byte, no de la clase.
+
+| Autómata | Clases declaradas | Distintas por δ | Distintas por δ y acción | Además por tipo de error |
+|---|---|---|---|---|
+| UTF-8 | 12 | 12 | — | — |
+| JSON | 31 | 24 | 26 | 26 |
+| XML | 29 | 27 | 27 | 28 |
+
+Las cifras las calcula y fija la prueba `particion_de_clases` de cada módulo (`utf8.rs`, `json.rs`, `xml.rs`) a partir de las tablas. Con estas clases la tabla pasa de 256 a 31 columnas en JSON y a 29 en XML. El cálculo de la clase de un byte es un acceso a un arreglo `CLASS[256]`, así que no cuesta nada en tiempo de ejecución.
 
 Clases del tokenizador JSON (`json::CLASS_NAMES`):
 
@@ -57,8 +70,9 @@ Clases del tokenizador XML (`xml::CLASS_NAMES`):
 | `[` `]` | una clase por símbolo | CDATA y la prohibición de `]]>` |
 | `0–9` | dígitos | nombre (no inicial), referencias decimales y hexadecimales |
 | `x` | letra | `&#x` |
-| `a–f B E F` | letras hexadecimales | nombre y referencia hexadecimal |
+| `a–c e f B E F` | letras hexadecimales | nombre y referencia hexadecimal |
 | `A` `C` `D` `T` | una clase por letra | `<![CDATA[`; `A C D` también son hexadecimales y `<!D` delata un DOCTYPE |
+| `d` | letra hexadecimal | transita igual que `a–c e f B E F`; tiene clase propia solo para que `<!d` (DOCTYPE en minúsculas) se reporte como `DoctypeForbidden` |
 | letra `_ :` | resto de letras ASCII, `_`, `:` | inicio de nombre |
 | control | `0x00–0x1F` salvo `\t \n \r` | prohibidos en todo documento XML |
 | otro ASCII | resto de `0x21–0x7F` | texto y valores |
@@ -214,7 +228,7 @@ Las restricciones de valor (la entidad es una de las 5 predefinidas; el número 
 
 ### Lo que se excluye y por qué
 
-- **`<!DOCTYPE`**: el autómata lo rechaza en el byte `D` de `<!D` (error `DoctypeForbidden`). Sin DTD no se pueden declarar entidades, y sin entidades declaradas no existen la **inyección de entidades externas (XXE)** ni la **expansión recursiva (*billion laughs*)**. La prueba `doctype_y_entidades_prohibidas` incluye los dos ataques.
+- **`<!DOCTYPE`**: el autómata lo rechaza en el byte que sigue a `<!` si es `D` o `d` (error `DoctypeForbidden`), así que cualquier combinación de mayúsculas (`<!DOCTYPE`, `<!doctype`, `<!DocType`) da el mismo error en el mismo offset. XML exige `DOCTYPE` en mayúsculas, pero reportar la variante en minúsculas como `UnexpectedByte` sería un mensaje menos claro para lo que es, sin duda, un intento de DTD. Sin DTD no se pueden declarar entidades, y sin entidades declaradas no existen la **inyección de entidades externas (XXE)** ni la **expansión recursiva (*billion laughs*)**. La prueba `doctype_y_entidades_prohibidas` incluye los dos ataques.
 - **Entidades no predefinidas** (`&x;`): error `UndefinedEntity`.
 
 ### Instrucciones de procesamiento
@@ -235,6 +249,8 @@ El lexer exige el nombre (`<??>` es error `InvalidPi`) y entrega el nombre y el 
 | `JsonLexer` | 96 bytes |
 | `XmlLexer` | 112 bytes |
 
+**Posiciones en entradas de varios GB.** `Pos` guarda `offset: u64`, `line: u32` y `column: u32`. El offset es exacto siempre (2⁶⁴ bytes no son alcanzables). Línea y columna **saturan** en `u32::MAX` en lugar de dar la vuelta o provocar pánico: una línea de más de 2³² − 1 caracteres reporta `column = u32::MAX`, que se lee como "u32::MAX o más"; el offset sigue localizando el byte exacto. Se prefirió saturar a ampliar a `u64` para no agrandar `Pos` (16 bytes) ni los lexers (pruebas `columna_satura_en_u32_max`, `linea_satura_en_u32_max`). En el límite, la columna de un `]` o `?` que el lexer XML retiene y emite después (`back` en `xml.rs`) es aproximada: si la columna actual está saturada se reporta `u32::MAX`, aunque el carácter estuviera hasta 2 columnas antes; el offset sigue siendo exacto (prueba `back_respeta_columna_saturada`).
+
 Como el lexer no reserva memoria ni guarda bytes de la entrada, es `no_std` y se puede incrustar en el validador generado (la CI lo comprueba compilándolo para `wasm32-unknown-unknown`).
 
 **Reanudable.** Al terminar un bloque el estado (estado del AFD, registros, posición) queda en la estructura y el siguiente bloque continúa donde iba, aunque un token, un escape `\uXXXX` o una secuencia UTF-8 queden partidos. Las pruebas de propiedad `trozos_arbitrarios` (JSON y XML) verifican que tokenizar la entrada entera y tokenizarla partida en trozos aleatorios da exactamente los mismos eventos y errores.
@@ -249,6 +265,7 @@ Como el lexer no reserva memoria ni guarda bytes de la entrada, es `no_std` y se
 |---|---|
 | `tests/utf8.rs` | Casos límite de UTF-8; igualdad con `core::str::from_utf8` (propiedad); memoria constante |
 | `tests/json.rs` | Números, escapes, sustitutos, UTF-8, errores con posición, rangos de bytes; bloques de 1, 7 y 4096 bytes; trozos aleatorios (propiedad); **oráculo**: todo JSON serializado por `serde_json` produce los mismos átomos en el mismo orden (propiedad) |
+| `tests/corpus.rs` | Formato de cada caso de `tests/cases` según `tests/README.md` (`_id` = nombre del archivo, `category` = carpeta, `format`, `expected`…), aplicado por `common::corpus()` antes de usar el caso; pruebas unitarias de cada regla incumplida |
 | `tests/*.rs` (`corpus_en_bloques`) | Cada payload de `tests/cases` (JSON y XML) tokenizado entero y en bloques de 1, 7 y 4096 bytes da el mismo resultado; los casos con error léxico declarado fallan en el offset declarado |
 | `tests/xml.rs` | Etiquetas, atributos, referencias, CDATA, comentarios, DOCTYPE/XXE/*billion laughs*, errores con posición; bloques de 1, 7 y 4096 bytes; trozos aleatorios (propiedad); **oráculo**: documentos generados al azar, con y sin referencias de carácter, producen exactamente sus nombres, atributos y textos (propiedad) |
 
@@ -259,3 +276,11 @@ El oráculo de XML encontró un error real durante el desarrollo: un documento c
 - Los nombres XML aceptan cualquier carácter no ASCII; la especificación excluye algunos rangos.
 - No se normalizan los fines de línea (`\r\n` → `\n`) ni los espacios de los valores de atributo.
 - La columna de las posiciones cuenta puntos de código, no unidades UTF-16.
+
+### Decisión tomada (D10): prefijo de BOM seguido de otro byte (JSON)
+
+El tokenizador JSON reconoce el BOM con un contador (`bom`, 0–3) antes del AFD. Al inicio, si llegan `EF` o `EF BB` y después un byte que no continúa el BOM, el error es **`UnexpectedByte` en el offset 0** (línea 1, columna 1), aunque la secuencia sea UTF-8 válido: `EF BC 81` (U+FF01), `EF BB 81` y `EF 31` dan los tres `(UnexpectedByte, 0)`. Es lo mismo que da cualquier byte no ASCII fuera de cadena en su primer byte (`[1,EF BC 81]` da `(UnexpectedByte, 3)`; `C3 B1`, `(UnexpectedByte, 0)`). El contador solo retrasa la decisión hasta ver el byte siguiente, así que el error se informa en `Pos::START` y no en la posición del byte que rompe el prefijo; el resultado no depende del tamaño de bloque.
+
+**Fin de entrada.** Si la entrada termina justo después del prefijo (`EF` o `EF BB` y nada más), `finish` informa **`InvalidUtf8` en el offset 0**: es una secuencia UTF-8 truncada, como cualquier otra al final. Antes de D10 esto ya salía en el offset 0, mientras que el prefijo seguido de otro byte salía en ese byte (offset 1 o 2); ahora los dos casos señalan el offset 0. **Diferencia conocida:** `C3` solo al inicio no pasa por el contador del BOM y da `(UnexpectedByte, 0)` en el acto, mientras que `EF` solo da `(InvalidUtf8, 0)`, porque `EF` podría ser el inicio de un BOM y el lexer espera al fin de la entrada para decidir.
+
+**Razón.** Antes, el error era `InvalidUtf8` en el byte siguiente: un mensaje engañoso para un carácter válido y un offset que no era el del carácter. XML no tiene este caso: decodifica el carácter con el AFD UTF-8 y solo después decide si es un BOM. Lo fija la prueba `prefijo_de_bom_seguido_de_otro_byte` (bloques de 1, 7 y 4096 bytes, con línea y columna).

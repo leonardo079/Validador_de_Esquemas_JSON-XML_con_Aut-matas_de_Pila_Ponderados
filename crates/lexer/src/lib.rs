@@ -18,13 +18,20 @@ pub mod utf8;
 pub mod xml;
 
 /// Posición de un byte en la entrada.
+///
+/// `line` y `column` son `u32` y **saturan** en `u32::MAX`: una entrada con
+/// más de 2³² − 1 líneas, o una línea con más de 2³² − 1 puntos de código
+/// (posible en un payload de varios GB en streaming), no da la vuelta ni
+/// provoca pánico; el valor `u32::MAX` se lee como "`u32::MAX` o más". El
+/// `offset` es exacto siempre: es `u64` y no se satura porque 2⁶⁴ bytes
+/// (16 EiB; siglos a 1 GB/s) no son alcanzables.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Pos {
     /// Desplazamiento en bytes desde el inicio (base 0).
     pub offset: u64,
-    /// Línea (base 1).
+    /// Línea (base 1; satura en `u32::MAX`).
     pub line: u32,
-    /// Columna en puntos de código (base 1).
+    /// Columna en puntos de código (base 1; satura en `u32::MAX`).
     pub column: u32,
 }
 
@@ -40,11 +47,11 @@ impl Pos {
     pub fn advance(&mut self, b: u8) {
         self.offset += 1;
         if b == b'\n' {
-            self.line += 1;
+            self.line = self.line.saturating_add(1);
             self.column = 1;
         } else if b & 0xC0 != 0x80 {
             // Los bytes de continuación UTF-8 no inician un punto de código.
-            self.column += 1;
+            self.column = self.column.saturating_add(1);
         }
     }
 }
@@ -113,4 +120,47 @@ pub enum Error<E> {
 pub trait Sink<Ev> {
     type Error;
     fn event(&mut self, ev: Ev, span: Span) -> Result<(), Self::Error>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Pos;
+
+    fn at(line: u32, column: u32) -> Pos {
+        Pos {
+            offset: 1 << 40,
+            line,
+            column,
+        }
+    }
+
+    #[test]
+    fn columna_satura_en_u32_max() {
+        let mut p = at(1, u32::MAX - 1);
+        p.advance(b' ');
+        assert_eq!(p.column, u32::MAX);
+        p.advance(b' ');
+        p.advance(0xC3); // inicial UTF-8: también cuenta columna
+        assert_eq!(p.column, u32::MAX);
+        p.advance(0xA9); // continuación: no cuenta columna
+        assert_eq!(p.column, u32::MAX);
+        // El offset sigue siendo exacto aunque la columna esté saturada.
+        assert_eq!(p.offset, (1 << 40) + 4);
+        // Un salto de línea reinicia la columna.
+        p.advance(b'\n');
+        assert_eq!((p.line, p.column), (2, 1));
+    }
+
+    #[test]
+    fn linea_satura_en_u32_max() {
+        let mut p = at(u32::MAX - 1, 7);
+        p.advance(b'\n');
+        assert_eq!((p.line, p.column), (u32::MAX, 1));
+        p.advance(b'\n');
+        p.advance(b'\n');
+        assert_eq!((p.line, p.column), (u32::MAX, 1));
+        p.advance(b'x');
+        assert_eq!((p.line, p.column), (u32::MAX, 2));
+        assert_eq!(p.offset, (1 << 40) + 4);
+    }
 }

@@ -86,17 +86,18 @@ const C_RBRACK: usize = 15;
 const C_LBRACK: usize = 16;
 const C_DIGIT: usize = 17;
 const C_X: usize = 18; // x
-const C_HEXLETTER: usize = 19; // a–f B E F
+const C_HEXLETTER: usize = 19; // a–c e f B E F
 const C_UA: usize = 20; // A (CDATA y hexadecimal)
 const C_UC: usize = 21; // C
 const C_UD: usize = 22; // D (CDATA, hexadecimal y DOCTYPE)
 const C_UT: usize = 23; // T
-const C_NAMESTART: usize = 24; // resto de letras, _ :
-const C_CTRL: usize = 25; // 00–1F salvo \t \n \r
-const C_OTHER: usize = 26;
-const C_NONASCII: usize = 27;
+const C_LD: usize = 24; // d (hexadecimal; `<!d` delata un DOCTYPE en minúsculas)
+const C_NAMESTART: usize = 25; // resto de letras, _ :
+const C_CTRL: usize = 26; // 00–1F salvo \t \n \r
+const C_OTHER: usize = 27;
+const C_NONASCII: usize = 28;
 
-pub const NUM_CLASSES: usize = 28;
+pub const NUM_CLASSES: usize = 29;
 
 pub const CLASS_NAMES: [&str; NUM_CLASSES] = [
     "␠",
@@ -118,11 +119,12 @@ pub const CLASS_NAMES: [&str; NUM_CLASSES] = [
     "[",
     "0–9",
     "x",
-    "a–f B E F",
+    "a–c e f B E F",
     "A",
     "C",
     "D",
     "T",
+    "d",
     "letra _ :",
     "control",
     "otro ASCII",
@@ -130,43 +132,46 @@ pub const CLASS_NAMES: [&str; NUM_CLASSES] = [
 ];
 
 const WSP: [usize; 2] = [C_SPACE, C_WS];
-const NAME_START: [usize; 8] = [
+const NAME_START: [usize; 9] = [
     C_X,
     C_HEXLETTER,
     C_UA,
     C_UC,
     C_UD,
     C_UT,
+    C_LD,
     C_NAMESTART,
     C_NONASCII,
 ];
-const NAME_CHAR: [usize; 11] = [
+const NAME_CHAR: [usize; 12] = [
     C_X,
     C_HEXLETTER,
     C_UA,
     C_UC,
     C_UD,
     C_UT,
+    C_LD,
     C_NAMESTART,
     C_NONASCII,
     C_DIGIT,
     C_DASH,
     C_DOT,
 ];
-const ENTITY_START: [usize; 7] = [C_X, C_HEXLETTER, C_UA, C_UC, C_UD, C_UT, C_NAMESTART];
-const ENTITY_CHAR: [usize; 10] = [
+const ENTITY_START: [usize; 8] = [C_X, C_HEXLETTER, C_UA, C_UC, C_UD, C_UT, C_LD, C_NAMESTART];
+const ENTITY_CHAR: [usize; 11] = [
     C_X,
     C_HEXLETTER,
     C_UA,
     C_UC,
     C_UD,
     C_UT,
+    C_LD,
     C_NAMESTART,
     C_DIGIT,
     C_DASH,
     C_DOT,
 ];
-const HEX: [usize; 5] = [C_DIGIT, C_HEXLETTER, C_UA, C_UC, C_UD];
+const HEX: [usize; 6] = [C_DIGIT, C_HEXLETTER, C_LD, C_UA, C_UC, C_UD];
 
 /// Clase de cada byte.
 pub static CLASS: [u8; 256] = build_classes();
@@ -201,6 +206,7 @@ const fn build_classes() -> [u8; 256] {
             b'C' => C_UC,
             b'D' => C_UD,
             b'T' => C_UT,
+            b'd' => C_LD,
             b'a'..=b'f' | b'B' | b'E' | b'F' => C_HEXLETTER,
             b'g'..=b'z' | b'G'..=b'Z' | b'_' | b':' => C_NAMESTART,
             _ => C_OTHER,
@@ -430,7 +436,8 @@ const fn build_table() -> Table {
     set(&mut t, S_PI_Q, &[C_GT], tr(S_CONTENT, A_PI_CLOSE));
     set(&mut t, S_PI_Q, &[C_CTRL], ERR);
 
-    // `<!`: comentario o CDATA. `<!D…` (DOCTYPE) y todo lo demás es error.
+    // `<!`: comentario o CDATA. `<!D…`/`<!d…` (DOCTYPE en cualquier
+    // combinación de mayúsculas) y todo lo demás es error.
     set(&mut t, S_BANG, &[C_DASH], tr(S_BANG_DASH, A_SKIP));
     set(&mut t, S_BANG, &[C_LBRACK], tr(S_CD_LB, A_SKIP));
     set(&mut t, S_BANG_DASH, &[C_DASH], tr(S_COMMENT, A_SKIP));
@@ -481,7 +488,7 @@ const fn build_table() -> Table {
 fn error_kind(state: usize, class: usize) -> LexErrorKind {
     match (state, class) {
         (_, C_CTRL) => LexErrorKind::InvalidXmlChar,
-        (S_BANG, C_UD) => LexErrorKind::DoctypeForbidden,
+        (S_BANG, C_UD | C_LD) => LexErrorKind::DoctypeForbidden,
         (S_PI_START | S_PI_TARGET | S_PI_TQ, _) => LexErrorKind::InvalidPi,
         (S_REF..=S_REF_HEX, _) => LexErrorKind::InvalidReference,
         _ => LexErrorKind::UnexpectedByte,
@@ -676,7 +683,12 @@ impl XmlLexer {
                 self.state = self.ref_ret;
                 self.emit_char(sink, c)
             }
-            A_CD_RB => self.emit_until(sink, Event::TextChar(']'), back(here, 2), here.offset - 1),
+            A_CD_RB => self.emit_until(
+                sink,
+                Event::TextChar(']'),
+                back(here, 2),
+                here.offset.saturating_sub(1),
+            ),
             A_CD_FLUSH1 => {
                 self.emit_until(sink, Event::TextChar(']'), back(here, 1), here.offset)?;
                 self.char(sink, b)
@@ -693,7 +705,12 @@ impl XmlLexer {
             }
             A_PI_CLOSE => self.emit(sink, Event::PiClose, self.tok_start),
             A_CD_FLUSH2 => {
-                self.emit_until(sink, Event::TextChar(']'), back(here, 2), here.offset - 1)?;
+                self.emit_until(
+                    sink,
+                    Event::TextChar(']'),
+                    back(here, 2),
+                    here.offset.saturating_sub(1),
+                )?;
                 self.emit_until(sink, Event::TextChar(']'), back(here, 1), here.offset)?;
                 self.char(sink, b)
             }
@@ -764,12 +781,27 @@ impl XmlLexer {
     }
 }
 
-/// Posición `k` bytes atrás en la misma línea (solo para `]` retenidos).
+/// Posición `k` bytes atrás en la misma línea (solo para `]` y `?` retenidos).
+///
+/// Los bytes retenidos son ASCII, ya se consumieron y están en la línea de
+/// `p`, así que `p.offset >= k` y `p.column > k`; las restas saturantes solo
+/// mantienen la coherencia con [`Pos::advance`] y no cambian el resultado.
+///
+/// Si la columna está saturada (`u32::MAX`, ver [`Pos`]) se deja saturada:
+/// restar a un valor que significa "`u32::MAX` o más" daría una columna
+/// concreta falsa. En el límite el valor es **aproximado**: un `]` cuya
+/// columna real era `u32::MAX - 1` o `u32::MAX - 2` se reporta en
+/// `u32::MAX`, un error de a lo sumo `k` columnas. Resolverlo exactamente
+/// exigiría columnas `u64`; el `offset` sí es exacto siempre.
 fn back(p: Pos, k: u32) -> Pos {
     Pos {
-        offset: p.offset - u64::from(k),
+        offset: p.offset.saturating_sub(u64::from(k)),
         line: p.line,
-        column: p.column - k,
+        column: if p.column == u32::MAX {
+            u32::MAX
+        } else {
+            p.column.saturating_sub(k)
+        },
     }
 }
 
@@ -798,6 +830,68 @@ pub fn write_dot(w: &mut impl core::fmt::Write) -> core::fmt::Result {
                 (S_REF_HEX, S_VAL_DQ, RET_DQ),
                 (S_REF_HEX, S_VAL_SQ, RET_SQ),
             ],
+            register_errors: &[
+                "&nombre con más de 4 bytes, o ; tras un nombre que no es \
+                 lt, gt, amp, quot ni apos: UndefinedEntity",
+                "dígito de &#… o &#x… que lleva el valor por encima de 10FFFF, \
+                 o ; con un valor fuera de la producción Char: InvalidCharRef",
+                "carácter decodificado fuera de Char (U+FFFE, U+FFFF): InvalidXmlChar",
+                "byte no ASCII que el AFD UTF-8 (en producto, afd-utf8) rechaza: InvalidUtf8",
+            ],
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+    use super::*;
+    use crate::table::{distintas, en_lexico_md};
+    use std::format;
+
+    /// Cifras de `docs/fase1/lexico.md` (tabla inicial y §1). De las 29 clases, δ distingue 27,
+    /// y la acción no añade ninguna; el tipo de error separa `d` de
+    /// `a–c e f B E F` (`<!d` es `DoctypeForbidden`) y deja 28. ␠ frente a
+    /// `\t \n \r` no lo exige ni δ ni la salida: va aparte por legibilidad
+    /// y para nombrar las clases como en JSON.
+    #[test]
+    fn particion_de_clases() {
+        let col = |c: usize, err: bool| {
+            core::array::from_fn::<_, NUM_STATES, _>(|s| {
+                let t = TABLE[s][c];
+                let kind = (err && usize::from(t.next) == S_ERR).then(|| error_kind(s, c));
+                (t.next, t.action, kind.map(|k| k as u8))
+            })
+        };
+        let delta = distintas(NUM_CLASSES, |c| {
+            core::array::from_fn::<_, NUM_STATES, _>(|s| TABLE[s][c].next)
+        });
+        let mealy = distintas(NUM_CLASSES, |c| col(c, false));
+        let con_error = distintas(NUM_CLASSES, |c| col(c, true));
+        assert_eq!((NUM_CLASSES, delta, mealy, con_error), (29, 27, 27, 28));
+        en_lexico_md(&format!(
+            "| Tokenizador XML | {NUM_STATES} (1 de error) | {NUM_CLASSES} |"
+        ));
+        en_lexico_md(&format!(
+            "| XML | {NUM_CLASSES} | {delta} | {mealy} | {con_error} |"
+        ));
+        en_lexico_md(&format!("a {NUM_CLASSES} en XML"));
+    }
+
+    #[test]
+    fn back_respeta_columna_saturada() {
+        let p = Pos {
+            offset: 1 << 33,
+            line: 3,
+            column: u32::MAX,
+        };
+        let q = back(p, 2);
+        assert_eq!((q.offset, q.line, q.column), ((1 << 33) - 2, 3, u32::MAX));
+        let p = Pos {
+            offset: 10,
+            line: 1,
+            column: 9,
+        };
+        assert_eq!(back(p, 2).column, 7);
+    }
 }

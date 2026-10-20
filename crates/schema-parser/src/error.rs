@@ -82,8 +82,9 @@ impl fmt::Display for ParseError {
 impl std::error::Error for ParseError {}
 
 /// Texto del usuario para un mensaje: con los caracteres de control escapados
-/// (el mensaje ocupa siempre una línea) y recortado a 32 caracteres.
-pub(crate) fn short(s: &str) -> String {
+/// (el mensaje ocupa siempre una línea) y recortado a 32 caracteres. Público
+/// para que los errores de la Fase 3 sigan la misma regla.
+pub fn short(s: &str) -> String {
     const MAX: usize = 32;
     let cut: String = s.chars().take(MAX).collect();
     let more = if s.chars().nth(MAX).is_some() {

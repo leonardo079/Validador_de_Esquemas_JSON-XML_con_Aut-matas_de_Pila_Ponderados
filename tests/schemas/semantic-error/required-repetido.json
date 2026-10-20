@@ -1,0 +1,5 @@
+{
+  "type": "object",
+  "properties": { "id": true, "nombre": true },
+  "required": ["id", "nombre", "id"]
+}

@@ -1,6 +1,6 @@
 digraph json {
   rankdir=LR;
-  label="AFD del tokenizador JSON (RFC 8259)\n(las transiciones omitidas van al estado de error)";
+  label="AFD del tokenizador JSON (RFC 8259)\n(las transiciones omitidas van al estado de error; las punteadas dependen de un registro)\nTambién van al error, según un registro y sin dibujarse:\n• \\uXXX + hex que completa un valor DC00–DFFF (sustituto bajo suelto): LoneSurrogate\n• alto\\uXXX + hex que completa un valor fuera de DC00–DFFF: LoneSurrogate\n• byte no ASCII que el AFD UTF-8 (en producto, afd-utf8) rechaza: InvalidUtf8";
   labelloc=t;
   node [shape=circle, fontname="Helvetica"];
   edge [fontname="Helvetica", fontsize=10];

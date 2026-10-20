@@ -1,5 +1,7 @@
 # Fase 2 — Gramática del metalenguaje de esquemas (JSON Schema)
 
+> **Cifras manuales.** Los archivos `ll1-*.md` los genera `scripts/ll1.py` (`make docs`) y la CI los comprueba (`make docs-check`). En cambio, el número de clases `K_*` de §1 y la tabla de §3 (FIRST y FOLLOW) de este documento son un resumen escrito a mano de esa salida: quien cambie la gramática (`esquema.ll1`) debe actualizarlos en el mismo cambio y compararlos con el `ll1-esquema.md` regenerado.
+
 Un esquema JSON es un documento JSON, así que podría analizarse con la gramática de [gramatica-json.md](gramatica-json.md) y revisar después qué hay dentro. El metalenguaje es más estrecho: la **palabra clave** de cada miembro decide qué forma tiene su valor (`minimum` lleva un número, `properties` un objeto de esquemas, `allOf` un arreglo de esquemas, …). Esa información se mete en la gramática para que el parser la compruebe mientras lee, en una sola pasada y con la posición exacta del primer token que no encaja.
 
 Implementación: `crates/schema-parser` ([`json_schema.rs`](../../crates/schema-parser/src/json_schema.rs)), un parser descendente recursivo escrito a mano con una función por no terminal. Lee los tokens del tokenizador JSON de la Fase 1.
@@ -91,13 +93,17 @@ La gramática fija la **forma** de cada valor; lo que no es libre de contexto, o
 | Formas excluidas por el alcance: `items` como arreglo, `exclusiveMinimum`/`exclusiveMaximum` booleanos | 2 (con una pista que lo explica) |
 | Claves repetidas en un mismo objeto (palabras clave, entradas de un mapa, miembros de un valor JSON) | 2, como restricción aparte |
 | Profundidad de anidamiento ≤ 256 | 2 |
-| Palabras clave fuera del subconjunto (`K_OTHER`) | 3 (rechazo con nombre y posición) |
+| Palabras clave fuera del subconjunto (`K_OTHER`) | 3 (rechazo con nombre, posición, categoría y motivo) |
 | Rangos: `minLength` entero ≥ 0, `multipleOf` > 0, … | 3 |
-| Nombres de `type` válidos, `required` sin repetidos, `enum` no vacío | 3 |
-| `$schema` con el URI de 2020-12, `$id` solo en la raíz, `$ref` local y resoluble, ciclos | 3 |
-| `pattern` dentro del subconjunto de regex | 3 |
+| Nombres de `type` válidos, sin repetidos en `type`, `required` y `dependentRequired`, arreglos no vacíos (`type` y arreglos de esquemas) | 3 |
+| `$schema` con el URI de 2020-12, `$id` solo en la raíz, `$ref` local | 3 |
+| `$ref` resoluble, `$anchor` sin repetir | 3 (tabla de símbolos, [../fase3/referencias.md](../fase3/referencias.md)) |
+| Ciclos no productivos | 3 (tarea siguiente) |
+| `pattern` dentro del subconjunto de regex | 3 (con la compilación de `pattern` a AFD) |
 
-**Claves repetidas.** La RFC 8259 dice que los nombres de un objeto *deberían* ser únicos, y 2020-12 no define qué significa un esquema con `"type"` dos veces. En lugar de quedarse con la primera o la última aparición, el parser lo rechaza en la segunda. No lo expresa la gramática (como la unicidad de atributos en [gramatica-xml.md](gramatica-xml.md)): lo comprueba el parser al leer cada clave, contra el conjunto de claves ya vistas en el mismo objeto.
+La tabla completa de lo que comprueba la Fase 3 contra el meta-esquema, y por qué no está en la gramática, está en [../fase3/meta-esquema.md](../fase3/meta-esquema.md).
+
+**Claves repetidas.** La RFC 8259 dice que los nombres de un objeto *deberían* ser únicos, y 2020-12 no define qué significa un esquema con `"type"` dos veces. En lugar de quedarse con la primera o la última aparición, el parser lo rechaza en la segunda. La regla vale en **cualquier** objeto del esquema, también en los valores literales de `const` y `enum` (decisión D2 del plan): el PDF del curso lista las claves duplicadas como caso malformado, y el validador generado también las rechaza en los payloads (`docs/00-alcance.md` §1), así que el proyecto aplica la misma regla a esquema y payload. No lo expresa la gramática (como la unicidad de atributos en [gramatica-xml.md](gramatica-xml.md)): lo comprueba el parser al leer cada clave, contra el conjunto de claves ya vistas en el mismo objeto.
 
 *Costo.* Cada objeto (objeto-esquema, mapa de `properties`/`$defs`/`dependentSchemas`/`dependentRequired` o valor JSON dentro de `const`, `enum`…) lleva una tabla hash (`HashSet<String>`) con sus claves: insertar y consultar cuesta O(1) esperado por clave, más O(ℓ) por copiar la clave de longitud ℓ, así que la comprobación es **lineal en el tamaño del esquema** y el análisis completo sigue siendo O(n). La tabla usa el hash por defecto de `std` (SipHash con semilla aleatoria por proceso), para que un esquema hostil no pueda fabricar colisiones y degradarla a cuadrática. Una primera versión comparaba cada clave con todas las anteriores (O(k²) para k claves): con 10⁵ claves en `properties` tardaba unos 18,6 s en release, lo que era una denegación de servicio barata porque los esquemas los sube el usuario en la web. Con la tabla, medido en release con `{"properties": {"p0": true, …}}`:
 
@@ -107,7 +113,13 @@ La gramática fija la **forma** de cada valor; lo que no es libre de contexto, o
 | 10⁵ | 1,3 MB | 55 ms |
 | 10⁶ | 14,2 MB | 0,62 s |
 
-La prueba `muchas_claves_en_tiempo_lineal` no usa un tope absoluto de tiempo, que dependería de la máquina. Mide objetos de N = 10⁴ y 4N claves en `properties`, `const`, `$defs` y `dependentRequired` y exige t(4N)/t(N) < 10 (lineal ≈ 4; la búsqueda cuadrática reintroducida midió 16,8 en debug y 26,4–27,9 en release). Cada estimación de la razón usa lotes calibrados para que cada muestra dure al menos ~50 ms, el mismo tiempo para N (4 veces más análisis) que para 4N, y el mínimo de 3 muestras intercaladas por lado. Aun así, **con la CPU muy sobresuscrita una estimación suelta no es fiable**: con 32 procesos `yes` en 8 núcleos se midieron razones de 1,1 a 15,9 con el parser lineal intacto (el auditor, con la versión anterior de la prueba, de 1,5 a 17). Por eso la prueba repite la estimación hasta 3 veces y falla solo si las tres superan el umbral: la versión cuadrática las supera siempre, el ruido rara vez tres veces seguidas. Con esa carga, 0 fallos en 30 corridas en release y 0 en 10 en debug (una de ellas necesitó un reintento). No es una garantía: con carga aún mayor o muy irregular la prueba todavía puede fallar sin regresión, con probabilidad baja. Con la regresión presente, la prueba tarda en fallar unos 75 s en release, porque las tres estimaciones se completan. También comprueba que una clave repetida al final de un objeto de 4N claves se detecta en su offset exacto.
+La prueba `muchas_claves_en_tiempo_lineal` no usa un tope absoluto de tiempo, que dependería de la máquina. Mide objetos de N = 10⁴ y 4N claves en `properties`, `const`, `$defs` y `dependentRequired` y exige t(4N)/t(N) < 10 (lineal ≈ 4; la búsqueda cuadrática reintroducida midió 16,8 en debug y 26,4–27,9 en release). Cada estimación de la razón usa lotes calibrados para que cada muestra dure al menos ~50 ms, el mismo tiempo para N (4 veces más análisis) que para 4N, y el mínimo de 3 muestras intercaladas por lado; la estimación se repite hasta 3 veces y la prueba falla solo si las tres superan el umbral. Como mide **tiempo de pared**, con la CPU sobresuscrita no es fiable en ninguna de las dos direcciones: con 32 procesos `yes` en 8 núcleos y el parser lineal intacto se midieron razones de 1,1 a 15,9 (falsos fallos posibles), y con la regresión cuadrática el auditor midió 8,99 en algún intento (falso aprobado). Por eso **está marcada `#[ignore]`**: las pruebas de `cargo test` y de la CI (runners compartidos, también Windows) deben ser deterministas, y las mediciones de tiempo no forman parte de ellas. Se corre a mano, en una máquina sin carga y en release, donde detecta la regresión de forma estable (26,4–27,2 en los tres intentos):
+
+```text
+cargo test -p schema-parser --release --test parser -- --ignored muchas_claves_en_tiempo_lineal
+```
+
+Con la regresión presente tarda en fallar unos 70–75 s en release. La parte determinista de la antigua prueba, que una clave repetida al final de un objeto de 4N claves se detecta en su offset exacto, pasó a `clave_repetida_al_final_de_objeto_grande` y corre siempre. La medición de rendimiento definitiva del parser corresponde al crate `bench` (criterion); ver [pendientes.md](pendientes.md) §1.
 
 **Números.** Se guardan como el lexema decimal exacto (`Num::lexeme`), nunca como `f64`, para que la Fase 4 compare `minimum` o `multipleOf` sin perder precisión (`docs/00-alcance.md` §1.1).
 
@@ -135,7 +147,7 @@ El parser pide los tokens de uno en uno: el lexer se alimenta byte a byte hasta 
 
 ## 6. Profundidad y pila
 
-El parser es descendente **recursivo**: su pila de llamadas es la pila del autómata (§5 de [gramatica-json.md](gramatica-json.md)), y crece con el anidamiento de `{`/`[`. Un esquema hostil con un millón de `[` dentro de `const` desbordaría la pila del proceso, lo que sería una caída y no un error. Por eso cada `{` o `[` incrementa un contador acotado por `max_depth` (256 por defecto, como los payloads en `docs/00-alcance.md` §4; configurable con `parse_with_max_depth`), y superarlo es el error `limit`.
+El parser es descendente **recursivo**: su pila de llamadas es la pila del autómata (§5 de [gramatica-json.md](gramatica-json.md)), y crece con el anidamiento de `{`/`[`. Un esquema hostil con un millón de `[` dentro de `const` desbordaría la pila del proceso, lo que sería una caída y no un error. Por eso cada `{` o `[` incrementa un contador acotado por `max_depth` (256 por defecto, el mismo valor por defecto de los payloads en `docs/00-alcance.md` §4; configurable a la baja con `parse_with_max_depth`, con tope `MAX_DEPTH_LIMIT` = 256), y superarlo es el error `limit`. `MAX_DEPTH_LIMIT` limita solo esta recursión del compilador sobre el esquema. La profundidad de los payloads (`SV_MAX_DEPTH`, Fase 5) es independiente: el validador generado usa una pila explícita de tamaño fijo, no recursión, así que su límite es configurable (`docs/00-alcance.md` §4) y solo lo acota la memoria que se reserve para esa pila.
 
 Además, el límite tiene que caber en la pila real. Se midió la pila mínima con la que el parser termina en el peor caso (cadena de `not` anidados, la de más marcos por nivel), con un hilo de tamaño controlado:
 
@@ -145,6 +157,8 @@ Además, el límite tiene que caber en la pila real. Se midió la pila mínima c
 | `dev` (sin optimizar) | ~5,4 KiB | ~1,34 MiB |
 
 Las dos caben en los 2 MiB que Rust y tokio reservan por defecto para cada hilo. En la primera versión el modo `dev` gastaba ~12 KiB por nivel y desbordaba esos 2 MiB; para bajar a 5,4 KiB, el error viaja en una caja dentro del parser (`Result<T, Box<ParseError>>`), cada alternativa de `keyword` tiene su propia función y la construcción de mensajes está en funciones `#[cold]`. La tabla de claves de §4 añade un `HashSet` vacío (sin reservar memoria) al marco de `delimited`; medido de nuevo, el costo por nivel no cambió. La prueba `profundidad_maxima` lo vigila: analiza esquemas a la profundidad máxima en un hilo de exactamente 2 MiB.
+
+**Tope de la profundidad configurable.** `parse_with_max_depth` recorta el valor pedido a `MAX_DEPTH_LIMIT` = 256. Sin el recorte, `parse_with_max_depth(…, u32::MAX)` con un millón de `[` desbordaba la pila (*thread has overflowed its stack … aborting*): una caída, no un error. Se eligió 256 porque es la mayor profundidad cuyo peor caso está medido y cabe en 2 MiB también en `dev` (1,34 MiB); 384 niveles ya pasarían de 2 MiB sin optimizar, así que subir el tope exige primero una pila explícita (ver [pendientes.md](pendientes.md) §5). Se recorta en lugar de devolver un error de configuración porque `ParseError` siempre señala una posición de la entrada y un parámetro fuera de rango no la tiene. El recorte no pasa desapercibido: si la entrada lo supera, el error `limit` (`TooDeep { max }`) informa el máximo efectivo, 256, no el pedido. Los valores menores que 256 se respetan tal cual. La garantía vale en hilos con al menos 2 MiB de pila: el hilo principal de Windows tiene 1 MiB, así que `schemac` y el servidor (y cualquier llamador desde un hilo de pila desconocida) deben llamarlo en un hilo creado con `std::thread::Builder::stack_size` de 2 MiB o más (ver [pendientes.md](pendientes.md) §5). La prueba `profundidad_configurable_acotada` lo verifica con `u32::MAX`, `MAX_DEPTH_LIMIT + 1` y 10⁵ sobre un millón de `[` y sobre 2·10⁵ `not` anidados, en un hilo de 2 MiB.
 
 ## 7. Ejemplo de derivación
 

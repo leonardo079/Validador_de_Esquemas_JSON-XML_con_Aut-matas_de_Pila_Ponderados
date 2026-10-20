@@ -1,0 +1,4 @@
+{
+  "$defs": { "n": { "$anchor": "nod" } },
+  "$ref": "#nodo"
+}

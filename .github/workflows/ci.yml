@@ -26,6 +26,18 @@ jobs:
       - name: El lexer es no_std (compila para WASM)
         run: cargo build -p lexer --target wasm32-unknown-unknown
 
+  docs:
+    name: Documentación generada sincronizada
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # python3 viene en ubuntu-latest; ll1.py solo usa la biblioteca estándar.
+      # No hace falta Graphviz: los .svg no se verifican (ver `docs-check` en
+      # el Makefile).
+      - run: make docs-check
+
   test:
     name: Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

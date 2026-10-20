@@ -252,6 +252,13 @@ impl Kw {
             .map(|&(n, _, _)| n)
     }
 
+    /// Nombres de todas las palabras clave reconocidas, en el orden de la
+    /// tabla. La Fase 3 los usa para sugerir la palabra clave más parecida a
+    /// una desconocida.
+    pub fn names() -> impl Iterator<Item = &'static str> {
+        KEYWORDS.iter().map(|&(n, _, _)| n)
+    }
+
     /// Terminal `K_*` de la gramática.
     pub fn class(self) -> Class {
         KEYWORDS

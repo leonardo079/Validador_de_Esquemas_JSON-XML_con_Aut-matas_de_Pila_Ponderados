@@ -380,9 +380,12 @@ const fn build_table() -> Table {
     t
 }
 
-fn error_kind(state: usize) -> LexErrorKind {
+/// Tipo de error de la transición (estado, clase) que va al error. Un byte no
+/// ASCII fuera de una cadena es `UnexpectedByte` en cualquier estado.
+fn error_kind(state: usize, class: usize) -> LexErrorKind {
     match state {
         S_VALUE => LexErrorKind::UnexpectedByte,
+        _ if class == C_NONASCII && state != S_STR => LexErrorKind::UnexpectedByte,
         S_T1..=S_N3 => LexErrorKind::InvalidLiteral,
         S_MINUS..=S_EXP_DIG => LexErrorKind::InvalidNumber,
         S_STR => LexErrorKind::ControlCharInString,
@@ -512,7 +515,10 @@ impl JsonLexer {
                 return Ok(());
             }
             if self.bom > 0 {
-                return self.fail(LexErrorKind::InvalidUtf8);
+                // D10: un prefijo de BOM que no se completa es un byte no ASCII
+                // fuera de cadena, como cualquier otro: `UnexpectedByte` en el
+                // primer byte del prefijo (offset 0), no en el byte actual.
+                return self.fail_at(LexErrorKind::UnexpectedByte, Pos::START);
             }
             self.bom = 3;
         }
@@ -617,12 +623,7 @@ impl JsonLexer {
                     if matches!(state, S_LOW_BS | S_LOW_U) {
                         return self.fail_at(LexErrorKind::LoneSurrogate, self.char_start);
                     }
-                    let kind = if CLASS[usize::from(b)] == C_NONASCII as u8 && state != S_STR {
-                        LexErrorKind::UnexpectedByte
-                    } else {
-                        error_kind(state)
-                    };
-                    return self.fail(kind);
+                    return self.fail(error_kind(state, usize::from(CLASS[usize::from(b)])));
                 }
             }
             return Ok(());
@@ -681,6 +682,58 @@ pub fn write_dot(w: &mut impl core::fmt::Write) -> core::fmt::Result {
             accepting: &is_accepting,
             error: S_ERR,
             guarded: &[(S_U4, S_LOW_BS, "hex [valor ∈ D800–DBFF]")],
+            register_errors: &[
+                "\\uXXX + hex que completa un valor DC00–DFFF \
+                 (sustituto bajo suelto): LoneSurrogate",
+                "alto\\uXXX + hex que completa un valor fuera de DC00–DFFF: LoneSurrogate",
+                "byte no ASCII que el AFD UTF-8 (en producto, afd-utf8) rechaza: InvalidUtf8",
+                // Un prefijo de BOM seguido de otro byte (D10) no se lista: da
+                // `UnexpectedByte` en su primer byte, el mismo resultado que la
+                // transición (valor, 80–FF) → error de la tabla. El contador
+                // solo retrasa esa decisión hasta ver el byte siguiente, salvo
+                // al fin de la entrada: `EF` o `EF BB` sin más bytes, que
+                // `finish` informa como `InvalidUtf8` en el offset 0 (ver
+                // docs/fase1/lexico.md §7).
+            ],
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+    use super::*;
+    use crate::table::{distintas, en_lexico_md};
+    use std::format;
+
+    /// Cifras de `docs/fase1/lexico.md` (tabla inicial y §1). De las 31 clases, δ solo distingue
+    /// 24; la acción (salida de la máquina de Mealy) separa además ␠ de
+    /// `{ } [ ] : ,` y «otro ASCII» de 80–FF, y deja 26. Las seis de
+    /// puntuación tienen el mismo δ y la misma acción (que lee el byte para
+    /// elegir el token): van separadas por legibilidad. El tipo de error no
+    /// separa ninguna más.
+    #[test]
+    fn particion_de_clases() {
+        let delta = distintas(NUM_CLASSES, |c| {
+            core::array::from_fn::<_, NUM_STATES, _>(|s| TABLE[s][c].next)
+        });
+        let mealy = distintas(NUM_CLASSES, |c| {
+            core::array::from_fn::<_, NUM_STATES, _>(|s| (TABLE[s][c].next, TABLE[s][c].action))
+        });
+        let con_error = distintas(NUM_CLASSES, |c| {
+            core::array::from_fn::<_, NUM_STATES, _>(|s| {
+                let t = TABLE[s][c];
+                let kind = (usize::from(t.next) == S_ERR).then(|| error_kind(s, c) as u8);
+                (t.next, t.action, kind)
+            })
+        });
+        assert_eq!((NUM_CLASSES, delta, mealy, con_error), (31, 24, 26, 26));
+        en_lexico_md(&format!(
+            "| Tokenizador JSON | {NUM_STATES} (1 de error) | {NUM_CLASSES} |"
+        ));
+        en_lexico_md(&format!(
+            "| JSON | {NUM_CLASSES} | {delta} | {mealy} | {con_error} |"
+        ));
+        en_lexico_md(&format!("a {NUM_CLASSES} columnas en JSON"));
+    }
 }

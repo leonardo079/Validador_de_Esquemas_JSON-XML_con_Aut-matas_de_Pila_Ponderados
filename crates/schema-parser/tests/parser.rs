@@ -3,7 +3,7 @@
 use proptest::prelude::*;
 use schema_parser::{
     parse, parse_with_max_depth, Class, ErrorKind, Json, JsonKind, Kw, ParseError, Schema,
-    SchemaKind, Value, DEFAULT_MAX_DEPTH,
+    SchemaKind, Value, DEFAULT_MAX_DEPTH, MAX_DEPTH_LIMIT,
 };
 
 fn ok(src: &str) -> Schema {
@@ -371,8 +371,10 @@ fn tiempo(src: &str, veces: u32) -> std::time::Duration {
 /// - Una pasada de calentamiento de 4N fija el tamaño del lote: cada muestra
 ///   dura al menos ~50 ms (en release un análisis de 4N dura unos 16 ms), para
 ///   que un corte del planificador sea una fracción pequeña de la muestra.
-/// - La muestra de N analiza 4 veces más textos que la de 4N, así que las dos
-///   duran lo mismo y una expropiación pesa igual en ambas.
+/// - La muestra de N analiza 4 veces más textos que la de 4N, así que, si el
+///   parser es lineal, las dos duran lo mismo y una expropiación pesa igual en
+///   ambas. Con un parser cuadrático no: el calentamiento dura segundos, el
+///   lote queda en 1 y la muestra de 4N dura unas 6 veces más que la de N.
 /// - Las muestras se intercalan y se toma el mínimo de cada lado (una
 ///   interrupción solo puede alargar una muestra, nunca acortarla).
 fn razon(chico: &str, grande: &str) -> (f64, std::time::Duration, std::time::Duration) {
@@ -392,15 +394,28 @@ fn razon(chico: &str, grande: &str) -> (f64, std::time::Duration, std::time::Dur
 
 /// La detección de claves repetidas es lineal en el número de claves de un
 /// objeto. No se compara contra un tope absoluto (dependería de la máquina),
-/// sino la razón t(4N)/t(N): ≈ 4 si es lineal, ≈ 16 si es cuadrática (la
-/// versión con una búsqueda lineal por clave midió 16,8 en debug y entre 26,4 y 27,9 en
-/// release). El umbral 10 queda lejos de las dos.
+/// sino la razón t(4N)/t(N): ≈ 4 si es lineal, ≈ 16 si es cuadrática (sin
+/// carga, la versión con una búsqueda lineal por clave midió 16,8 en debug y
+/// entre 26,4 y 27,9 en release). El umbral 10 queda lejos de las dos.
 ///
-/// Con la CPU muy sobresuscrita una estimación suelta puede salir de rango
-/// (ventanas largas de expropiación), así que se repite hasta `INTENTOS` veces
-/// y la prueba falla solo si todas superan el umbral: una versión cuadrática
-/// las supera siempre, y el ruido rara vez se repite. Con el parser lineal
-/// basta el primer intento. N = 10⁴ para que t(N) sea de milisegundos.
+/// **Ignorada por defecto:** mide tiempo de pared, y las pruebas de
+/// `cargo test` (y de la CI, con runners compartidos y Windows) deben ser
+/// deterministas. Con la CPU sobresuscrita una estimación suelta sale de rango
+/// en las dos direcciones: falsos fallos con el parser lineal y falsos
+/// aprobados con la regresión cuadrática. Se corre a mano, en una máquina sin
+/// carga y en release:
+///
+/// ```text
+/// cargo test -p schema-parser --release --test parser -- --ignored muchas_claves_en_tiempo_lineal
+/// ```
+///
+/// Sin carga detecta la regresión de forma estable. Para absorber ruido leve
+/// se repite hasta `INTENTOS` veces y falla solo si todas superan el umbral;
+/// con el parser lineal basta el primer intento. La parte determinista (la
+/// clave repetida al final de un objeto grande) está en
+/// `clave_repetida_al_final_de_objeto_grande`, que sí corre siempre. Ver
+/// `docs/fase2/pendientes.md` §1. N = 10⁴ para que t(N) sea de ms.
+#[ignore = "mide tiempo de pared (no determinista); correr a mano sin carga, ver doc"]
 #[test]
 fn muchas_claves_en_tiempo_lineal() {
     const N: usize = 10_000;
@@ -430,8 +445,13 @@ fn muchas_claves_en_tiempo_lineal() {
              lineal ≈ 4, cuadrático ≈ 16 o más"
         );
     }
+}
 
-    // Una clave repetida al final de un objeto grande se detecta en su offset.
+/// Una clave repetida al final de un objeto de 4·10⁴ claves se detecta en su
+/// offset exacto (determinista; antes era la cola de la prueba de tiempo).
+#[test]
+fn clave_repetida_al_final_de_objeto_grande() {
+    const N: usize = 10_000;
     let src = objeto_con_claves("properties", 4 * N, |i| format!("\"p{i}\": true"));
     let src = format!("{}, \"p0\": true}}}}", &src[..src.len() - 2]);
     let e = err(&src);
@@ -520,6 +540,42 @@ fn anidamiento_enorme_no_desborda() {
     assert_eq!(e.code(), "limit");
     let src = anidado(200_000);
     assert_eq!(err(&src).code(), "limit");
+}
+
+/// `parse_with_max_depth` recorta la profundidad pedida a `MAX_DEPTH_LIMIT`:
+/// con `u32::MAX` y un millón de `[`, el resultado es el error `limit` con el
+/// máximo efectivo, no un desbordamiento de pila. Corre en un hilo de 2 MiB,
+/// la pila por defecto de Rust y tokio.
+#[test]
+fn profundidad_configurable_acotada() {
+    std::thread::Builder::new()
+        .stack_size(2 << 20)
+        .spawn(|| {
+            let lim = MAX_DEPTH_LIMIT as usize;
+            let src = format!("{{\"const\": {}", "[".repeat(1_000_000));
+            for pedido in [u32::MAX, MAX_DEPTH_LIMIT + 1, 100_000] {
+                let e = parse_with_max_depth(src.as_bytes(), pedido).unwrap_err();
+                assert_eq!(
+                    e.kind,
+                    ErrorKind::TooDeep {
+                        max: MAX_DEPTH_LIMIT
+                    }
+                );
+                // El `[` que excede el tope: el objeto es el nivel 1.
+                assert_eq!(e.at.offset as usize, "{\"const\": ".len() + lim - 1);
+                let e = parse_with_max_depth(anidado(200_000).as_bytes(), pedido).unwrap_err();
+                assert_eq!(e.code(), "limit");
+                // Hasta el tope sigue aceptando.
+                assert!(parse_with_max_depth(anidado(lim).as_bytes(), pedido).is_ok());
+                assert!(parse_with_max_depth(anidado(lim + 1).as_bytes(), pedido).is_err());
+            }
+            // Por debajo del tope el valor pedido se respeta.
+            let e = parse_with_max_depth(anidado(11).as_bytes(), 10).unwrap_err();
+            assert_eq!(e.kind, ErrorKind::TooDeep { max: 10 });
+        })
+        .unwrap()
+        .join()
+        .unwrap();
 }
 
 // -------------------------------------------------------- propiedades ---

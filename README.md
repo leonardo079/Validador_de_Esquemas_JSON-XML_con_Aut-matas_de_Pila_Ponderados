@@ -36,7 +36,7 @@ Esquema (JSON Schema / XSD)
 | 1. Análisis léxico | Alfabeto de bytes UTF-8, tokens JSON y XML, AFD del tokenizador en streaming, gramáticas regulares. |
 | 2. Análisis sintáctico | GLC de JSON, XML y del metalenguaje de esquemas; parser LL(1); árboles de derivación. |
 | 3. Análisis semántico | Validación contra el meta-esquema, resolución de `$ref`/`$defs`, detección de ciclos no productivos, clasificación de palabras clave. |
-| 4. Autómata ponderado | M = (Q, Σ, Γ, δ, q₀, Z₀, F, w) con pesos en el semianillo tropical; construcción composicional; verificación de determinismo y minimización. |
+| 4. Autómata ponderado | M = (Q, Σ, Γ, δ, q₀, Z₀, F, w) con pesos en el semianillo tropical (ℕ ∪ {∞}, mín, +, ∞, 0); construcción composicional; verificación de determinismo y minimización. |
 | 5. Generación de código | Emisores C y Rust (tablas densas o saltos directos), pila acotada, API C-ABI/FFI, WASM opcional, generador de payloads. |
 | 6. Validación en tiempo real | Streaming por bloques, errores con JSON Pointer y posición, límites, métricas (MB/s, ciclos/byte, memoria, asignaciones, profundidad). |
 | 7. Aplicación web | API REST + WebSocket, editor de esquemas, visualización del autómata y del árbol de derivación, panel comparativo, sandbox, despliegue en la nube. |
@@ -45,8 +45,8 @@ Esquema (JSON Schema / XSD)
 
 | Categoría | Palabras clave | Estrategia |
 |---|---|---|
-| (a) Directas en el DPDA | `type`, `properties`, `items`, `enum`, `const`, límites | Transiciones del autómata. |
-| (b) Con registros o contadores | `required`, `minItems`, `maxItems` | Máscara de bits / contador en el marco de pila. |
+| (a) Directas en el DPDA | `type`, `properties`, `items`, `enum`, `const`, límites numéricos (`minimum`, `maximum`, `exclusive*`, `multipleOf`) | Transiciones del autómata. |
+| (b) Con registros o contadores | `required`, `minLength`, `maxLength`, `minItems`, `maxItems`, `minProperties`, `maxProperties` | Máscara de bits / contador en el marco de pila. |
 | (c) No deterministas o no libres de contexto | `anyOf`, `oneOf`, `allOf`, `pattern`, `uniqueItems`, dependencias | Producto de autómatas, determinización acotada o verificación diferida. |
 
 ## Estructura del repositorio
@@ -99,6 +99,9 @@ cargo build --workspace
 
 # Ejecutar las pruebas
 cargo test --workspace
+
+# Analizar un esquema (sintaxis y meta-esquema 2020-12 restringido) y listar sus errores
+cargo run -p cli -- check esquema.json
 
 # Compilar un esquema a un validador en C (previsto)
 cargo run -p cli -- compile esquema.json --lang c --out build/

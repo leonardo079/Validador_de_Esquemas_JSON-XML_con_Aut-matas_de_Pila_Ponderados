@@ -1,8 +1,9 @@
 //! Fase 2 — Análisis sintáctico.
 //!
-//! Parser LL(1) del metalenguaje de esquemas (subconjunto de JSON Schema
-//! 2020-12 y de XSD) que produce un AST común. El AST solo existe en tiempo
-//! de compilación.
+//! Parser LL(1) del metalenguaje de esquemas. Cada lenguaje tiene su propio
+//! AST: este crate produce hoy el de JSON Schema 2020-12 (subconjunto); el
+//! del subconjunto de XSD será otro AST, y los dos bajan a una IR común en la
+//! Fase 3 (decisión D3 del plan). El AST solo existe en tiempo de compilación.
 //!
 //! El parser de JSON Schema ([`parse`]) es descendente recursivo, escrito a
 //! mano sobre la gramática de `docs/fase2/esquema.ll1`, y lee los tokens del
@@ -18,5 +19,5 @@ mod token;
 
 pub use ast::{Class, Json, JsonKind, Keyword, Kw, Num, Schema, SchemaKind, Str, Value};
 pub use error::{ErrorKind, ParseError};
-pub use json_schema::{parse, parse_with_max_depth, DEFAULT_MAX_DEPTH};
+pub use json_schema::{parse, parse_with_max_depth, DEFAULT_MAX_DEPTH, MAX_DEPTH_LIMIT};
 pub use lexer::{Pos, Span};
