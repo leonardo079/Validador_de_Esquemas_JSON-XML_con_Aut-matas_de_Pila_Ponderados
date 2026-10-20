@@ -120,14 +120,35 @@ pub fn to_fragment(pointer: &str) -> String {
     let mut out = String::with_capacity(pointer.len() + 1);
     out.push('#');
     for &b in pointer.as_bytes() {
-        let keep = b.is_ascii_alphanumeric() || b"-._~!$&'()*+,;=:@/?".contains(&b);
-        if keep {
-            out.push(b as char);
-        } else {
-            out.push_str(&format!("%{b:02X}"));
-        }
+        push_byte(b, &mut out);
     }
     out
+}
+
+fn push_byte(b: u8, out: &mut String) {
+    let keep = b.is_ascii_alphanumeric() || b"-._~!$&'()*+,;=:@/?".contains(&b);
+    if keep {
+        out.push(b as char);
+    } else {
+        out.push_str(&format!("%{b:02X}"));
+    }
+}
+
+/// Un carácter de un segmento tal como queda en el fragmento: primero el
+/// escape de la RFC 6901 (`~` → `~0`, `/` → `~1`) y después el de la
+/// RFC 3986. Concatenar `/` + `encode_char` de cada carácter de cada
+/// segmento da exactamente `to_fragment` del puntero, sin construirlo.
+pub(crate) fn encode_char(c: char, out: &mut String) {
+    match c {
+        '~' => out.push_str("~0"),
+        '/' => out.push_str("~1"),
+        _ => {
+            let mut buf = [0u8; 4];
+            for &b in c.encode_utf8(&mut buf).as_bytes() {
+                push_byte(b, out);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

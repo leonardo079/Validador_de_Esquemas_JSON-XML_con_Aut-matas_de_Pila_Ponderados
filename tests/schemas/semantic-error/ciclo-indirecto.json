@@ -1,0 +1,8 @@
+{
+  "$ref": "#/$defs/a",
+  "$defs": {
+    "a": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/b" }] },
+    "b": { "oneOf": [{ "$ref": "#/$defs/c" }] },
+    "c": { "$ref": "#/$defs/a" }
+  }
+}

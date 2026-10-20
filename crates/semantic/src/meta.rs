@@ -133,13 +133,16 @@ fn check_keyword(kw: &Keyword, root: bool, errors: &mut Vec<SemanticError>) {
             v,
         )),
         // `""` es una referencia al mismo documento (RFC 3986 §4.4), equivalente
-        // a `#`: es local y se acepta (D11). Lo demás sin `#` inicial nombra
-        // otro recurso.
+        // a `#`: es local y se acepta (D11). Lo demás sin `#` inicial puede ser
+        // otro recurso o, resuelto contra `$id`, este mismo; no se resuelven URI
+        // para distinguirlo (`docs/fase3/meta-esquema.md` §4), así que el
+        // mensaje no dice «remoto».
         (Kw::Ref, Value::Str(v)) if !is_local_ref(&v.value) => errors.push(form(
             kw,
             v,
-            "solo se admiten referencias locales: un fragmento que empieza por `#` (`#`, \
-             `#/$defs/x`, `#ancla`) o la cadena vacía; no se descargan recursos remotos",
+            "solo se admiten referencias locales que empiezan por `#` (`#`, `#/$defs/x`, \
+             `#ancla`) o la cadena vacía; si el URI nombra este mismo documento, escriba \
+             `#…` en su lugar (no se resuelven URI ni se descargan recursos)",
         )),
         (Kw::Type, Value::Str(v)) => check_type_name(v, errors),
         (Kw::Type, Value::Strings(l)) => {

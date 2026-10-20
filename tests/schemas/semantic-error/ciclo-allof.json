@@ -1,0 +1,5 @@
+{
+  "$defs": {
+    "a": { "allOf": [{ "type": "object" }, { "$ref": "#/$defs/a" }] }
+  }
+}

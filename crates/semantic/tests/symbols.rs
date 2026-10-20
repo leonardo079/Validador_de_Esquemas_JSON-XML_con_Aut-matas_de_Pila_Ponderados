@@ -10,6 +10,16 @@ use semantic::{analyze, RefProblem, SchemaId, SemanticError, SymbolTable};
 
 const TESTS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests");
 
+/// Etapa que prueban estas pruebas: meta-esquema y tabla de símbolos, sin la
+/// detección de ciclos. Varias usan a propósito referencias circulares no
+/// productivas (A → B → A, `#` desde un `not`), que la resolución debe
+/// resolver sin bucle aunque después `analyze` las rechace en la etapa de
+/// ciclos (`tests/cycles.rs` lo comprueba con los mismos esquemas).
+fn resolved(s: &Schema) -> Result<SymbolTable<'_>, Vec<SemanticError>> {
+    semantic::check_meta_schema(s)?;
+    SymbolTable::build(s)
+}
+
 fn parsed(src: &str) -> Schema {
     parse(src.as_bytes()).unwrap_or_else(|e| panic!("{src}: {e}"))
 }
@@ -17,13 +27,13 @@ fn parsed(src: &str) -> Schema {
 /// Destinos de los `$ref` del esquema, como punteros, en orden de documento.
 fn targets(src: &str) -> Vec<String> {
     let s = parsed(src);
-    let t = analyze(&s).unwrap_or_else(|e| panic!("{src}: {}", e[0]));
+    let t = resolved(&s).unwrap_or_else(|e| panic!("{src}: {}", e[0]));
     t.refs().iter().map(|r| t.pointer(r.target)).collect()
 }
 
 fn errs(src: &str) -> Vec<SemanticError> {
     let s = parsed(src);
-    analyze(&s).map(|_| ()).expect_err(src)
+    resolved(&s).map(|_| ()).expect_err(src)
 }
 
 #[test]
@@ -34,7 +44,7 @@ fn ids_en_preorden_de_documento() {
         "allOf": [{}, { "prefixItems": [true, false] }]
     }"#;
     let s = parsed(src);
-    let t = analyze(&s).unwrap();
+    let t = resolved(&s).unwrap();
     let ptrs: Vec<String> = t.ids().map(|id| t.pointer(id)).collect();
     assert_eq!(
         ptrs,
@@ -67,6 +77,29 @@ fn ids_en_preorden_de_documento() {
     assert!(!t.is_empty());
 }
 
+/// El fragmento recortado de un nodo bajo una clave enorme no depende de
+/// la longitud de la clave.
+#[test]
+fn fragmento_recortado_con_clave_larga() {
+    let key = format!("{}ñ/~", "k".repeat(100_000));
+    let src = format!(
+        r#"{{"properties": {{{}: {{"items": true}}}}}}"#,
+        serde_json::to_string(&key).unwrap()
+    );
+    let s = parsed(&src);
+    let t = resolved(&s).unwrap();
+    let items = t.id(2).unwrap();
+    // La clave escapada: 10⁵ `k`, `ñ` (2 bytes), `~1` y `~0`.
+    assert_eq!(
+        t.pointer(items).len(),
+        "/properties/".len() + 100_006 + "/items".len()
+    );
+    let c = t.fragment_clipped(items, 80);
+    assert!(c.len() <= 80, "{c}");
+    assert!(c.starts_with("#/properties/kkk"), "{c}");
+    assert!(c.ends_with("k%C3%B1~1~0/items"), "{c}");
+}
+
 #[test]
 fn defs_con_su_puntero() {
     let src = r#"{
@@ -75,7 +108,7 @@ fn defs_con_su_puntero() {
         "properties": { "p": { "$defs": { "f": {} } } }
     }"#;
     let s = parsed(src);
-    let t = analyze(&s).unwrap();
+    let t = resolved(&s).unwrap();
     let defs: Vec<String> = t.defs().iter().map(|&d| t.pointer(d)).collect();
     assert_eq!(
         defs,
@@ -104,7 +137,7 @@ fn arbol_recursivo_del_caso() {
         "orden: el $ref de items va dentro de $defs, antes que el de la raíz"
     );
     let s = parsed(&text);
-    let t = analyze(&s).unwrap();
+    let t = resolved(&s).unwrap();
     let from: Vec<String> = t.refs().iter().map(|r| t.pointer(r.from)).collect();
     assert_eq!(from, ["/$defs/node/properties/children/items", ""]);
     for r in t.refs() {
@@ -219,7 +252,7 @@ fn anclas() {
     }"##;
     assert_eq!(targets(src), ["", "/not", "/$defs/a/allOf/0", "/not"]);
     let s = parsed(src);
-    let t = analyze(&s).unwrap();
+    let t = resolved(&s).unwrap();
     assert_eq!(t.anchor("raiz"), Some(SchemaId::ROOT));
     assert_eq!(t.anchor("nada"), None);
     // Un ancla dentro de un literal no se registra.
@@ -303,7 +336,8 @@ fn errores_de_resolucion() {
 /// un solo error, el del meta-esquema.
 #[test]
 fn analyze_se_detiene_en_el_meta_esquema() {
-    let e = errs(r#"{"$ref": "otro.json#/a", "if": {}}"#);
+    let s = parsed(r#"{"$ref": "otro.json#/a", "if": {}}"#);
+    let e = analyze(&s).map(|_| ()).unwrap_err();
     let codes: Vec<&str> = e.iter().map(SemanticError::code).collect();
     assert_eq!(codes, ["unsupported", "unsupported"]);
     // `build` por sí solo tampoco falla con un `$ref` no local.
@@ -325,8 +359,8 @@ fn ids_estables() {
             .unwrap();
     let a = parse(&text).unwrap();
     let b = parse(&text).unwrap();
-    let ta = analyze(&a).unwrap();
-    let tb = analyze(&b).unwrap();
+    let ta = resolved(&a).unwrap();
+    let tb = resolved(&b).unwrap();
     let ids = |t: &SymbolTable<'_>| -> Vec<(usize, usize, String)> {
         t.refs()
             .iter()
@@ -355,7 +389,7 @@ fn profundidad_maxima() {
                 "}".repeat(d)
             );
             let s = parsed(&src);
-            let t = analyze(&s).unwrap();
+            let t = resolved(&s).unwrap();
             assert_eq!(t.len(), d + 1);
             assert_eq!(t.refs()[0].target.index(), d);
             assert_eq!(t.pointer(t.refs()[0].target), ptr);
@@ -452,12 +486,33 @@ fn esquema(depth: u32) -> BoxedStrategy<String> {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]
 
+    /// `fragment_clipped` es el fragmento entero si cabe y, si no, un
+    /// principio y un final suyos separados por `…`, sin pasar de `max`.
+    #[test]
+    fn fragmento_recortado(s in esquema(3), max in 16usize..48) {
+        let base = parsed(&s);
+        let t = resolved(&base).unwrap();
+        for id in t.ids() {
+            let full = t.fragment(id);
+            let c = t.fragment_clipped(id, max);
+            prop_assert_eq!(t.fragment_clipped(id, usize::MAX), full.clone());
+            if full.len() <= max {
+                prop_assert_eq!(c, full);
+            } else {
+                prop_assert!(c.len() <= max, "{} > {}", c.len(), max);
+                let (head, tail) = c.split_once('…').unwrap();
+                prop_assert!(head.starts_with('#') && full.starts_with(head), "{} / {}", c, full);
+                prop_assert!(full.ends_with(tail), "{} / {}", c, full);
+            }
+        }
+    }
+
     /// Ida y vuelta: el fragmento de cada subesquema, usado como `$ref`,
     /// resuelve a ese mismo subesquema; y los ids están en orden de texto.
     #[test]
     fn fragmento_de_cada_nodo_resuelve_a_el(s in esquema(3)) {
         let base = parsed(&s);
-        let t = analyze(&base).unwrap();
+        let t = resolved(&base).unwrap();
         prop_assert!(t.nodes().windows(2).all(|w| w[0].schema.span.start.offset
             < w[1].schema.span.start.offset));
         let refs: Vec<String> = t
@@ -469,7 +524,7 @@ proptest! {
             .collect();
         let doc = format!(r#"{{"allOf": [{s}, {{"anyOf": [{}]}}]}}"#, refs.join(", "));
         let d = parsed(&doc);
-        let t2 = analyze(&d).unwrap();
+        let t2 = resolved(&d).unwrap();
         prop_assert_eq!(t2.refs().len(), t.len());
         for (id, r) in t.ids().zip(t2.refs()) {
             let esperado = format!("/allOf/0{}", t.pointer(id));

@@ -65,6 +65,19 @@ pub enum ErrorKind {
         /// Posición del valor de la primera aparición.
         first: Pos,
     },
+    /// Ciclo de aristas que no consumen entrada (`$ref` y aplicadores sobre
+    /// la misma instancia; `docs/fase3/ciclos.md`). Se señala el primer
+    /// `$ref` del ciclo en el texto.
+    NonProductiveCycle {
+        /// Fragmento (`#…`) del esquema que contiene ese `$ref`.
+        start: String,
+        /// Aristas del ciclo desde `start`: (palabra clave, fragmento del
+        /// destino). La primera es el `$ref` y la última vuelve a `start`. Si
+        /// el ciclo es largo solo se guardan las primeras y la última.
+        edges: Vec<(String, String)>,
+        /// Número total de aristas del ciclo mostrado.
+        total: usize,
+    },
 }
 
 /// Por qué no se resuelve un `$ref`.
@@ -188,6 +201,7 @@ impl SemanticError {
             ErrorKind::InvalidValue { .. } => "meta-schema",
             ErrorKind::UnresolvedRef { .. } => "reference",
             ErrorKind::DuplicateAnchor { .. } => "duplicate-anchor",
+            ErrorKind::NonProductiveCycle { .. } => "cycle",
         }
     }
 }
@@ -243,8 +257,42 @@ impl fmt::Display for SemanticError {
                 first.line,
                 first.column
             ),
+            ErrorKind::NonProductiveCycle {
+                start,
+                edges,
+                total,
+            } => {
+                write!(
+                    f,
+                    "ciclo de referencias que no consume entrada (validar el valor exigiría \
+                     volver a validarlo con el mismo esquema sin leer ningún token): {}",
+                    clip(start)
+                )?;
+                let gap = *total > edges.len();
+                for (i, (via, to)) in edges.iter().enumerate() {
+                    if gap && i + 1 == edges.len() {
+                        write!(f, " …")?;
+                    }
+                    write!(f, " —{}→ {}", clip(via), clip(to))?;
+                }
+                if gap {
+                    write!(f, " ({total} aristas)")?;
+                }
+                Ok(())
+            }
         }
     }
 }
 
 impl std::error::Error for SemanticError {}
+
+/// Fragmento o palabra clave en un mensaje: recortado a 80 caracteres. Los
+/// fragmentos ya están codificados (sin caracteres de control); las palabras
+/// clave son las de la tabla.
+fn clip(s: &str) -> String {
+    const MAX: usize = 80;
+    match s.char_indices().nth(MAX) {
+        Some((i, _)) => format!("{}…", &s[..i]),
+        None => s.to_owned(),
+    }
+}

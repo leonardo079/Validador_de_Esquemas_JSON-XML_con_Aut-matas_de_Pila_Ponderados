@@ -42,7 +42,7 @@ La columna **Cat.** indica la categoría de reconocibilidad:
 | `$schema` | Solo `https://json-schema.org/draft/2020-12/schema` (o ausente), y solo en la raíz. Se admite también con un `#` final vacío (`…/schema#`), que según la RFC 3986 es el mismo recurso. Otro valor → error. | — |
 | `$id` | Solo en la raíz, como URI base. No se descargan recursos remotos. | — |
 | `$defs` (y `definitions` como alias) | Tabla de símbolos de subesquemas. | — |
-| `$ref` | Solo referencias **locales**: `#`, `#/$defs/x`, JSON Pointer dentro del documento, `#ancla` (la cadena vacía equivale a `#`). El destino debe ser un subesquema, no un literal (`const`, `enum`, `default`…). Recursión permitida si es productiva (T3.4). | (a) |
+| `$ref` | Solo referencias **locales**: `#`, `#/$defs/x`, JSON Pointer dentro del documento, `#ancla` (la cadena vacía equivale a `#`). El destino debe ser un subesquema, no un literal (`const`, `enum`, `default`…). Recursión permitida si es productiva (T3.4): un ciclo de `$ref` y aplicadores sobre la misma instancia (`allOf`, `anyOf`, `oneOf`, `not`, `dependentSchemas`) que no pase por `properties`, `additionalProperties`, `items` o `prefixItems` es un error ([fase3/ciclos.md](fase3/ciclos.md)). | (a) |
 | `$anchor` | Anclas locales, únicas en el documento. | — |
 | `$comment`, `title`, `description`, `default`, `examples`, `deprecated`, `readOnly`, `writeOnly` | Anotaciones: se aceptan y se ignoran. | — |
 | Esquemas booleanos `true` / `false` | `true` acepta cualquier valor; `false` rechaza. | (a) |

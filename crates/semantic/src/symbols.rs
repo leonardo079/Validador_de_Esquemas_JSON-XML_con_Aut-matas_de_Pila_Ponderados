@@ -107,7 +107,7 @@ struct Index<'a> {
 enum At<'a> {
     Schema(SchemaId),
     Map(SchemaId, usize, &'a str),
-    List(SchemaId, usize, usize, &'a str),
+    List(SchemaId, usize, &'a str),
 }
 
 /// Padre en la pila del preorden: id, posición de la palabra clave,
@@ -278,7 +278,7 @@ impl<'a> SymbolTable<'a> {
                     match &kw.value {
                         Value::Schema(_) => At::Schema(child(id, pos, 0)?),
                         Value::SchemaMap(_) => At::Map(id, pos, name),
-                        Value::SchemaList(l) => At::List(id, pos, l.len(), name),
+                        Value::SchemaList(_) => At::List(id, pos, name),
                         Value::Json(_) | Value::JsonList(_) => {
                             return Err(RefProblem::IntoLiteral {
                                 keyword: name.to_owned(),
@@ -298,10 +298,10 @@ impl<'a> SymbolTable<'a> {
                         .ok_or_else(not_found)?;
                     At::Schema(child(id, pos, i)?)
                 }
-                At::List(id, pos, len, _) => {
-                    let i = array_index(seg)
-                        .filter(|&i| i < len)
-                        .ok_or_else(not_found)?;
+                At::List(id, pos, _) => {
+                    // Un índice fuera del arreglo no está en `idx.child`:
+                    // `child` ya da `NotFound`, no hace falta la longitud.
+                    let i = array_index(seg).ok_or_else(not_found)?;
                     At::Schema(child(id, pos, i)?)
                 }
             };
@@ -335,6 +335,11 @@ impl<'a> SymbolTable<'a> {
         (0..self.nodes.len()).map(SchemaId)
     }
 
+    /// Id del subesquema en la posición `i` del preorden, si existe.
+    pub fn id(&self, i: usize) -> Option<SchemaId> {
+        (i < self.nodes.len()).then_some(SchemaId(i))
+    }
+
     pub fn node(&self, id: SchemaId) -> &Node<'a> {
         &self.nodes[id.0]
     }
@@ -357,7 +362,8 @@ impl<'a> SymbolTable<'a> {
     }
 
     /// Puntero JSON (RFC 6901) del subesquema: `""` para la raíz,
-    /// `/$defs/a~1b` para la entrada `a/b` de `$defs`. Costo O(profundidad).
+    /// `/$defs/a~1b` para la entrada `a/b` de `$defs`. Costo O(profundidad +
+    /// longitud del puntero), que incluye la de todas las claves del camino.
     pub fn pointer(&self, id: SchemaId) -> String {
         let mut steps = Vec::new();
         let mut cur = id;
@@ -380,9 +386,122 @@ impl<'a> SymbolTable<'a> {
 
     /// El puntero como fragmento de URI, listo para un `$ref` (`#/$defs/x`,
     /// con `%XX` donde la RFC 3986 lo exige).
+    ///
+    /// Su longitud es la del camino entero (claves incluidas): para mensajes
+    /// de error, donde puede haber un nodo profundo con claves largas por
+    /// cada error, use [`SymbolTable::fragment_clipped`].
     pub fn fragment(&self, id: SchemaId) -> String {
         pointer::to_fragment(&self.pointer(id))
     }
+
+    /// El fragmento de [`SymbolTable::fragment`] recortado a como mucho
+    /// `max` bytes (mínimo 16): si no cabe, su principio, `…` y su final.
+    /// No construye el fragmento entero: recorre los padres (O(profundidad))
+    /// y codifica solo los caracteres que caben, así que cuesta
+    /// O(profundidad + max) y no depende de la longitud de las claves.
+    pub fn fragment_clipped(&self, id: SchemaId, max: usize) -> String {
+        const GAP: &str = "…";
+        let max = max.max(16);
+        let mut steps = Vec::new();
+        let mut cur = id;
+        while let Some((parent, step)) = self.nodes[cur.0].parent {
+            steps.push(step);
+            cur = parent;
+        }
+        steps.reverse();
+        let mut segs: Vec<Seg<'_>> = Vec::with_capacity(2 * steps.len());
+        for step in &steps {
+            match *step {
+                Step::Keyword(k) => segs.push(Seg::Str(k)),
+                Step::Entry(k, e) => segs.extend([Seg::Str(k), Seg::Str(e)]),
+                Step::Index(k, i) => segs.extend([Seg::Str(k), Seg::Num(i)]),
+            }
+        }
+        // Todo, si cabe en `max`.
+        let mut out = String::from("#");
+        if emit(&segs, &mut out, max, false) {
+            return out;
+        }
+        // Principio y final.
+        let head = (max - GAP.len()) / 2;
+        let tail = max - GAP.len() - head;
+        let mut first = String::from("#");
+        emit(&segs, &mut first, head, false);
+        let mut last = String::new();
+        emit(&segs, &mut last, tail, true);
+        first.push_str(GAP);
+        first.push_str(&last);
+        first
+    }
+}
+
+/// Segmento de un puntero, sin codificar.
+#[derive(Clone, Copy)]
+enum Seg<'a> {
+    Str(&'a str),
+    Num(usize),
+}
+
+/// Añade a `out` los trozos codificados (`/` y un carácter de segmento a la
+/// vez) de los segmentos, del principio (o del final, con `rev`), mientras
+/// `out` no pase de `max` bytes. Con `rev` los trozos se añaden en orden
+/// inverso y se dan la vuelta al terminar. Devuelve si cupieron todos. Solo
+/// mira los caracteres que caben más uno.
+fn emit(segs: &[Seg<'_>], out: &mut String, max: usize, rev: bool) -> bool {
+    let mut chunks: Vec<String> = Vec::new();
+    let mut len = out.len();
+    let mut push = |chunk: String, chunks: &mut Vec<String>| -> bool {
+        if len + chunk.len() > max {
+            return false;
+        }
+        len += chunk.len();
+        chunks.push(chunk);
+        true
+    };
+    let mut all = true;
+    let order: Box<dyn Iterator<Item = &Seg<'_>>> = if rev {
+        Box::new(segs.iter().rev())
+    } else {
+        Box::new(segs.iter())
+    };
+    'outer: for seg in order {
+        let num;
+        let text: &str = match seg {
+            Seg::Str(s) => s,
+            Seg::Num(i) => {
+                num = i.to_string();
+                &num
+            }
+        };
+        if !rev && !push("/".to_owned(), &mut chunks) {
+            all = false;
+            break;
+        }
+        let chars: Box<dyn Iterator<Item = char>> = if rev {
+            Box::new(text.chars().rev())
+        } else {
+            Box::new(text.chars())
+        };
+        for c in chars {
+            let mut enc = String::new();
+            pointer::encode_char(c, &mut enc);
+            if !push(enc, &mut chunks) {
+                all = false;
+                break 'outer;
+            }
+        }
+        if rev && !push("/".to_owned(), &mut chunks) {
+            all = false;
+            break;
+        }
+    }
+    if rev {
+        chunks.reverse();
+    }
+    for c in chunks {
+        out.push_str(&c);
+    }
+    all
 }
 
 /// Índice de arreglo de la RFC 6901: `0` o un decimal sin ceros a la

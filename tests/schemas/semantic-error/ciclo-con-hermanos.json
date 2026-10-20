@@ -1,0 +1,9 @@
+{
+  "$defs": {
+    "nodo": {
+      "type": "object",
+      "properties": { "hijos": { "items": { "$ref": "#/$defs/nodo" } } },
+      "$ref": "#/$defs/nodo"
+    }
+  }
+}

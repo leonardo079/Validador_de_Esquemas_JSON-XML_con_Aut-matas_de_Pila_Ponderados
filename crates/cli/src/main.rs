@@ -8,8 +8,9 @@ const USO: &str = "\
 uso: schemac <comando>
 
 comandos:
-  check <esquema.json>  analiza el esquema (Fases 2 y 3: sintaxis, meta-esquema y
-                        resolución de $ref) y lista sus errores con línea y columna
+  check <esquema.json>  analiza el esquema (Fases 2 y 3: sintaxis, meta-esquema,
+                        resolución de $ref y ciclos no productivos) y lista sus
+                        errores con línea y columna
   dot <utf8|json|xml>   escribe el AFD indicado en formato DOT (Graphviz)
   version               muestra la versión";
 
@@ -89,8 +90,8 @@ fn check(path: &Path) -> ExitCode {
 
 /// Resumen de la tabla de símbolos si el esquema es válido; si no, el error
 /// de la Fase 2 (el primero: el parser se detiene en él) o todos los de la
-/// Fase 3 (meta-esquema y, si pasa, resolución de `$ref`), como mensajes de
-/// una línea.
+/// Fase 3 (meta-esquema, resolución de `$ref` y ciclos no productivos, por
+/// etapas: ver `semantic::analyze`), como mensajes de una línea.
 fn analizar(bytes: &[u8]) -> Result<String, Vec<String>> {
     let schema = schema_parser::parse(bytes).map_err(|e| vec![e.to_string()])?;
     match semantic::analyze(&schema) {

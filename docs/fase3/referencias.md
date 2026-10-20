@@ -15,15 +15,15 @@ Sea *S* el AST. El conjunto **N(S)** de subesquemas y el camino **π(s)** de cad
 
 Nada más es un subesquema: los valores de `const`, `enum`, `default`, `examples` y de las palabras clave fuera del subconjunto son **literales** JSON aunque tengan forma de esquema, y los de las demás palabras clave (`minimum`, `required`, `$ref`…) no son esquemas.
 
-π es inyectiva: dos subesquemas distintos tienen caminos distintos, porque el parser rechaza las claves repetidas en un mismo objeto (D2). Por eso el camino identifica al subesquema, y el **puntero JSON** de *s* es p(*s*) = concatenación de `/`·esc(*σ*) para cada segmento *σ* de π(*s*), con esc(*σ*) la codificación de la RFC 6901 (`~` → `~0`, `/` → `~1`).
+π es inyectiva: dos subesquemas distintos tienen caminos distintos. Se apoya en dos premisas: (1) el parser rechaza las claves repetidas en un mismo objeto (D2), así que una palabra clave o una entrada de mapa nombra un único valor; y (2) la clase de una palabra clave es función de su nombre (`K_SCHEMA`, `K_MAP` y `K_LIST` son disjuntas, `gramatica-esquema.md` §1), así que el número de segmentos de cada paso (uno tras `K_SCHEMA`, dos tras `K_MAP` o `K_LIST`) queda determinado por el segmento de la palabra clave y un camino no puede partirse en pasos de dos maneras. Por eso el camino identifica al subesquema, y el **puntero JSON** de *s* es p(*s*) = concatenación de `/`·esc(*σ*) para cada segmento *σ* de π(*s*), con esc(*σ*) la codificación de la RFC 6901 (`~` → `~0`, `/` → `~1`).
 
 ## 2. Tabla de símbolos
 
 T(S) = (N, id, padre, A, D, ρ):
 
 - **id: N → {0, …, |N|−1}** numera los subesquemas en **preorden en orden de documento**. Como el texto de un subárbol es contiguo y cada esquema empieza antes que sus hijos, el preorden coincide con el orden del primer byte (`{` o `true`/`false`) de cada subesquema en la entrada: id(*s*) < id(*t*) ⇔ inicio(*s*) < inicio(*t*). Los ids son **estables**: dependen solo del texto, no de semillas de hash ni del orden de recorrido interno.
-- **padre(*t*) = (*s*, paso)**: el paso es el último uno o dos segmentos de π(*t*). p(*t*) se reconstruye subiendo por los padres en O(profundidad). Se guarda el padre y no el puntero completo para que la tabla ocupe O(n): guardar cada puntero costaría la suma de sus longitudes, que es cuadrática en el peor caso (una clave larga cerca de la raíz con muchos descendientes).
-- **A: nombres → N**, la tabla de anclas: A(*a*) = *s* si *s* tiene `"$anchor": a`. Debe ser una función: con un único recurso (`$id` solo en la raíz, `00-alcance.md` §2.1), 2020-12 exige que cada nombre de ancla sea único en el documento. Un `$anchor` repetido es el error `duplicate-anchor` en la **segunda aparición en el texto** (se ordenan por posición, no por orden de visita).
+- **padre(*t*) = (*s*, paso)**: el paso es el último uno o dos segmentos de π(*t*). p(*t*) se reconstruye subiendo por los padres en O(profundidad + |p(*t*)|); `fragment_clipped` da una versión recortada en O(profundidad + tope), sin construirlo entero. Se guarda el padre y no el puntero completo para que la tabla ocupe O(n): guardar cada puntero costaría la suma de sus longitudes, que es cuadrática en el peor caso (una clave larga cerca de la raíz con muchos descendientes).
+- **A: nombres → N**, la tabla de anclas: A(*a*) = *s* si *s* tiene `"$anchor": a`. Debe ser una función. En 2020-12 (Core §8.2.2) repetir un nombre de fragmento dentro de un recurso tiene un efecto **indefinido** y las implementaciones *pueden* (MAY) dar error; la norma no lo exige. El subconjunto elige ese error que la especificación permite (alcance §2.1: anclas «únicas en el documento»); como `$id` solo se admite en la raíz, el documento es un único recurso. Un `$anchor` repetido es el error `duplicate-anchor` en la **segunda aparición en el texto** (se ordenan por posición, no por orden de visita).
 - **D ⊆ N**, las entradas de `$defs` y `definitions` (alias, `00-alcance.md` §2.1) de cualquier nivel, en orden de documento, cada una con su puntero p(*d*).
 - **ρ: N ⇀ N**, el destino del `$ref` de cada subesquema que lo tiene (a lo sumo uno por esquema, D2).
 
@@ -49,7 +49,7 @@ Un `$ref` local *u* es `""` o `#`·*f*. La cadena vacía es una referencia al mi
 
 Si al acabar los segmentos el estado es *valor (s, k)* (por ejemplo `#/properties` o `#/allOf`), el destino no es un esquema y también es error. Por la inyectividad de π, el recorrido de p(*t*) termina exactamente en *t*: **resolver el fragmento de un subesquema devuelve ese subesquema** (la prueba de propiedades `fragmento_de_cada_nodo_resuelve_a_el` lo comprueba sobre esquemas generados con nombres que necesitan escapes).
 
-El puntero recorre el **documento**, no la semántica: no atraviesa otros `$ref` (si `#/$defs/a` es `{"$ref": "#/$defs/b"}`, `#/$defs/a/properties/x` no existe aunque `b` tenga esa propiedad), igual que en 2020-12. Por eso resolver un `$ref` nunca sigue otro, y **una referencia circular se resuelve como cualquier otra**: el árbol recursivo de `valid-recursive-tree-01` (`items → #/$defs/node`, que contiene ese `items`), `A → B → A` o `{"$ref": "#"}` dan aristas de ρ sin bucle alguno. Decidir si un ciclo de ρ es productivo (consume entrada) es la tarea siguiente.
+El puntero recorre el **documento**, no la semántica: no atraviesa otros `$ref` (si `#/$defs/a` es `{"$ref": "#/$defs/b"}`, `#/$defs/a/properties/x` no existe aunque `b` tenga esa propiedad), igual que en 2020-12. Por eso resolver un `$ref` nunca sigue otro, y **una referencia circular se resuelve como cualquier otra**: el árbol recursivo de `valid-recursive-tree-01` (`items → #/$defs/node`, que contiene ese `items`), `A → B → A` o `{"$ref": "#"}` dan aristas de ρ sin bucle alguno. Decidir si un ciclo es productivo (consume entrada) es la tarea siguiente ([ciclos.md](ciclos.md)); `analyze` rechaza los que no lo son, pero `SymbolTable::build` los resuelve igual.
 
 ## 4. Salida para las tareas siguientes
 
@@ -61,9 +61,10 @@ El puntero recorre el **documento**, no la semántica: no atraviesa otros `$ref`
 | `refs()` | Las aristas de ρ: `Ref { from, target, at }`, en orden de documento del `$ref` |
 | `defs()` | Entradas de `$defs`/`definitions` |
 | `anchor(nombre)` | A |
-| `pointer(id)`, `fragment(id)` | p(*s*) y su forma de fragmento (`#…`, con `%XX` donde la RFC 3986 lo exige) |
+| `pointer(id)`, `fragment(id)` | p(*s*) y su forma de fragmento (`#…`, con `%XX` donde la RFC 3986 lo exige). Miden lo que el camino entero, claves incluidas |
+| `fragment_clipped(id, max)` | El fragmento recortado a `max` bytes (principio, `…`, final) sin construirlo entero: O(profundidad + max). Es el que deben usar los mensajes de error ([ciclos.md](ciclos.md) §5) |
 
-El grafo de referencias de la tarea de ciclos es G = (N, E_estr ∪ E_ref), con E_estr = {(padre(*t*), *t*)} (las aristas que **consumen** entrada o no según la palabra clave del paso, que es lo que esa tarea decidirá) y E_ref = {(*s*, ρ(*s*))}.
+El grafo de referencias es G = (N, E_estr ∪ E_ref), con E_estr = {(padre(*t*), *t*)} y E_ref = {(*s*, ρ(*s*))}. La detección de ciclos ([ciclos.md](ciclos.md)) usa su subgrafo G₀ de aristas que no consumen entrada.
 
 ## 5. Errores
 

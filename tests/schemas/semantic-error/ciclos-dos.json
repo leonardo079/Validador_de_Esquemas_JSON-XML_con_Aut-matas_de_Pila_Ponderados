@@ -1,0 +1,8 @@
+{
+  "$defs": {
+    "a": { "$ref": "#/$defs/b" },
+    "b": { "$ref": "#/$defs/a" },
+    "c": { "not": { "$ref": "#/$defs/c" } }
+  },
+  "properties": { "p": { "$ref": "#/$defs/a" } }
+}

@@ -14,8 +14,13 @@
 //!   `$defs`, `$anchor`) y la resolución de `$ref` ([`SymbolTable`]); teoría
 //!   en `docs/fase3/referencias.md`.
 //!
-//! [`analyze`] encadena las dos.
+//! - la detección de ciclos no productivos ([`check_cycles`]): ciclos de
+//!   `$ref` y aplicadores sobre la misma instancia; teoría en
+//!   `docs/fase3/ciclos.md`.
+//!
+//! [`analyze`] encadena las tres.
 
+mod cycles;
 pub mod error;
 mod meta;
 mod number;
@@ -23,18 +28,23 @@ mod pointer;
 mod symbols;
 mod unsupported;
 
+pub use cycles::{application, check_cycles, Application, FRAGMENT_BYTES};
 pub use error::{Category, ErrorKind, RefProblem, SemanticError};
 pub use meta::{check_meta_schema, DIALECT, TYPE_NAMES};
 pub use symbols::{Node, Ref, SchemaId, Step, SymbolTable};
 
 use schema_parser::Schema;
 
-/// Análisis semántico hecho hasta ahora: meta-esquema y, si pasa, tabla de
-/// símbolos con los `$ref` resueltos. Si el meta-esquema falla no se
-/// resuelve nada: un `$ref` remoto o una palabra clave fuera del subconjunto
-/// ya tienen su propio error, y repetirlos como referencias sin resolver solo
-/// confundiría.
+/// Análisis semántico hecho hasta ahora, por etapas: meta-esquema; si pasa,
+/// tabla de símbolos con los `$ref` resueltos; si pasa, ciclos no
+/// productivos. Cada etapa necesita la anterior completa (un `$ref` remoto o
+/// una palabra clave fuera del subconjunto ya tienen su error, y repetirlos
+/// como referencias sin resolver confundiría; sin todos los `$ref` resueltos
+/// el grafo de ciclos estaría incompleto), así que se devuelven los errores
+/// de la primera etapa que falla.
 pub fn analyze(schema: &Schema) -> Result<SymbolTable<'_>, Vec<SemanticError>> {
     check_meta_schema(schema)?;
-    SymbolTable::build(schema)
+    let table = SymbolTable::build(schema)?;
+    check_cycles(&table)?;
+    Ok(table)
 }

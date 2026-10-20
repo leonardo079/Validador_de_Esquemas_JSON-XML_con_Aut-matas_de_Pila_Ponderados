@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 7bd4110803d339a1b7d3a795f89ebd03284f751b25c67c684925fa2cdfef918a # shrinks to (n, aristas) = (1, [(0, 0, Properties)])
+cc f7bde91aff605ecf20ec26e5454a5ac83617262c0d46d47601eb3a62544e671c # shrinks to (n, aristas) = (1, [(0, 0, Not)])

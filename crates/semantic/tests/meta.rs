@@ -93,6 +93,14 @@ fn formas_fuera_de_alcance() {
     assert_eq!((code, line, col), ("unsupported", 1, 10));
     assert!(msg.contains("referencias locales"), "{msg}");
     one(r#"{"$ref": "https://ejemplo.co/esquema.json"}"#);
+    // Un URI que, resuelto contra `$id`, nombra este mismo documento tampoco
+    // se acepta, pero el mensaje no lo llama remoto: sugiere escribir `#…`.
+    let (code, _, _, msg) = one(
+        r##"{"$id": "https://e.co/s.json", "$defs": {"a": true}, "$ref": "https://e.co/s.json#/$defs/a"}"##,
+    );
+    assert_eq!(code, "unsupported");
+    assert!(msg.contains("escriba `#…` en su lugar"), "{msg}");
+    assert!(!msg.contains("remoto"), "{msg}");
 
     for src in [
         r#"{"exclusiveMinimum": true}"#,

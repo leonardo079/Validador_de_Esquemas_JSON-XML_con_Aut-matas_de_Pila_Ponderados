@@ -86,10 +86,14 @@ Prueba el parser del metalenguaje (Fase 2, `crates/schema-parser/tests/corpus.rs
 
 Los esquemas JSON de `cases/` también pasan por el parser.
 
-La Fase 3 (`crates/semantic/tests/corpus.rs`: meta-esquema y, si pasa, tabla de símbolos con la resolución de `$ref`) usa el mismo corpus:
+La Fase 3 (`crates/semantic/tests/corpus.rs`: meta-esquema y, por etapas, tabla de símbolos con la resolución de `$ref` y ciclos no productivos) usa el mismo corpus:
 
 - `schemas/parse-ok/*.json` y los esquemas JSON de `cases/` deben pasarla, salvo dos esquemas de `parse-ok` que existen para probar el parser y fallan a propósito en la Fase 3 (`combinadores.json` y `fuera-del-subconjunto.json`; sus errores exactos están fijados en la prueba).
-- `schemas/semantic-error/*.json`: parsean pero deben fallar en la Fase 3. Cada archivo tiene una entrada en `schemas/errores-semanticos.json` con los mismos campos que `errores.json` (`code` es `unsupported`, `meta-schema`, `reference` o `duplicate-anchor`; `line` y `column` son las del **primer** error por posición) y, opcional, `count`: el número total de errores que se esperan (la Fase 3 los informa todos).
+- `schemas/semantic-error/*.json`: parsean pero deben fallar en la Fase 3. Cada archivo tiene una entrada en `schemas/errores-semanticos.json` con los mismos campos que `errores.json` (`code` es `unsupported`, `meta-schema`, `reference`, `duplicate-anchor` o `cycle`; `line` y `column` son las del **primer** error por posición) y, opcional, `count`: el número total de errores que se esperan (la Fase 3 los informa todos).
+
+## Semillas de proptest (`*.proptest-regressions`)
+
+Cuando una prueba de propiedades falla, proptest guarda la semilla del caso mínimo en un archivo `<prueba>.proptest-regressions` junto a la prueba (por ejemplo `crates/semantic/tests/symbols.proptest-regressions`) y la vuelve a probar antes que los casos nuevos en cada ejecución. **Se versionan**, como recomienda proptest: así cualquiera que ejecute las pruebas (y la CI) repite los contraejemplos que ya encontraron un error, y el costo es una línea por caso. No se editan a mano; si una semilla deja de tener sentido porque cambió el generador, se borra la línea y se explica en el commit. Las semillas actuales de `crates/semantic/tests/` salieron de mutaciones deliberadas hechas para comprobar que las pruebas detectan errores: `symbols.proptest-regressions`, de quitar el orden de documento del preorden; `cycles.proptest-regressions`, de tratar `properties` como aplicador sobre la misma instancia y de no tratar así a `not`. Son contraejemplos reales de esos errores.
 
 ## Cómo agregar un caso
 

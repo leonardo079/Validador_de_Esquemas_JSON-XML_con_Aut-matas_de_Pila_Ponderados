@@ -48,6 +48,13 @@ fn errores_de_fase_2_y_3() {
         err.contains("línea 3, columna 11: no se puede resolver \"$ref\""),
         "{err}"
     );
+
+    let (code, _, err) = schemac(&Path::new(TESTS_DIR).join("semantic-error/ciclo-directo.json"));
+    assert_eq!(code, 1);
+    assert!(
+        err.contains("línea 3, columna 20: ciclo de referencias que no consume entrada"),
+        "{err}"
+    );
 }
 
 /// D7: el análisis corre en un hilo con pila explícita, así que un esquema a
