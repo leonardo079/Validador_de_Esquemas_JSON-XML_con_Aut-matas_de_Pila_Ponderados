@@ -11,8 +11,8 @@ use schema_parser::error::short;
 use schema_parser::Pos;
 
 /// Un error semántico. A diferencia del parser, la Fase 3 no se detiene en el
-/// primero: [`crate::check_meta_schema`] y [`crate::SymbolTable::build`]
-/// devuelven todos, en orden de posición.
+/// primero: [`crate::check_meta_schema`], [`crate::SymbolTable::build`] y
+/// [`crate::check_cycles`] devuelven todos, en orden de posición.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SemanticError {
     pub kind: ErrorKind,

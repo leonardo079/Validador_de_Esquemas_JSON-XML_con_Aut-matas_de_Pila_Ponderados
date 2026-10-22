@@ -100,6 +100,86 @@ fn fragmento_recortado_con_clave_larga() {
     assert!(c.ends_with("k%C3%B1~1~0/items"), "{c}");
 }
 
+/// Posiciones de `frag` (un fragmento entero de `SymbolTable::fragment`)
+/// donde se puede cortar sin partir un escape: entre `#`, `/`, `~0`, `~1`,
+/// los `%XX` de un mismo carácter (de uno a cuatro, según su primer byte
+/// UTF-8) y los demás caracteres ASCII.
+fn cortes(frag: &str) -> Vec<usize> {
+    let b = frag.as_bytes();
+    let mut out = vec![0];
+    let mut i = 0;
+    while i < b.len() {
+        i += match b[i] {
+            b'~' => 2,
+            b'%' => {
+                let lead = u8::from_str_radix(&frag[i + 1..i + 3], 16).unwrap();
+                3 * match lead {
+                    0..=0x7F => 1,
+                    0xC0..=0xDF => 2,
+                    0xE0..=0xEF => 3,
+                    _ => 4,
+                }
+            }
+            _ => 1,
+        };
+        out.push(i);
+    }
+    assert_eq!(i, b.len(), "{frag}");
+    out
+}
+
+/// El corte de `fragment_clipped` cae entre escapes, nunca dentro: con el
+/// límite justo en medio de una `ñ` (`%C3%B1`), de un `~0`/`~1`, de un `€`
+/// (`%E2%82%AC`) o de un `😀` (`%F0%9F%98%80`), ese carácter queda fuera
+/// entero, en el principio y en el final.
+#[test]
+fn fragmento_recortado_no_parte_escapes() {
+    // max = 80: principio de 38 bytes y final de 39 (`…` ocupa 3).
+    // "#/properties/" (13) + 22 `k` = 35; la `ñ` siguiente llegaría a 41.
+    // Por el final, "/items" (6) + 5 `ñ` = 36; la sexta llegaría a 42.
+    let key = format!("{}{}", "k".repeat(22), "ñ".repeat(20));
+    let src = format!(r#"{{"properties": {{"{key}": {{"items": true}}}}}}"#);
+    let s = parsed(&src);
+    let t = resolved(&s).unwrap();
+    let items = t.id(2).unwrap();
+    assert_eq!(
+        t.fragment_clipped(items, 80),
+        format!(
+            "#/properties/{}…{}/items",
+            "k".repeat(22),
+            "%C3%B1".repeat(5)
+        )
+    );
+    // 13 + 24 `k` = 37; el `~0` o `~1` siguiente llegaría a 39. Por el
+    // final, 6 + 8 veces `~0~1` = 38; el `~1` anterior llegaría a 40.
+    let key = format!("{}{}", "k".repeat(24), "~/".repeat(20));
+    let src = format!(r#"{{"properties": {{"{key}": {{"items": true}}}}}}"#);
+    let s = parsed(&src);
+    let t = resolved(&s).unwrap();
+    let items = t.id(2).unwrap();
+    assert_eq!(
+        t.fragment_clipped(items, 80),
+        format!("#/properties/{}…{}/items", "k".repeat(24), "~0~1".repeat(8))
+    );
+    // Caracteres de 3 y 4 bytes: `€` es `%E2%82%AC` (9) y `😀` es
+    // `%F0%9F%98%80` (12). 13 + 22 `k` = 35; el `😀` siguiente llegaría a
+    // 47. Por el final, 6 + 2 `😀` + `€` = 39, justo el tope; el `😀`
+    // anterior llegaría a 51.
+    let key = format!("{}{}€{}", "k".repeat(22), "😀".repeat(5), "😀".repeat(2));
+    let src = format!(r#"{{"properties": {{"{key}": {{"items": true}}}}}}"#);
+    let s = parsed(&src);
+    let t = resolved(&s).unwrap();
+    let items = t.id(2).unwrap();
+    assert_eq!(
+        t.fragment_clipped(items, 80),
+        format!(
+            "#/properties/{}…%E2%82%AC{}/items",
+            "k".repeat(22),
+            "%F0%9F%98%80".repeat(2)
+        )
+    );
+}
+
 #[test]
 fn defs_con_su_puntero() {
     let src = r#"{
@@ -454,7 +534,7 @@ fn ast_muy_profundo_no_desborda() {
 // ------------------------------------------------------------ propiedades ---
 
 /// Esquema aleatorio sin `$ref` ni `$anchor`, con nombres que necesitan
-/// escapes (`~`, `/`, `%`, espacio, no ASCII).
+/// escapes (`~`, `/`, `%`, espacio, no ASCII de 2, 3 y 4 bytes).
 fn esquema(depth: u32) -> BoxedStrategy<String> {
     let hoja = prop_oneof![Just("true".to_owned()), Just("{}".to_owned())];
     if depth == 0 {
@@ -462,7 +542,7 @@ fn esquema(depth: u32) -> BoxedStrategy<String> {
     }
     let sub = esquema(depth - 1);
     let mapa = |kw: &'static str, sub: BoxedStrategy<String>| {
-        prop::collection::btree_map("[a~/% ñ0-9]{0,3}", sub, 0..3).prop_map(move |m| {
+        prop::collection::btree_map("[a~/% ñ€😀0-9]{0,3}", sub, 0..3).prop_map(move |m| {
             let entries: Vec<String> = m
                 .iter()
                 .map(|(k, v)| format!("{}: {v}", serde_json::to_string(k).unwrap()))
@@ -486,24 +566,32 @@ fn esquema(depth: u32) -> BoxedStrategy<String> {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]
 
-    /// `fragment_clipped` es el fragmento entero si cabe y, si no, un
-    /// principio y un final suyos separados por `…`, sin pasar de `max`.
+    /// Oráculo exacto de `fragment_clipped`, construido con el fragmento
+    /// entero y sus [`cortes`]: con `m = max(max, 16)`, si el fragmento cabe
+    /// en `m` es él mismo; si no, es su principio hasta la mayor frontera
+    /// que no pasa de `(m − 3) / 2` bytes, `…` (3 bytes) y su final desde
+    /// la menor frontera cuyo resto cabe en los `m − 3 − (m − 3) / 2` bytes
+    /// que quedan. Así ningún corte parte un escape `%XX`, `~0` o `~1` (ni
+    /// los `%XX` de un mismo carácter) y los dos son tan largos como caben.
     #[test]
-    fn fragmento_recortado(s in esquema(3), max in 16usize..48) {
+    fn fragmento_recortado(s in esquema(3), max in 0usize..120) {
         let base = parsed(&s);
         let t = resolved(&base).unwrap();
+        let m = max.max(16);
+        let head = (m - 3) / 2;
+        let tail = m - 3 - head;
         for id in t.ids() {
             let full = t.fragment(id);
-            let c = t.fragment_clipped(id, max);
             prop_assert_eq!(t.fragment_clipped(id, usize::MAX), full.clone());
-            if full.len() <= max {
-                prop_assert_eq!(c, full);
+            let esperado = if full.len() <= m {
+                full.clone()
             } else {
-                prop_assert!(c.len() <= max, "{} > {}", c.len(), max);
-                let (head, tail) = c.split_once('…').unwrap();
-                prop_assert!(head.starts_with('#') && full.starts_with(head), "{} / {}", c, full);
-                prop_assert!(full.ends_with(tail), "{} / {}", c, full);
-            }
+                let fronteras = cortes(&full);
+                let h = *fronteras.iter().filter(|&&f| f <= head).max().unwrap();
+                let f = *fronteras.iter().find(|&&f| full.len() - f <= tail).unwrap();
+                format!("{}…{}", &full[..h], &full[f..])
+            };
+            prop_assert_eq!(t.fragment_clipped(id, max), esperado, "{}", full);
         }
     }
 

@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc ed67c5410de2ef8387f3e3900fbd2557f08ed7da74233ae6c00153f058426e6e # shrinks to s = "{\"properties\": {\"\": {\"allOf\": [{\"allOf\": [true, true]}]}}}"
+cc 194b5d405dca789b5a50a1b07d5bb51bd26a05859983fbe2c2a0105098612432 # shrinks to s = "{\"$defs\": {\"ñññ\": true}}", max = 21

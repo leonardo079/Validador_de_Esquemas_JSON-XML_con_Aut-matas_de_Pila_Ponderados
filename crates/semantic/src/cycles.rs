@@ -207,8 +207,12 @@ impl<'a> Graph<'a> {
                 }
             }
         }
+        // Las dos salidas con camino vacío solo se dan si se rompe un
+        // invariante; en release dan un error incoherente pero no ocultan
+        // ninguno (la componente sigue informándose), en debug avisan.
+        // No ocurre si `from` y `to` están en la misma componente.
+        debug_assert!(seen[to], "path_in: destino {to} fuera de la componente {c}");
         if !seen[to] {
-            // No ocurre si `from` y `to` están en la misma componente.
             return Vec::new();
         }
         // Un camino simple tiene menos de n aristas. Con el invariante de
@@ -218,6 +222,10 @@ impl<'a> Graph<'a> {
         let mut path = Vec::new();
         let mut cur = to;
         while cur != from {
+            debug_assert!(
+                path.len() < self.len(),
+                "path_in: la cadena de pred no llega al origen {from}"
+            );
             if path.len() >= self.len() {
                 return Vec::new();
             }
@@ -241,12 +249,13 @@ pub const FRAGMENT_BYTES: usize = 80;
 /// informan todos (sin tope): ver el costo.
 ///
 /// Costo: O(V + E) para el grafo, Tarjan y los caminos, más
-/// O(m · (h + 9·`FRAGMENT_BYTES`)) para construir los m errores (h, la
+/// O(m · 9 · (h + `FRAGMENT_BYTES`)) para construir los m errores (h, la
 /// profundidad máxima de un subesquema) y O(m log m) para ordenarlos. Cada
 /// error guarda a lo sumo 9 fragmentos ya recortados a `FRAGMENT_BYTES` con
-/// [`SymbolTable::fragment_clipped`], que no construye el puntero entero:
-/// la salida es O(m), y m ≤ n/9 porque cada componente tiene un `$ref` propio
-/// de al menos 9 bytes (`docs/fase3/ciclos.md` §5).
+/// [`SymbolTable::fragment_clipped`], que sube los h padres en cada una de
+/// las 9 llamadas y no construye el puntero entero: la salida es O(m), y
+/// m ≤ n/9 porque cada componente tiene un `$ref` propio de al menos 9
+/// bytes (`docs/fase3/ciclos.md` §5).
 pub fn check_cycles(table: &SymbolTable<'_>) -> Result<(), Vec<SemanticError>> {
     let n = table.len();
     let mut edges: Vec<(usize, usize, &str)> = Vec::new();
@@ -421,5 +430,30 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Las dos salidas anómalas de `path_in` no son silenciosas en debug:
+    /// destino fuera de la componente.
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "fuera de la componente")]
+    fn camino_a_otra_componente_avisa() {
+        let g = Graph::new(2, &[(0, 1, "x")]);
+        let (comp, _) = g.cyclic_components();
+        let (mut seen, mut pred) = (vec![false; 2], vec![(0, ""); 2]);
+        g.path_in(0, 1, comp[0], &comp, &mut seen, &mut pred);
+    }
+
+    /// … y cadena de `pred` que no vuelve a `from` (marcadores de otra
+    /// búsqueda que forman un bucle 1 → 2 → 1).
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "no llega al origen")]
+    fn cadena_de_pred_rota_avisa() {
+        let g = Graph::new(3, &[(0, 1, "x"), (1, 0, "x")]);
+        let (comp, _) = g.cyclic_components();
+        let mut seen = vec![false, true, true];
+        let mut pred = vec![(0, ""), (2, "x"), (1, "x")];
+        g.path_in(0, 1, comp[0], &comp, &mut seen, &mut pred);
     }
 }

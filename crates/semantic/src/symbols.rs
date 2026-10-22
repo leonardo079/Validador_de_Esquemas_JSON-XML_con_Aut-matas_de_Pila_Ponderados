@@ -15,7 +15,8 @@
 //! el puntero sobre el documento con un índice hash, sin seguir otros
 //! `$ref`: una referencia circular (un árbol recursivo, `A → B → A`) se
 //! resuelve igual que cualquier otra y no hay bucle. Decidir si un ciclo es
-//! productivo es la tarea siguiente, que usa [`SymbolTable::refs`].
+//! productivo lo hace después [`crate::check_cycles`] (`docs/fase3/ciclos.md`)
+//! a partir de [`SymbolTable::refs`].
 //!
 //! Teoría: `docs/fase3/referencias.md`.
 //!
@@ -399,6 +400,8 @@ impl<'a> SymbolTable<'a> {
     /// No construye el fragmento entero: recorre los padres (O(profundidad))
     /// y codifica solo los caracteres que caben, así que cuesta
     /// O(profundidad + max) y no depende de la longitud de las claves.
+    /// Nunca parte un escape: cada carácter codificado (`~0`, `~1` o sus
+    /// `%XX`) entra entero o no entra.
     pub fn fragment_clipped(&self, id: SchemaId, max: usize) -> String {
         const GAP: &str = "…";
         let max = max.max(16);
@@ -417,21 +420,19 @@ impl<'a> SymbolTable<'a> {
                 Step::Index(k, i) => segs.extend([Seg::Str(k), Seg::Num(i)]),
             }
         }
-        // Todo, si cabe en `max`.
-        let mut out = String::from("#");
-        if emit(&segs, &mut out, max, false) {
-            return out;
-        }
-        // Principio y final.
+        // Todo, si cabe en `max`; si no, el principio es lo escrito hasta
+        // la última frontera entre trozos que no pasa de `head` bytes.
         let head = (max - GAP.len()) / 2;
         let tail = max - GAP.len() - head;
-        let mut first = String::from("#");
-        emit(&segs, &mut first, head, false);
-        let mut last = String::new();
-        emit(&segs, &mut last, tail, true);
-        first.push_str(GAP);
-        first.push_str(&last);
-        first
+        let mut out = String::with_capacity(max.min(1024));
+        out.push('#');
+        let Some(cut) = emit_head(&segs, &mut out, max, head) else {
+            return out;
+        };
+        out.truncate(cut);
+        out.push_str(GAP);
+        emit_tail(&segs, &mut out, tail);
+        out
     }
 }
 
@@ -442,66 +443,69 @@ enum Seg<'a> {
     Num(usize),
 }
 
-/// Añade a `out` los trozos codificados (`/` y un carácter de segmento a la
-/// vez) de los segmentos, del principio (o del final, con `rev`), mientras
-/// `out` no pase de `max` bytes. Con `rev` los trozos se añaden en orden
-/// inverso y se dan la vuelta al terminar. Devuelve si cupieron todos. Solo
+/// Añade a `out` los trozos codificados (`/` o un carácter de segmento) de
+/// los segmentos, desde el principio, mientras `out` no pase de `max`
+/// bytes. Devuelve `None` si cupieron todos y, si no, la longitud de `out`
+/// en la última frontera entre trozos que no pasa de `head` bytes. Solo
 /// mira los caracteres que caben más uno.
-fn emit(segs: &[Seg<'_>], out: &mut String, max: usize, rev: bool) -> bool {
-    let mut chunks: Vec<String> = Vec::new();
-    let mut len = out.len();
-    let mut push = |chunk: String, chunks: &mut Vec<String>| -> bool {
-        if len + chunk.len() > max {
-            return false;
-        }
-        len += chunk.len();
-        chunks.push(chunk);
-        true
-    };
-    let mut all = true;
-    let order: Box<dyn Iterator<Item = &Seg<'_>>> = if rev {
-        Box::new(segs.iter().rev())
-    } else {
-        Box::new(segs.iter())
-    };
-    'outer: for seg in order {
+fn emit_head(segs: &[Seg<'_>], out: &mut String, max: usize, head: usize) -> Option<usize> {
+    let mut cut = out.len();
+    let mut buf = [0u8; pointer::MAX_ENCODED];
+    for seg in segs {
         let num;
-        let text: &str = match seg {
+        let text: &str = match *seg {
             Seg::Str(s) => s,
             Seg::Num(i) => {
                 num = i.to_string();
                 &num
             }
         };
-        if !rev && !push("/".to_owned(), &mut chunks) {
-            all = false;
-            break;
-        }
-        let chars: Box<dyn Iterator<Item = char>> = if rev {
-            Box::new(text.chars().rev())
-        } else {
-            Box::new(text.chars())
-        };
-        for c in chars {
-            let mut enc = String::new();
-            pointer::encode_char(c, &mut enc);
-            if !push(enc, &mut chunks) {
-                all = false;
-                break 'outer;
+        for c in std::iter::once(None).chain(text.chars().map(Some)) {
+            let enc: &[u8] = match c {
+                None => b"/",
+                Some(c) => pointer::encode_char(c, &mut buf),
+            };
+            if out.len() + enc.len() > max {
+                return Some(cut);
+            }
+            // `encode_char` solo produce ASCII.
+            out.extend(enc.iter().map(|&b| char::from(b)));
+            if out.len() <= head {
+                cut = out.len();
             }
         }
-        if rev && !push("/".to_owned(), &mut chunks) {
-            all = false;
-            break;
+    }
+    None
+}
+
+/// Añade a `out` el final de los segmentos codificados: los trozos desde el
+/// último hacia atrás mientras quepan en `max` bytes. Cada trozo se guarda
+/// del revés y se da la vuelta al conjunto al terminar, así cada uno queda
+/// entero y en su orden. Solo mira los caracteres que caben más uno.
+fn emit_tail(segs: &[Seg<'_>], out: &mut String, max: usize) {
+    let mut rev: Vec<u8> = Vec::with_capacity(max.min(1024));
+    let mut buf = [0u8; pointer::MAX_ENCODED];
+    'outer: for seg in segs.iter().rev() {
+        let num;
+        let text: &str = match *seg {
+            Seg::Str(s) => s,
+            Seg::Num(i) => {
+                num = i.to_string();
+                &num
+            }
+        };
+        for c in text.chars().rev().map(Some).chain(std::iter::once(None)) {
+            let enc: &[u8] = match c {
+                None => b"/",
+                Some(c) => pointer::encode_char(c, &mut buf),
+            };
+            if rev.len() + enc.len() > max {
+                break 'outer;
+            }
+            rev.extend(enc.iter().rev());
         }
     }
-    if rev {
-        chunks.reverse();
-    }
-    for c in chunks {
-        out.push_str(&c);
-    }
-    all
+    out.extend(rev.iter().rev().map(|&b| char::from(b)));
 }
 
 /// Índice de arreglo de la RFC 6901: `0` o un decimal sin ceros a la

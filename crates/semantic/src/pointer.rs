@@ -125,28 +125,49 @@ pub fn to_fragment(pointer: &str) -> String {
     out
 }
 
+/// Bytes que la RFC 3986 admite sin codificar en un fragmento.
+fn keep(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b"-._~!$&'()*+,;=:@/?".contains(&b)
+}
+
 fn push_byte(b: u8, out: &mut String) {
-    let keep = b.is_ascii_alphanumeric() || b"-._~!$&'()*+,;=:@/?".contains(&b);
-    if keep {
+    if keep(b) {
         out.push(b as char);
     } else {
         out.push_str(&format!("%{b:02X}"));
     }
 }
 
+/// Bytes como mucho de un carácter codificado: cuatro bytes UTF-8 en `%XX`.
+pub(crate) const MAX_ENCODED: usize = 12;
+
 /// Un carácter de un segmento tal como queda en el fragmento: primero el
 /// escape de la RFC 6901 (`~` → `~0`, `/` → `~1`) y después el de la
 /// RFC 3986. Concatenar `/` + `encode_char` de cada carácter de cada
 /// segmento da exactamente `to_fragment` del puntero, sin construirlo.
-pub(crate) fn encode_char(c: char, out: &mut String) {
+/// Escribe en `buf`, sin reservar memoria; el resultado es ASCII.
+pub(crate) fn encode_char(c: char, buf: &mut [u8; MAX_ENCODED]) -> &[u8] {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
     match c {
-        '~' => out.push_str("~0"),
-        '/' => out.push_str("~1"),
+        '~' => b"~0",
+        '/' => b"~1",
         _ => {
-            let mut buf = [0u8; 4];
-            for &b in c.encode_utf8(&mut buf).as_bytes() {
-                push_byte(b, out);
+            let mut utf8 = [0u8; 4];
+            let mut n = 0;
+            for &b in c.encode_utf8(&mut utf8).as_bytes() {
+                if keep(b) {
+                    buf[n] = b;
+                    n += 1;
+                } else {
+                    buf[n..n + 3].copy_from_slice(&[
+                        b'%',
+                        HEX[usize::from(b >> 4)],
+                        HEX[usize::from(b & 0x0F)],
+                    ]);
+                    n += 3;
+                }
             }
+            &buf[..n]
         }
     }
 }
