@@ -35,13 +35,17 @@ teoría en `docs/fase3/ir.md`, incluidas las decisiones pendientes de
 prueba construyendo IR a mano.
 
 **Criterios de aceptación:**
-- [ ] `docs/fase3/ir.md` define formalmente la IR, sus invariantes y cómo se representa cada palabra clave de `00-alcance.md` §2 y cada construcción de §3.1; resuelve los tres puntos de §5 (que se quitan de ahí)
-- [ ] Pruebas que construyen a mano la IR de un esquema JSON recursivo (`$ref` a la raíz por `properties`) y de un XSD con `sequence`, `choice`, atributo requerido y `maxOccurs="unbounded"`, y pasan `Ir::verify`; casos que rompen cada invariante fallan con un error claro
-- [ ] Sin recursión (D7), sin `unsafe`, tamaño O(n) en número de subesquemas; el documento muestra de qué dato de la IR sale cada pieza de la construcción del DPDA de la Fase 4
+- [x] `docs/fase3/ir.md` define formalmente la IR, sus invariantes y cómo se representa cada palabra clave de `00-alcance.md` §2 y cada construcción de §3.1; resuelve los tres puntos de §5 (que se quitan de ahí)
+- [x] Pruebas que construyen a mano la IR de un esquema JSON recursivo (`$ref` a la raíz por `properties`) y de un XSD con `sequence`, `choice`, atributo requerido y `maxOccurs="unbounded"`, y pasan `Ir::verify`; casos que rompen cada invariante fallan con un error claro
+- [x] Sin recursión (D7), sin `unsafe`, tamaño O(n) en número de subesquemas; el documento muestra de qué dato de la IR sale cada pieza de la construcción del DPDA de la Fase 4
 
 **Verificación:**
-- [ ] `make lint`, `make test`, `cargo doc -p ir --no-deps` sin avisos
-- [ ] Revisión del usuario en el punto de control A
+- [x] `make lint`, `make test`, `cargo doc -p ir --no-deps` sin avisos
+- [x] Revisión del usuario en el punto de control A (aprobado el 26 oct; `VerifiedIr` pasa a la 4.2)
+
+**Estado (26 oct):** APROBADO CON OBSERVACIONES (0 Critical, 0 High; 2 Important de documentación de fases futuras). 3 rondas de corrección en la segunda invocación; sin commit. Casillas marcadas: las verificó el Tester de la ronda 3, y el punto de control A lo aprobó el usuario. Observaciones abiertas en el plan general («Pendientes abiertos tras 4.1»).
+
+**Arrastra de 4.0:** los pendientes (a)-(d) de «Pendientes abiertos tras 4.0» del plan general (cota de amplificación ≲ 12× —11,35× medido— y «≈ 9×» como estimación, cifras de `ciclos.md:100-102`, prueba en release de las salvaguardas de `path_in`, requisitos conjuntos del servidor en `docs/fase3/pendientes.md` §2); se corrigen junto con 4.1.
 
 **Dependencias:** 4.0 (solo por orden de commits)
 
@@ -65,10 +69,14 @@ explícita que `schemac check` (D7).
 - [ ] Todos los esquemas válidos del corpus (`tests/schemas/parse-ok`, salvo las 2 excepciones, y `tests/cases`) bajan a una IR que pasa `Ir::verify`; cada nodo conserva su `Span` y su puntero
 - [ ] Un `$ref` no duplica su destino: el número de nodos es el de subesquemas; la recursión productiva queda como ciclo en el grafo; la salida es determinista (prueba dorada de al menos 3 esquemas)
 - [ ] `schemac ir` da código 0 con la IR, 1 con los mismos errores que `check`, 2 si no puede leer; bajada iterativa, O(n)
+- [ ] `VerifiedIr` (punto de control A, 26 oct): `Ir::verify(self) -> Result<VerifiedIr, (Ir, Vec<VerifyError>)>`; `VerifiedIr` sin campos mutables; la bajada llama siempre a `verify` en el camino normal y sus errores se presentan como un único error interno (`docs/fase3/ir.md` §4, pendientes 1 y 6 de §11); las fases siguientes solo aceptan `&VerifiedIr`
+- [ ] Exportar la IR a DOT (`schemac ir --dot`, o generada por `make docs`) y versionar en `docs/fase3/` el diagrama de al menos un esquema de ejemplo con recursión productiva; `make docs-check` verifica que el `.dot` está sincronizado, igual que los AFD de la Fase 1
 
 **Verificación:**
 - [ ] `make lint`, `make test`
 - [ ] Manual: `cargo run -p cli -- ir tests/cases/valid/<uno>.json` muestra la IR
+
+**Arrastra de 4.1 (baratos, de texto):** SA-L1 (los mensajes de `VerifyError` repiten nombres y lexemas del usuario sin escapar ni recortar: llevar `short` a un sitio compartido; registrar solo el recuento y los N primeros errores internos); en `docs/fase3/ir.md`: decisión 9 y pendiente 6 ya decididos (punto A, 26 oct; el 6 remite al criterio `VerifiedIr`), fila `Content` de §9 marcada «propuesta, se confirma en 4.3», «2^(10⁴ − 1) caminos» en §7-§8; decir qué código de salida da el error interno de `verify` en `schemac ir`.
 
 **Dependencias:** 4.1
 

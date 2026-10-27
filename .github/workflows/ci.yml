@@ -51,6 +51,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --workspace --all-targets
       - run: cargo test --workspace
+      # Las salvaguardas de release de `path_in` (`crates/semantic/src/cycles.rs`)
+      # solo tienen prueba sin `debug_assertions` (docs/fase3/pendientes.md §2).
+      - run: cargo test -p semantic --release
 
   coverage:
     name: Cobertura

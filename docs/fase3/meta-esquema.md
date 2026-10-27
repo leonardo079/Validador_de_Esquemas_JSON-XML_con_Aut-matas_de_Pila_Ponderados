@@ -140,6 +140,6 @@ El valor de una palabra clave rechazada no se recorre (puede ser cualquier JSON)
 
 ## 8. Pendiente
 
-- Magnitud de los contadores: `"maxLength": 1e400` es válido según el meta-esquema. La IR (tarea posterior) tendrá que acotarlo al tamaño de sus registros o tratarlo como «sin límite»; no es un error del esquema.
+- Magnitud de los contadores: `"maxLength": 1e400` es válido según el meta-esquema; no es un error del esquema. **Resuelto** en la IR ([ir.md](ir.md) §5.1): la bajada satura los contadores en `u64::MAX`, que es exacto (un máximo saturado es «sin límite» y un mínimo saturado, insatisfacible).
 - `pattern`: la comprobación del subconjunto de regex va con la tarea `pattern` → AFD (semana 3), que es la que tiene el analizador de expresiones regulares.
 - Resolución de `$ref` y de `$anchor` (que el destino exista, anclas repetidas): **hecha** en la tarea de la tabla de símbolos, [referencias.md](referencias.md).

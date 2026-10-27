@@ -36,7 +36,9 @@ la Fase 4, así que su forma se audita antes de construir nada encima (D3).
   es una arista a un nodo ya existente, así la recursión productiva se
   conserva sin duplicar subesquemas y el tamaño de la IR es O(n).
 - **Mínimos que la IR debe expresar (D3):** nodo, restricciones tipadas por
-  palabra clave, clase y estrategia, orden de hijos (`xs:sequence`),
+  palabra clave, clase y estrategia (derivables de la clase de cada regla,
+  `RuleKind`; la tabla clase/estrategia vive aparte y la construye 4.3),
+  orden de hijos (`xs:sequence`),
   atributo frente a elemento, `minOccurs`/`maxOccurs`, contenido simple.
   Números como lexema exacto; la ubicación de origen (`Span` y puntero o
   ruta) para los errores de las fases siguientes.

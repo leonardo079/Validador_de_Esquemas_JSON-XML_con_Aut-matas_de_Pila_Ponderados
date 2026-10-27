@@ -58,6 +58,7 @@ Esquema (JSON Schema / XSD)
 │   ├── lexer/          # Fase 1
 │   ├── schema-parser/  # Fase 2
 │   ├── semantic/       # Fase 3
+│   ├── ir/             # Fase 3: IR común de JSON Schema y XSD
 │   ├── automaton/      # Fase 4
 │   ├── codegen/        # Fase 5
 │   ├── runtime-c/      # Soporte C del validador generado

@@ -98,7 +98,7 @@ La columna **Cat.** indica la categoría de reconocibilidad:
 | `allOf` | Producto (intersección) de autómatas. | (c) |
 | `anyOf` | Determinista si las ramas se distinguen por el primer token; si no, determinización acotada (límite de estados configurable) y, al excederlo, verificación diferida. | (c) |
 | `oneOf` | Como `anyOf`, contando que acepte **exactamente una** rama. | (c) |
-| `not` | Complemento de un subautómata determinista; si el subesquema es de categoría (c), verificación diferida. | (c) |
+| `not` | Complemento de un subautómata determinista: se invierte su veredicto al cerrar la instancia; si el subesquema es de categoría (c), sigue la estrategia de ese subesquema (producto acotado o verificación diferida) y se invierte el veredicto que entrega ([fase3/ir.md](fase3/ir.md) §6.1). | (c) |
 
 ### 2.8 Fuera de alcance
 
@@ -136,7 +136,7 @@ Las construcciones XSD se analizan a un **AST propio de XSD** y bajan a la **mis
 
 ### 3.3 Fuera de alcance
 
-`xs:import`, `xs:include`, `xs:redefine`, `xs:any`, `xs:anyAttribute`, `xs:group`, `xs:attributeGroup`, `substitutionGroup`, `abstract`, `nillable`/`xsi:nil`, `xsi:type`, contenido mixto (`mixed="true"`), `xs:list`, `xs:union`, `xs:complexContent` (extensión/restricción de tipos complejos), restricciones de identidad (`xs:key`, `xs:keyref`, `xs:unique`, no libres de contexto), facetas `totalDigits`/`fractionDigits`/`whiteSpace`, y tipos de fecha y hora.
+`xs:import`, `xs:include`, `xs:redefine`, `xs:any`, `xs:anyAttribute`, `xs:group`, `xs:attributeGroup`, `substitutionGroup`, `abstract`, `nillable`/`xsi:nil`, `xsi:type`, contenido mixto (`mixed="true"`), `xs:element` sin `type`, `ref` ni tipo anónimo (su tipo implícito es `xs:anyType`, que admite cualquier contenido, también mixto, elementos no declarados y cualquier atributo: equivale a `xs:any`, `xs:anyAttribute` y `mixed="true"`, ya excluidos; [fase3/ir.md](fase3/ir.md) §5.2), `xs:list`, `xs:union`, `xs:complexContent` (extensión/restricción de tipos complejos), restricciones de identidad (`xs:key`, `xs:keyref`, `xs:unique`, no libres de contexto), facetas `totalDigits`/`fractionDigits`/`whiteSpace`, y tipos de fecha y hora.
 
 ---
 
@@ -160,6 +160,4 @@ Todos son configurables en tiempo de compilación o en `sv_limits_t` (T5.2, T6.4
 
 ## 5. Pendiente de decidir en la Fase 3
 
-- Si `not` sobre subesquemas de categoría (a)/(b) se implementa como complemento real del autómata o siempre como verificación diferida.
-- Semántica exacta de `additionalProperties` combinado con `allOf` (en 2020-12 no "ve" las `properties` de las ramas).
-- Correspondencia exacta entre `xs:sequence` (orden fijo) y los objetos JSON (sin orden) en la IR común.
+Nada. Los tres puntos que quedaban se resolvieron con el diseño de la IR común ([fase3/ir.md](fase3/ir.md) §6): `not` sobre (a)/(b) es complemento real (inversión del veredicto al cerrar la instancia); `additionalProperties` sigue la semántica de 2020-12 y no ve las `properties` de las ramas de `allOf`; y `xs:sequence` y los objetos JSON son reglas distintas de la IR, que no se traducen entre sí.

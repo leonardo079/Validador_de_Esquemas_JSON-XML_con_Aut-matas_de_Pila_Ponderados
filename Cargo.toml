@@ -4,6 +4,7 @@ members = [
     "crates/lexer",
     "crates/schema-parser",
     "crates/semantic",
+    "crates/ir",
     "crates/automaton",
     "crates/codegen",
     "crates/runtime-rs",
@@ -23,6 +24,7 @@ repository = "https://github.com/leonardo079/Validador_de_Esquemas_JSON-XML_con_
 lexer = { path = "crates/lexer" }
 schema-parser = { path = "crates/schema-parser" }
 semantic = { path = "crates/semantic" }
+ir = { path = "crates/ir" }
 automaton = { path = "crates/automaton" }
 codegen = { path = "crates/codegen" }
 runtime-rs = { path = "crates/runtime-rs" }
@@ -35,6 +37,10 @@ rust_2018_idioms = { level = "warn", priority = -1 }
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
 
+# Ningún perfil usa `panic = "abort"`: el servidor (Fase 7) y `schemac` aíslan
+# cada compilación de esquema en un hilo y convierten un pánico en un error de
+# esa petición con `join()`; con `abort` el pánico tumbaría el proceso
+# (`docs/fase3/pendientes.md` §2).
 [profile.release]
 lto = "thin"
 codegen-units = 1

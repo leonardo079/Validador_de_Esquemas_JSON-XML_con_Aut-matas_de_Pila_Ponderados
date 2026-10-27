@@ -456,4 +456,31 @@ mod tests {
         let mut pred = vec![(0, ""), (2, "x"), (1, "x")];
         g.path_in(0, 1, comp[0], &comp, &mut seen, &mut pred);
     }
+
+    /// Gemelas de las dos anteriores sin `debug_assertions` (las corre
+    /// `cargo test -p semantic --release`): en release las salvaguardas
+    /// devuelven un camino vacío en lugar de hacer pánico, y el bucle de
+    /// `pred` termina aunque la cadena forme un ciclo.
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn camino_a_otra_componente_es_vacio_en_release() {
+        let g = Graph::new(2, &[(0, 1, "x")]);
+        let (comp, _) = g.cyclic_components();
+        let (mut seen, mut pred) = (vec![false; 2], vec![(0, ""); 2]);
+        assert!(g
+            .path_in(0, 1, comp[0], &comp, &mut seen, &mut pred)
+            .is_empty());
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn cadena_de_pred_rota_es_vacia_en_release() {
+        let g = Graph::new(3, &[(0, 1, "x"), (1, 0, "x")]);
+        let (comp, _) = g.cyclic_components();
+        let mut seen = vec![false, true, true];
+        let mut pred = vec![(0, ""), (2, "x"), (1, "x")];
+        assert!(g
+            .path_in(0, 1, comp[0], &comp, &mut seen, &mut pred)
+            .is_empty());
+    }
 }
