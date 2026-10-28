@@ -1,0 +1,19 @@
+digraph ir {
+  rankdir=LR;
+  label="IR (json): 6 nodos, 6 aristas; clases: 3 (a), 3 (b), 0 (c)\n(continuas: consumen entrada; discontinuas: misma instancia)";
+  labelloc=t;
+  node [shape=box, fontname="Helvetica"];
+  edge [fontname="Helvetica", fontsize=10];
+  n0 [label="0 (raíz)\n$ref\n(b) transición, registro o contador", peripheries=2];
+  n1 [label="1 $defs/node\ntype, properties, required\n(b) transición, registro o contador"];
+  n2 [label="2 properties/value\ntype\n(a) transición"];
+  n3 [label="3 properties/children\ntype, items\n(a) transición"];
+  n4 [label="4 items\n$ref\n(b) transición, registro o contador"];
+  n5 [label="5 additionalProperties\nfalse\n(a) transición"];
+  n0 -> n1 [label="$ref", style=dashed];
+  n1 -> n2 [label="properties/value"];
+  n1 -> n3 [label="properties/children"];
+  n1 -> n5 [label="additionalProperties"];
+  n3 -> n4 [label="items"];
+  n4 -> n1 [label="$ref", style=dashed];
+}

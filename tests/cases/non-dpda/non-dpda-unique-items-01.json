@@ -1,0 +1,11 @@
+{
+  "_id": "non-dpda-unique-items-01",
+  "category": "non-dpda",
+  "format": "json",
+  "description": "uniqueItems: verificación diferida con hash acotado al cerrar el arreglo.",
+  "phase": 3,
+  "strategy": "deferred",
+  "schema": { "type": "array", "items": { "type": "integer" }, "uniqueItems": true },
+  "payload": "[1, 2, 3]",
+  "expected": { "valid": true, "violations": 0 }
+}

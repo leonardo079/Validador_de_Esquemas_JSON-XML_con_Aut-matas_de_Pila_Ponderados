@@ -6,8 +6,9 @@
 //! referencias.
 
 use ir::{
-    Attribute, Constraint, ContentModel, Format, Ir, JsonType, Lexical, LitToken, Literal, Node,
-    NodeId, Num, Occurs, Origin, Particle, Pos, Rule, Sort, Span, Step, Term, TypeSet,
+    Attribute, Constraint, ContentModel, Format, InternalError, Ir, JsonType, Lexical, LitToken,
+    Literal, Node, NodeId, Num, Occurs, Origin, Particle, Pos, Rule, Sort, Span, Step, Term,
+    TypeSet, VerifiedIr, VerifyError,
 };
 
 // --- Ayudas para construir IR a mano -------------------------------------
@@ -115,10 +116,27 @@ fn attr(name: &str, required: bool, ty: usize) -> Attribute {
     }
 }
 
+/// [`Ir::verify`] consume la IR (D15); las pruebas la verifican sobre una
+/// copia y comprueban además que no la cambia: si pasa, la `VerifiedIr` es
+/// la misma IR; si no, devuelve la IR intacta junto a los errores.
+#[track_caller]
+fn verificar(ir: &Ir) -> Result<VerifiedIr, Vec<VerifyError>> {
+    match ir.clone().verify() {
+        Ok(v) => {
+            assert_eq!(v.ir(), ir, "verify cambió la IR");
+            Ok(v)
+        }
+        Err((devuelta, e)) => {
+            assert_eq!(&devuelta, ir, "verify no devolvió la IR intacta");
+            Err(e)
+        }
+    }
+}
+
 /// Códigos de los errores del verificador, en orden.
 fn codes(ir: &Ir) -> Vec<&'static str> {
-    match ir.verify() {
-        Ok(()) => Vec::new(),
+    match verificar(ir) {
+        Ok(_) => Vec::new(),
         Err(e) => e.iter().map(|e| e.code()).collect(),
     }
 }
@@ -126,12 +144,12 @@ fn codes(ir: &Ir) -> Vec<&'static str> {
 /// La IR rompe exactamente un invariante, con el código `code`.
 #[track_caller]
 fn falla(ir: &Ir, code: &str) {
-    assert_eq!(codes(ir), [code], "{:?}", ir.verify());
+    assert_eq!(codes(ir), [code], "{:?}", verificar(ir));
 }
 
 #[track_caller]
 fn pasa(ir: &Ir) {
-    if let Err(e) = ir.verify() {
+    if let Err(e) = verificar(ir) {
         panic!("{}", e[0]);
     }
 }
@@ -355,7 +373,7 @@ fn xsd_con_sequence_choice_atributo_y_unbounded_pasa() {
 fn informa_todos_los_errores_en_orden() {
     let mut ir = json(vec![Rule::AllOf(vec![]), Rule::Ref(id(9))]);
     hijo(&mut ir, vec![Rule::Minimum(Num::new("01"))]);
-    let e = ir.verify().unwrap_err();
+    let e = verificar(&ir).unwrap_err();
     let got: Vec<_> = e.iter().map(|e| (e.node.index(), e.code())).collect();
     assert_eq!(got, [(0, "empty"), (0, "dangling"), (1, "number")]);
 }
@@ -363,7 +381,7 @@ fn informa_todos_los_errores_en_orden() {
 #[test]
 fn mensaje_claro() {
     let ir = json(vec![Rule::Ref(id(9))]);
-    let e = ir.verify().unwrap_err();
+    let e = verificar(&ir).unwrap_err();
     assert_eq!(
         e[0].to_string(),
         "IR inválida: nodo 0 (línea 1, columna 1): \"$ref\" apunta al nodo 9, que no existe"
@@ -597,7 +615,7 @@ fn i9_literales_bien_formados() {
         (vec![LitToken::Number("1.".into())], "número"),
     ] {
         let ir = json(vec![Rule::Enum(vec![lit(vec![s("ok")]), lit(malo)])]);
-        let e = ir.verify().expect_err(que);
+        let e = verificar(&ir).expect_err(que);
         assert_eq!(e.len(), 1, "{que}: {e:?}");
         assert_eq!(e[0].code(), "literal", "{que}");
         assert!(
@@ -1196,7 +1214,7 @@ fn i13_cada_faceta_en_texto_equivocado() {
     falla(&ir, "text");
     // El mensaje dice por qué, también con un literal de cadena.
     ir.nodes[b.index()].rules[1].rule = Rule::Enum(vec![lit(vec![s("true")])]);
-    let e = ir.verify().unwrap_err();
+    let e = verificar(&ir).unwrap_err();
     assert!(
         e[0].to_string()
             .contains("xs:boolean no admite xs:enumeration"),
@@ -1252,8 +1270,7 @@ fn errores_de_ciclo_en_orden_de_nodo() {
         rule: Rule::Ref(a),
         span: sp(),
     });
-    let got: Vec<_> = ir
-        .verify()
+    let got: Vec<_> = verificar(&ir)
         .unwrap_err()
         .iter()
         .map(|e| (e.node.index(), e.code()))
@@ -1280,7 +1297,7 @@ fn i13_base_con_muchas_reglas() {
             vec![Rule::Lexical(Lexical::Decimal), Rule::Ref(base)],
         ));
     }
-    let e = ir.verify().unwrap_err();
+    let e = verificar(&ir).unwrap_err();
     // Una regla `pattern` repetida n − 1 veces en la base, y n restricciones
     // que cambian el espacio léxico.
     assert_eq!(
@@ -1621,8 +1638,7 @@ fn i14_ciclo_que_no_pasa_por_el_inicio_del_recorrido() {
     let mut ir = json(vec![Rule::AllOf(vec![id(1)])]);
     hijo(&mut ir, vec![Rule::Ref(id(2))]);
     hijo(&mut ir, vec![Rule::Ref(id(1))]);
-    let got: Vec<_> = ir
-        .verify()
+    let got: Vec<_> = verificar(&ir)
         .unwrap_err()
         .iter()
         .map(|e| (e.node.index(), e.code()))
@@ -1754,7 +1770,7 @@ fn mensajes_de_cada_clase_de_error() {
     ];
     let mut vistos = Vec::new();
     for (ir, code, motivo) in &casos {
-        let e = ir.verify().unwrap_err();
+        let e = verificar(ir).unwrap_err();
         assert_eq!(e[0].code(), *code, "{:?}", e);
         let texto = e[0].to_string();
         let prefijo = format!(
@@ -1770,4 +1786,96 @@ fn mensajes_de_cada_clase_de_error() {
     vistos.sort_unstable();
     vistos.dedup();
     assert_eq!(vistos.len(), 16);
+}
+
+// --- Tarea 4.2: `VerifiedIr` (D15) y mensajes (SA-L1) ----------------------
+
+/// `verify` consume la IR: si pasa, la `VerifiedIr` da acceso de solo
+/// lectura a la misma IR (nodos, ubicación, aristas) y `into_ir` la devuelve
+/// para modificarla, que obliga a verificarla otra vez; si no, devuelve la
+/// IR intacta junto a todos los errores.
+#[test]
+fn verified_ir_de_solo_lectura() {
+    let original = arbol_json();
+    let v = original.clone().verify().expect("árbol válido");
+    assert_eq!(v.ir(), &original);
+    assert_eq!(v.format(), &Format::Json);
+    assert_eq!(v.nodes().len(), 6);
+    assert_eq!(v.node(id(3)).origin.step, entry("properties", "hijos"));
+    assert_eq!(v.location(id(4)), "#/properties/hijos/items");
+    assert_eq!(v.edge_count(), 7);
+    assert_eq!(v.into_ir(), original);
+
+    let mala = json(vec![Rule::Ref(id(9))]);
+    let (devuelta, e) = mala.clone().verify().unwrap_err();
+    assert_eq!(devuelta, mala);
+    assert_eq!(e.len(), 1);
+}
+
+/// SA-L1: los nombres y lexemas del usuario salen en los mensajes de
+/// `VerifyError` escapados y recortados con el mismo `short` que la Fase 3
+/// (32 caracteres y `…`): el mensaje es de una línea y acotado.
+#[test]
+fn mensajes_escapan_y_recortan_texto_del_usuario() {
+    let largo = format!("a\nb\"{}", "x".repeat(100));
+    let corto = format!("a\\nb\\\"{}…", "x".repeat(28));
+    let casos = [
+        json(vec![Rule::Minimum(Num::new(&largo))]),
+        json(vec![Rule::Required(vec![largo.clone(), largo.clone()])]),
+    ];
+    for ir in &casos {
+        let e = verificar(ir).unwrap_err();
+        let texto = e[0].to_string();
+        assert!(texto.contains(&format!("\"{corto}\"")), "{texto}");
+        assert!(!texto.contains('\n'), "{texto}");
+        assert!(texto.len() < 200, "{texto}");
+    }
+    // También en los de XSD: el nombre de un elemento inconsistente.
+    let ir = con_modelo(vec![
+        group(Term::Sequence(vec![1, 2]), Occurs::ONCE),
+        el(&largo, 3, Occurs::ONCE),
+        el(&largo, 4, Occurs::ONCE),
+    ]);
+    let texto = verificar(&ir)
+        .unwrap_err()
+        .iter()
+        .find(|e| e.code() == "element-consistency")
+        .expect("inconsistente")
+        .to_string();
+    assert!(texto.contains(&format!("\"{corto}\"")), "{texto}");
+    assert!(!texto.contains('\n'), "{texto}");
+}
+
+/// D15: los errores de `verify` se presentan como **un** error interno de
+/// texto fijo; el detalle para el registro lleva el recuento y solo los N
+/// primeros, así que está acotado aunque haya muchos errores.
+#[test]
+fn error_interno_unico_y_acotado() {
+    let mut ir = json(vec![]);
+    for _ in 0..1000 {
+        hijo(&mut ir, vec![Rule::Ref(id(usize::MAX))]);
+    }
+    let (_, errores) = ir.verify().unwrap_err();
+    assert_eq!(errores.len(), 1000);
+    let interno = InternalError::new(errores);
+    assert_eq!(
+        interno.to_string(),
+        "error interno del compilador: la IR no cumple sus invariantes"
+    );
+    assert_eq!(interno.errors().len(), 1000);
+    let detalle: Vec<String> = interno.detail(5).collect();
+    assert_eq!(detalle.len(), 6, "{detalle:?}");
+    assert_eq!(
+        detalle[0],
+        "1000 invariantes rotos; se muestran los 5 primeros"
+    );
+    assert!(
+        detalle[1].starts_with("IR inválida: nodo 1 "),
+        "{detalle:?}"
+    );
+    // Con menos errores que el tope se muestran todos.
+    let (_, pocos) = json(vec![Rule::Ref(id(9))]).verify().unwrap_err();
+    let detalle: Vec<String> = InternalError::new(pocos).detail(5).collect();
+    assert_eq!(detalle.len(), 2, "{detalle:?}");
+    assert_eq!(detalle[0], "1 invariante roto");
 }

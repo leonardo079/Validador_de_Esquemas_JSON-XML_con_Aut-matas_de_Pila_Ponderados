@@ -10,6 +10,8 @@
 use core::fmt;
 use std::collections::{HashMap, HashSet};
 
+use lexer::short;
+
 use crate::{
     target_sort, Constraint, ContentModel, Format, Ir, Lexical, LitToken, Literal, Node, NodeId,
     Num, Pos, Rule, RuleKind, Sort, Term,
@@ -162,25 +164,36 @@ impl fmt::Display for VerifyError {
                 kind,
                 lexeme,
                 problem,
-            } => write!(f, "\"{}\": número \"{lexeme}\" {problem}", kind.name()),
+            } => write!(
+                f,
+                "\"{}\": número \"{}\" {problem}",
+                kind.name(),
+                short(lexeme)
+            ),
             VerifyErrorKind::Literal {
                 kind,
                 index,
                 problem,
             } => write!(f, "literal {index} de \"{}\": {problem}", kind.name()),
             VerifyErrorKind::RepeatedName { kind, name } => {
-                write!(f, "\"{}\": nombre \"{name}\" repetido", kind.name())
+                write!(
+                    f,
+                    "\"{}\": nombre \"{}\" repetido",
+                    kind.name(),
+                    short(name)
+                )
             }
             VerifyErrorKind::Content { problem } => write!(f, "modelo de contenido: {problem}"),
             VerifyErrorKind::All { problem } => write!(f, "xs:all: {problem}"),
             VerifyErrorKind::InconsistentElement { name } => write!(
                 f,
-                "el elemento \"{name}\" aparece con dos tipos distintos en el mismo modelo \
-                 de contenido"
+                "el elemento \"{}\" aparece con dos tipos distintos en el mismo modelo \
+                 de contenido",
+                short(name)
             ),
             VerifyErrorKind::Text { problem } => write!(f, "texto: {problem}"),
             VerifyErrorKind::Attribute { name, problem } => {
-                write!(f, "atributo \"{name}\": {problem}")
+                write!(f, "atributo \"{}\": {problem}", short(name))
             }
             VerifyErrorKind::Cycle { kind, target } => write!(
                 f,
@@ -196,22 +209,37 @@ impl fmt::Display for VerifyError {
 impl std::error::Error for VerifyError {}
 
 impl Ir {
-    /// Comprueba los invariantes I1–I14 (`docs/fase3/ir.md` §4) y devuelve
-    /// todos los que se rompen, en orden de nodo. Dentro de un nodo: primero
-    /// los del nodo (origen, formato, texto sin espacio léxico), después los
-    /// de cada regla en el orden de las reglas, y al final los de ciclo
-    /// (I14), que salen de un recorrido de todo el grafo. O(n + m log m), con
-    /// n el tamaño de la IR y m el número de errores (O(n) si es válida); sin
-    /// recursión (D7).
-    pub fn verify(&self) -> Result<(), Vec<VerifyError>> {
+    /// Comprueba los invariantes I1–I14 (`docs/fase3/ir.md` §4). Consume la
+    /// IR (D15): si los cumple, la devuelve como [`VerifiedIr`], que solo da
+    /// acceso de lectura y es lo único que aceptan las fases siguientes; si
+    /// no, la devuelve intacta junto a **todos** los invariantes rotos, en
+    /// orden de nodo. Dentro de un nodo: primero los del nodo (origen,
+    /// formato, texto sin espacio léxico), después los de cada regla en el
+    /// orden de las reglas, y al final los de ciclo (I14), que salen de un
+    /// recorrido de todo el grafo. O(n + m log m), con n el tamaño de la IR
+    /// y m el número de errores (O(n) si es válida); sin recursión (D7).
+    ///
+    /// En el camino normal los errores no se listan al usuario: son un fallo
+    /// del frontal y se presentan como un único [`InternalError`].
+    pub fn verify(self) -> Result<VerifiedIr, (Ir, Vec<VerifyError>)> {
+        let errors = self.errors();
+        if errors.is_empty() {
+            Ok(VerifiedIr(self))
+        } else {
+            Err((self, errors))
+        }
+    }
+
+    /// Todos los invariantes rotos, en el orden de [`Ir::verify`].
+    fn errors(&self) -> Vec<VerifyError> {
         if self.nodes.is_empty() {
-            return Err(vec![VerifyError {
+            return vec![VerifyError {
                 node: NodeId::ROOT,
                 at: Pos::START,
                 kind: VerifyErrorKind::Origin {
                     problem: "la IR no tiene nodos (falta la raíz)",
                 },
-            }]);
+            }];
         }
         let lexical = self
             .nodes
@@ -236,13 +264,118 @@ impl Ir {
         // Los errores de ciclo se añaden al final; el orden es estable, así
         // que dentro de cada nodo se conserva el orden de las reglas.
         v.errors.sort_by_key(|e| e.node);
-        if v.errors.is_empty() {
-            Ok(())
-        } else {
-            Err(v.errors)
-        }
+        v.errors
     }
 }
+
+/// Una IR que pasó [`Ir::verify`]: cumple I1–I14. Solo se obtiene de
+/// `verify` (su campo es privado) y no da acceso de escritura, así que no
+/// puede cambiar después de verificada; para modificarla hay que sacarla con
+/// [`VerifiedIr::into_ir`] y volver a verificarla. Las fases siguientes
+/// (constructor del DPDA, exportación a JSON y DOT) solo aceptan
+/// `&VerifiedIr` (D15).
+///
+/// ```compile_fail
+/// # use ir::*;
+/// # let ir = Ir::new(Format::Json, Node { sort: Sort::Json, rules: vec![],
+/// #     origin: Origin { span: Span { start: Pos::START, end: 0 }, parent: None,
+/// #     step: Step::Root } });
+/// let v = ir.verify().unwrap();
+/// v.ir().nodes.clear(); // no compila: `ir()` da `&Ir`
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VerifiedIr(Ir);
+
+impl VerifiedIr {
+    /// La IR, de solo lectura.
+    pub fn ir(&self) -> &Ir {
+        &self.0
+    }
+
+    /// Devuelve la IR para modificarla; deja de estar verificada.
+    pub fn into_ir(self) -> Ir {
+        self.0
+    }
+
+    /// Formato de los payloads que valida (JSON o XML).
+    pub fn format(&self) -> &Format {
+        &self.0.format
+    }
+
+    /// Los nodos; `nodes()[0]` es la raíz.
+    pub fn nodes(&self) -> &[Node] {
+        &self.0.nodes
+    }
+
+    /// El nodo `id`. No hace pánico con los `NodeId` que salen de esta IR
+    /// (sus reglas cumplen I2 y la raíz existe por I1); un `id` de otra IR
+    /// fuera de rango sí.
+    pub fn node(&self, id: NodeId) -> &Node {
+        self.0.node(id)
+    }
+
+    /// [`Ir::edge_count`].
+    pub fn edge_count(&self) -> usize {
+        self.0.edge_count()
+    }
+
+    /// [`Ir::location`]: la ruta entera, sin tope. Para mensajes al usuario,
+    /// las Fases 4 y 5 usarán una versión recortada (`docs/fase3/ir.md`
+    /// §11, pendiente 2).
+    pub fn location(&self, id: NodeId) -> String {
+        self.0.location(id)
+    }
+}
+
+/// Lo que ve el usuario cuando una IR recién bajada no pasa [`Ir::verify`]:
+/// **un único error interno** de texto fijo (`docs/fase3/ir.md` §4,
+/// «Contrato»). Es un fallo del frontal, no del esquema. La lista completa
+/// queda en [`InternalError::errors`] para las pruebas, y
+/// [`InternalError::detail`] da la versión acotada para el registro: el
+/// recuento y los N primeros.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InternalError {
+    errors: Vec<VerifyError>,
+}
+
+impl InternalError {
+    /// Texto fijo que ve el usuario.
+    pub const MESSAGE: &'static str =
+        "error interno del compilador: la IR no cumple sus invariantes";
+
+    /// El error interno de una IR que no pasó [`Ir::verify`], con todos sus
+    /// errores (los que devuelve `verify`).
+    pub fn new(errors: Vec<VerifyError>) -> InternalError {
+        InternalError { errors }
+    }
+
+    /// Todos los invariantes rotos, en el orden de [`Ir::verify`].
+    pub fn errors(&self) -> &[VerifyError] {
+        &self.errors
+    }
+
+    /// Líneas para el registro: el recuento y los `max` primeros errores
+    /// (cada uno de una línea y acotado: el texto del usuario va recortado
+    /// con [`lexer::short`]). Tamaño O(`max`), sea cual sea el número de
+    /// errores.
+    pub fn detail(&self, max: usize) -> impl Iterator<Item = String> + '_ {
+        let n = self.errors.len();
+        let head = match n {
+            1 => "1 invariante roto".to_owned(),
+            _ if n <= max => format!("{n} invariantes rotos"),
+            _ => format!("{n} invariantes rotos; se muestran los {max} primeros"),
+        };
+        std::iter::once(head).chain(self.errors.iter().take(max).map(ToString::to_string))
+    }
+}
+
+impl fmt::Display for InternalError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(Self::MESSAGE)
+    }
+}
+
+impl std::error::Error for InternalError {}
 
 struct Verifier<'a> {
     ir: &'a Ir,

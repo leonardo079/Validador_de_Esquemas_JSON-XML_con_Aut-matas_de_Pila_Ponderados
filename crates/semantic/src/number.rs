@@ -83,6 +83,75 @@ fn exponent(bytes: &[u8]) -> i64 {
     }
 }
 
+/// Valor de un entero no negativo (lo que el meta-esquema admite en
+/// `minLength`, `maxItems`…: `5`, `5.0`, `1.5e1`, `1e400`) como `u64`,
+/// **saturado** en `u64::MAX` (`docs/fase3/ir.md` §5.1). Es exacto: el
+/// valor es `D × 10^s` con `s ≥ 0` tras quitar los ceros a la derecha de
+/// `D` (ver el método al principio del módulo), y se satura en cuanto `D`
+/// tiene más de 20 cifras o `s` pasa de 19. Ante un lexema que no es un
+/// entero no negativo (la bajada nunca lo pasa) devuelve la parte que
+/// cabría, sin fallar: 0 para negativos y la parte entera truncada para
+/// fracciones.
+pub(crate) fn to_u64_saturating(lexeme: &str) -> u64 {
+    let bytes = lexeme.as_bytes();
+    if bytes.first() == Some(&b'-') {
+        return 0;
+    }
+    let (mantissa, exp) = match bytes.iter().position(|&b| b == b'e' || b == b'E') {
+        Some(i) => (&bytes[..i], exponent(&bytes[i + 1..])),
+        None => (bytes, 0),
+    };
+    let (int, frac) = match mantissa.iter().position(|&b| b == b'.') {
+        Some(i) => (&mantissa[..i], &mantissa[i + 1..]),
+        None => (mantissa, &mantissa[mantissa.len()..]),
+    };
+    let digits: Vec<u8> = int
+        .iter()
+        .chain(frac)
+        .copied()
+        .filter(u8::is_ascii_digit)
+        .skip_while(|&d| d == b'0')
+        .collect();
+    let trailing = digits.iter().rev().take_while(|&&d| d == b'0').count();
+    let significant = &digits[..digits.len() - trailing];
+    if significant.is_empty() {
+        return 0;
+    }
+    // Valor = significant × 10^s.
+    let frac_len = frac.iter().filter(|b| b.is_ascii_digit()).count();
+    let s = exp
+        .saturating_sub(to_i64(frac_len))
+        .saturating_add(to_i64(trailing));
+    // Si s < 0 se descartan las −s últimas cifras (truncar la fracción).
+    let keep = if s < 0 {
+        let drop = usize::try_from(s.unsigned_abs()).unwrap_or(usize::MAX);
+        &significant[..significant.len().saturating_sub(drop)]
+    } else {
+        significant
+    };
+    let mut v: u64 = 0;
+    for &d in keep {
+        v = match v
+            .checked_mul(10)
+            .and_then(|v| v.checked_add(u64::from(d - b'0')))
+        {
+            Some(v) => v,
+            None => return u64::MAX,
+        };
+    }
+    if v == 0 || s <= 0 {
+        return v;
+    }
+    // u64::MAX < 10^20: con s ≥ 20 y v ≥ 1 ya satura.
+    let Ok(s) = u32::try_from(s) else {
+        return u64::MAX;
+    };
+    10u64
+        .checked_pow(s)
+        .and_then(|p| v.checked_mul(p))
+        .unwrap_or(u64::MAX)
+}
+
 fn to_i64(n: usize) -> i64 {
     i64::try_from(n).unwrap_or(i64::MAX)
 }
@@ -169,7 +238,52 @@ mod tests {
             })
     }
 
+    #[test]
+    fn enteros_a_u64_saturado() {
+        let casos = [
+            ("0", 0),
+            ("-0", 0),
+            ("0e999999999999999999999", 0),
+            ("7", 7),
+            ("5.0", 5),
+            ("1.5e1", 15),
+            ("100e-2", 1),
+            ("1E+2", 100),
+            ("0.000120e6", 120),
+            ("18446744073709551615", u64::MAX),
+            ("18446744073709551614", u64::MAX - 1),
+            ("18446744073709551616", u64::MAX),
+            ("1844674407370955161.5e1", u64::MAX),
+            ("1e19", 10_000_000_000_000_000_000),
+            ("2e19", u64::MAX),
+            ("1e20", u64::MAX),
+            ("1e400", u64::MAX),
+            ("1e999999999999999999999", u64::MAX),
+            ("000000000000000000000000003", 3),
+            // No son enteros no negativos: no fallan.
+            ("-3", 0),
+            ("2.5", 2),
+            ("1e-999999999999999999999", 0),
+        ];
+        for (lexema, esperado) in casos {
+            assert_eq!(to_u64_saturating(lexema), esperado, "{lexema}");
+        }
+    }
+
     proptest! {
+        /// Coincide con la aritmética exacta en el rango de `u64`.
+        #[test]
+        fn u64_coincide_con_aritmetica_exacta(v in any::<u64>(), ceros in 0usize..5, e in 0u32..3) {
+            // v·10^ceros escrito como "v" + ceros + "e-" ceros… y en otras formas.
+            let lex = format!("{v}{}e-{ceros}", "0".repeat(ceros));
+            prop_assert_eq!(to_u64_saturating(&lex), v);
+            let lex = format!("{v}.{}", "0".repeat(ceros + 1));
+            prop_assert_eq!(to_u64_saturating(&lex), v);
+            let esperado = u128::from(v) * 10u128.pow(e);
+            let esperado = u64::try_from(esperado).unwrap_or(u64::MAX);
+            prop_assert_eq!(to_u64_saturating(&format!("{v}e{e}")), esperado);
+        }
+
         /// Coincide con aritmética entera exacta: v × 10^s es entero si
         /// s ≥ 0 o si 10^(−s) divide a v.
         #[test]

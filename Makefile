@@ -1,7 +1,7 @@
 # Tareas comunes del proyecto. En Windows sin `make`, usar scripts/lint.ps1.
 C_SOURCES := $(shell find crates/runtime-c -name '*.c' -o -name '*.h' 2>/dev/null)
 
-.PHONY: all build test fmt fmt-check clippy c-fmt-check lint coverage docs docs-check clean
+.PHONY: all build test fmt fmt-check clippy c-fmt-check lint coverage docs docs-check doradas clean
 
 all: build
 
@@ -31,10 +31,17 @@ coverage:
 	cargo llvm-cov --workspace --lcov --output-path lcov.info
 
 # Diagramas y tablas generados desde el código (requiere Graphviz).
+# IR_DOT: esquemas cuya IR se dibuja en docs/fase3/ir-<nombre>.dot (Fase 3,
+# `schemac ir --dot`); el de ejemplo tiene recursión productiva.
+IR_DOT := arbol-recursivo
 docs:
 	for a in utf8 json xml; do \
 		cargo run -q -p cli -- dot $$a > docs/fase1/afd-$$a.dot && \
 		dot -Tsvg docs/fase1/afd-$$a.dot -o docs/fase1/afd-$$a.svg; \
+	done
+	for e in $(IR_DOT); do \
+		cargo run -q -p cli -- ir --dot tests/schemas/parse-ok/$$e.json > docs/fase3/ir-$$e.dot && \
+		dot -Tsvg docs/fase3/ir-$$e.dot -o docs/fase3/ir-$$e.svg; \
 	done
 	python3 scripts/ll1.py docs/fase2/json.ll1 > docs/fase2/ll1-json.md
 	python3 scripts/ll1.py docs/fase2/xml.ll1 > docs/fase2/ll1-xml.md
@@ -42,7 +49,8 @@ docs:
 	python3 scripts/ll1.py docs/fase2/json-izquierda.ll1 > docs/fase2/ll1-json-izquierda.md || true
 
 # Comprueba que los artefactos deterministas de `make docs` coinciden con los
-# versionados: los `.dot` de la Fase 1 y las tablas `ll1-*.md` de la Fase 2.
+# versionados: los `.dot` de la Fase 1, las tablas `ll1-*.md` de la Fase 2 y
+# los `.dot` de la IR de la Fase 3.
 # Los regenera en `target/` y los compara con los del árbol de trabajo, así
 # que no depende de git ni del estado del índice. Los `.svg` quedan fuera: la
 # salida de `dot -Tsvg` incluye la versión de Graphviz y coordenadas que
@@ -58,6 +66,10 @@ docs-check:
 		cargo run -q -p cli -- dot $$a > $(DOCS_TMP)/afd-$$a.dot || exit 1; \
 		diff -u docs/fase1/afd-$$a.dot $(DOCS_TMP)/afd-$$a.dot || fallo=1; \
 	done; \
+	for e in $(IR_DOT); do \
+		cargo run -q -p cli -- ir --dot tests/schemas/parse-ok/$$e.json > $(DOCS_TMP)/ir-$$e.dot || exit 1; \
+		diff -u docs/fase3/ir-$$e.dot $(DOCS_TMP)/ir-$$e.dot || fallo=1; \
+	done; \
 	for g in json xml esquema; do \
 		python3 scripts/ll1.py docs/fase2/$$g.ll1 > $(DOCS_TMP)/ll1-$$g.md || exit 1; \
 		diff -u docs/fase2/ll1-$$g.md $(DOCS_TMP)/ll1-$$g.md || fallo=1; \
@@ -68,7 +80,18 @@ docs-check:
 		echo "docs/ desincronizado con el código: ejecutar 'make docs' y versionar el resultado"; \
 		exit 1; \
 	fi; \
-	echo "docs-check: .dot de la Fase 1 y ll1-*.md de la Fase 2 sincronizados"
+	echo "docs-check: .dot de la Fase 1, ll1-*.md de la Fase 2 y .dot de la IR (Fase 3) sincronizados"
+
+# Regenera las IR doradas de tests/ir (`schemac ir` de cada esquema de
+# tests/schemas/parse-ok con el mismo nombre). Solo tras un cambio de la
+# bajada o del formato revisado a mano: las pruebas comparan contra ellas.
+# Escribe en un `.tmp` y lo mueve solo si `schemac` termina bien, así una
+# compilación fallida no deja la dorada vacía.
+doradas:
+	for f in tests/ir/*.json; do \
+		cargo run -q -p cli -- ir tests/schemas/parse-ok/$$(basename $$f) > $$f.tmp \
+			&& mv $$f.tmp $$f || { rm -f $$f.tmp; exit 1; }; \
+	done
 
 clean:
 	cargo clean

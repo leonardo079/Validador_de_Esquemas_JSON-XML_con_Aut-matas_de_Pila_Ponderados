@@ -93,7 +93,12 @@ decisiones» del plan (D1–D9); aquí solo se remite a ellas.
 
 ### 6. Límite de tamaño del esquema
 
-- **Estado:** cada clave se copia a la tabla de claves vistas, y no hay límite de tamaño
-  del esquema ni de claves por objeto.
-- **Cuándo actuar:** en la fase de la aplicación web. El límite va en el servidor (tamaño
-  máximo de subida), no en el parser.
+- **Estado:** cada clave se copia a la tabla de claves vistas, y el parser no tiene límite
+  de tamaño del esquema ni de claves por objeto. **`schemac` sí tiene un tope** desde la
+  tarea 4.2: lee como mucho **16 MiB** y solo archivos regulares; pasarlo es un error de
+  entrada con código 2 ([00-alcance.md](../00-alcance.md) §4,
+  [fase3/bajada.md](../fase3/bajada.md) §5).
+- **Cuándo actuar:** el tope del **servidor** (tamaño máximo de subida) sigue pendiente
+  para la aplicación web (Fase 7). Va en el servidor, no en el parser, y se fija junto con
+  el `RLIMIT_AS` de cada compilación ([fase3/pendientes.md](../fase3/pendientes.md) §1 y
+  §2: la compilación hasta la IR usa ≈ 143 veces el tamaño del esquema).

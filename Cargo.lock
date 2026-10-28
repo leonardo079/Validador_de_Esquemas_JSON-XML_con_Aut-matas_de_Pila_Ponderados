@@ -113,9 +113,11 @@ version = "0.1.0"
 dependencies = [
  "automaton",
  "codegen",
+ "ir",
  "lexer",
  "schema-parser",
  "semantic",
+ "serde_json",
 ]
 
 [[package]]
@@ -201,6 +203,7 @@ name = "ir"
 version = "0.1.0"
 dependencies = [
  "lexer",
+ "serde_json",
 ]
 
 [[package]]
@@ -383,6 +386,7 @@ dependencies = [
 name = "semantic"
 version = "0.1.0"
 dependencies = [
+ "ir",
  "proptest",
  "schema-parser",
  "serde_json",

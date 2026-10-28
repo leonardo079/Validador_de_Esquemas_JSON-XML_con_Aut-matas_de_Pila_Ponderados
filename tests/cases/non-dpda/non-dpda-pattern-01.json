@@ -1,0 +1,10 @@
+{
+  "_id": "non-dpda-pattern-01",
+  "category": "non-dpda",
+  "format": "json",
+  "description": "pattern compilado a AFD sobre una cadena.",
+  "phase": 3,
+  "schema": { "type": "string", "pattern": "^[a-z]+[0-9]*$" },
+  "payload": "\"abc12\"",
+  "expected": { "valid": true, "violations": 0 }
+}

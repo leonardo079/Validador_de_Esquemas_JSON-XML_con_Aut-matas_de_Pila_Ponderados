@@ -1,0 +1,23 @@
+{
+  "irVersion": 2,
+  "format": "json",
+  "targetNamespace": null,
+  "nodeCount": 1,
+  "edgeCount": 0,
+  "classCount": {"a": 1, "b": 0, "c": 0},
+  "nodes": [
+    {
+      "id": 0,
+      "sort": "json",
+      "span": {"line": 1, "column": 1, "start": 0, "end": 309},
+      "parent": null,
+      "step": null,
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "enum", "span": {"line": 3, "column": 3, "start": 150, "end": 230}, "class": "a", "strategy": "transition", "values": [[["number", "1e400"]], [["number", "0.10000000000000000000001"]], [["number", "-0e-7"]], [["array", 2], ["number", "1.0"], ["object", 2], ["key", "a"], ["bool", true], ["key", "z"], ["null"]]]},
+        {"rule": "const", "span": {"line": 4, "column": 3, "start": 234, "end": 307}, "class": "a", "strategy": "transition", "value": [["object", 2], ["key", "k\"ey/~1"], ["object", 2], ["key", "a"], ["object", 0], ["key", "b\n"], ["array", 2], ["number", "1e400"], ["string", "é\t"], ["key", "ñ"], ["bool", false]]}
+      ]
+    }
+  ]
+}

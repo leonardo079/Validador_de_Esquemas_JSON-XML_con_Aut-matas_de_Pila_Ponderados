@@ -1,0 +1,85 @@
+{
+  "irVersion": 2,
+  "format": "json",
+  "targetNamespace": null,
+  "nodeCount": 6,
+  "edgeCount": 6,
+  "classCount": {"a": 3, "b": 3, "c": 0},
+  "nodes": [
+    {
+      "id": 0,
+      "sort": "json",
+      "span": {"line": 1, "column": 1, "start": 0, "end": 389},
+      "parent": null,
+      "step": null,
+      "class": "b",
+      "strategies": ["transition", "register"],
+      "rules": [
+        {"rule": "$ref", "span": {"line": 15, "column": 3, "start": 365, "end": 387}, "class": "a", "strategy": "transition", "target": 1}
+      ]
+    },
+    {
+      "id": 1,
+      "sort": "json",
+      "span": {"line": 4, "column": 13, "start": 88, "end": 357},
+      "parent": 0,
+      "step": {"keyword": "$defs", "entry": "node"},
+      "class": "b",
+      "strategies": ["transition", "register"],
+      "rules": [
+        {"rule": "type", "span": {"line": 6, "column": 7, "start": 121, "end": 137}, "class": "a", "strategy": "transition", "types": ["object"]},
+        {"rule": "properties", "span": {"line": 7, "column": 7, "start": 145, "end": 285}, "class": "a", "strategy": "transition", "declared": [{"name": "value", "target": 2}, {"name": "children", "target": 3}], "additional": 5},
+        {"rule": "required", "span": {"line": 11, "column": 7, "start": 293, "end": 314}, "class": "b", "strategy": "register", "names": ["value"]}
+      ]
+    },
+    {
+      "id": 2,
+      "sort": "json",
+      "span": {"line": 8, "column": 18, "start": 178, "end": 199},
+      "parent": 1,
+      "step": {"keyword": "properties", "entry": "value"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "type", "span": {"line": 8, "column": 20, "start": 180, "end": 197}, "class": "a", "strategy": "transition", "types": ["integer"]}
+      ]
+    },
+    {
+      "id": 3,
+      "sort": "json",
+      "span": {"line": 9, "column": 21, "start": 221, "end": 277},
+      "parent": 1,
+      "step": {"keyword": "properties", "entry": "children"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "type", "span": {"line": 9, "column": 23, "start": 223, "end": 238}, "class": "a", "strategy": "transition", "types": ["array"]},
+        {"rule": "items", "span": {"line": 9, "column": 40, "start": 240, "end": 275}, "class": "a", "strategy": "transition", "prefix": [], "rest": 4}
+      ]
+    },
+    {
+      "id": 4,
+      "sort": "json",
+      "span": {"line": 9, "column": 49, "start": 249, "end": 275},
+      "parent": 3,
+      "step": {"keyword": "items"},
+      "class": "b",
+      "strategies": ["transition", "register"],
+      "rules": [
+        {"rule": "$ref", "span": {"line": 9, "column": 51, "start": 251, "end": 273}, "class": "a", "strategy": "transition", "target": 1}
+      ]
+    },
+    {
+      "id": 5,
+      "sort": "json",
+      "span": {"line": 12, "column": 31, "start": 346, "end": 351},
+      "parent": 1,
+      "step": {"keyword": "additionalProperties"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "false", "span": {"line": 12, "column": 31, "start": 346, "end": 351}, "class": "a", "strategy": "transition"}
+      ]
+    }
+  ]
+}

@@ -15,8 +15,12 @@ path = "src/main.rs"
 lexer.workspace = true
 schema-parser.workspace = true
 semantic.workspace = true
+ir.workspace = true
 automaton.workspace = true
 codegen.workspace = true
+
+[dev-dependencies]
+serde_json = "1.0.154"
 
 [lints]
 workspace = true

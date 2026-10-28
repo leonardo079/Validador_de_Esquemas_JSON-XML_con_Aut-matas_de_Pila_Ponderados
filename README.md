@@ -101,8 +101,13 @@ cargo build --workspace
 # Ejecutar las pruebas
 cargo test --workspace
 
-# Analizar un esquema (sintaxis y meta-esquema 2020-12 restringido) y listar sus errores
+# Analizar un esquema (sintaxis, meta-esquema 2020-12 restringido, $ref y ciclos) y listar sus errores
 cargo run -p cli -- check esquema.json
+
+# Bajar el esquema a la IR verificada y escribirla en JSON estable (o en DOT con --dot),
+# con la clase (a)/(b)/(c) y la estrategia de cada nodo (docs/fase3/clasificacion.md)
+cargo run -p cli -- ir esquema.json
+cargo run -p cli -- ir --dot esquema.json | dot -Tsvg > ir.svg
 
 # Compilar un esquema a un validador en C (previsto)
 cargo run -p cli -- compile esquema.json --lang c --out build/
@@ -117,7 +122,12 @@ docker compose up
 make lint        # rustfmt --check + clippy -D warnings + clang-format
 make test        # cargo test --workspace
 make coverage    # cargo llvm-cov (requiere `cargo install cargo-llvm-cov`)
+make docs        # regenera diagramas DOT/SVG y tablas LL(1) de docs/ (requiere Graphviz)
+make docs-check  # comprueba que los .dot y ll1-*.md versionados están sincronizados
+make doradas     # regenera las IR doradas de tests/ir (tras revisar el cambio)
 ```
+
+Códigos de salida de `schemac check` y `schemac ir`: 0 bien (también si el lector cierra la salida antes de tiempo, como `| head`); 1 el esquema tiene errores (los mismos en los dos comandos); 2 no se pudo leer el archivo, no es un archivo regular o pasa de 16 MiB, los argumentos son inválidos, no se pudo escribir la salida, no se pudo crear el hilo de análisis o, solo en `check`, un fallo interno (pánico); 3 error interno del compilador en `schemac ir` (la IR bajada no cumple sus invariantes o un pánico en su hilo, [docs/fase3/bajada.md](docs/fase3/bajada.md) §4).
 
 En Windows sin `make`: `powershell -File scripts/lint.ps1`. La CI (GitHub Actions) ejecuta lint, tests en Linux y Windows, y cobertura en cada PR.
 

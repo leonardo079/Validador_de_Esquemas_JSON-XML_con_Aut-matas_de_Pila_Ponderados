@@ -1,0 +1,59 @@
+{
+  "irVersion": 2,
+  "format": "json",
+  "targetNamespace": null,
+  "nodeCount": 4,
+  "edgeCount": 3,
+  "classCount": {"a": 3, "b": 0, "c": 1},
+  "nodes": [
+    {
+      "id": 0,
+      "sort": "json",
+      "span": {"line": 1, "column": 1, "start": 0, "end": 262},
+      "parent": null,
+      "step": null,
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "properties", "span": {"line": 3, "column": 3, "start": 86, "end": 260}, "class": "a", "strategy": "transition", "declared": [{"name": "año", "target": 1}, {"name": "niño", "target": 2}, {"name": "emoji 😀", "target": 3}], "additional": null}
+      ]
+    },
+    {
+      "id": 1,
+      "sort": "json",
+      "span": {"line": 4, "column": 12, "start": 114, "end": 135},
+      "parent": 0,
+      "step": {"keyword": "properties", "entry": "año"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "type", "span": {"line": 4, "column": 14, "start": 116, "end": 133}, "class": "a", "strategy": "transition", "types": ["integer"]}
+      ]
+    },
+    {
+      "id": 2,
+      "sort": "json",
+      "span": {"line": 5, "column": 13, "start": 150, "end": 205},
+      "parent": 0,
+      "step": {"keyword": "properties", "entry": "niño"},
+      "class": "c",
+      "strategies": ["transition", "dfa"],
+      "rules": [
+        {"rule": "type", "span": {"line": 5, "column": 15, "start": 152, "end": 168}, "class": "a", "strategy": "transition", "types": ["string"]},
+        {"rule": "pattern", "span": {"line": 5, "column": 33, "start": 170, "end": 203}, "class": "c", "strategy": "dfa", "source": "^[a-záéíóúñ]+$"}
+      ]
+    },
+    {
+      "id": 3,
+      "sort": "json",
+      "span": {"line": 6, "column": 16, "start": 225, "end": 256},
+      "parent": 0,
+      "step": {"keyword": "properties", "entry": "emoji 😀"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "const", "span": {"line": 6, "column": 18, "start": 227, "end": 254}, "class": "a", "strategy": "transition", "value": [["string", "\"\\/\u0008\u000c\n\r\t"]]}
+      ]
+    }
+  ]
+}

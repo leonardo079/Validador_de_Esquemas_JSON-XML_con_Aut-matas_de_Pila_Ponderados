@@ -14,6 +14,7 @@ tests/
 │   ├── pumping/     # u·vᵏ·x·yᵏ·z con k creciente
 │   └── extreme/     # payloads enormes, números gigantes, billion laughs…
 ├── schemas/         # esquemas sueltos para el parser (Fase 2) y el análisis semántico (Fase 3) (ver abajo)
+├── ir/              # IR doradas (`schemac ir`) de esquemas de schemas/parse-ok (ver abajo)
 └── large/           # caché local de payloads generados (ignorado por git; ningún caso la referencia)
 ```
 
@@ -90,6 +91,16 @@ La Fase 3 (`crates/semantic/tests/corpus.rs`: meta-esquema y, por etapas, tabla 
 
 - `schemas/parse-ok/*.json` y los esquemas JSON de `cases/` deben pasarla, salvo dos esquemas de `parse-ok` que existen para probar el parser y fallan a propósito en la Fase 3 (`combinadores.json` y `fuera-del-subconjunto.json`; sus errores exactos están fijados en la prueba).
 - `schemas/semantic-error/*.json`: parsean pero deben fallar en la Fase 3. Cada archivo tiene una entrada en `schemas/errores-semanticos.json` con los mismos campos que `errores.json` (`code` es `unsupported`, `meta-schema`, `reference`, `duplicate-anchor` o `cycle`; `line` y `column` son las del **primer** error por posición) y, opcional, `count`: el número total de errores que se esperan (la Fase 3 los informa todos).
+
+La bajada a la IR (`crates/semantic/tests/lower.rs`, [docs/fase3/bajada.md](../docs/fase3/bajada.md)) usa también ese corpus: todos los esquemas que pasan la Fase 3 bajan a una IR que pasa `Ir::verify`.
+
+La clasificación (a)/(b)/(c) (`crates/semantic/tests/corpus.rs`, `corpus_clasificado`; [docs/fase3/clasificacion.md](../docs/fase3/clasificacion.md)) recorre el mismo corpus: cada caso de `cases/non-dpda` debe tener al menos un nodo (c) (con la estrategia de su campo `strategy`, si lo declara), y los casos `valid` cuyo esquema no usa combinadores, `pattern`, `uniqueItems` ni dependencias no deben tener ninguno.
+
+Las pruebas de la Fase 3 leen el esquema de un caso con su **texto original** (`crates/semantic/tests/common/mod.rs`: el valor de `schema` recortado del archivo del caso por su rango), no reserializado: así ven el orden de las palabras clave y los lexemas exactos de los números.
+
+## IR doradas (`ir/`)
+
+`ir/<nombre>.json` es la salida exacta de `schemac ir schemas/parse-ok/<nombre>.json` (formato en [docs/fase3/bajada.md](../docs/fase3/bajada.md) §5.1; versión 2, con la clase y la estrategia de cada nodo y regla). La prueba `ir_doradas` compara byte a byte; si un cambio de la bajada o del formato las altera a propósito, se revisa el `diff` y se regeneran con `make doradas`. Para añadir una, crear el archivo vacío con el nombre de un esquema de `schemas/parse-ok` y ejecutar `make doradas`.
 
 ## Semillas de proptest (`*.proptest-regressions`)
 

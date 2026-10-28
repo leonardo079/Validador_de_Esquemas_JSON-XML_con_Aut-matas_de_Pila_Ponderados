@@ -1,0 +1,5 @@
+{
+  "$comment": "Literales que un lector JSON con f64 perdería, y objetos anidados con claves escapadas (IR dorada, docs/fase3/bajada.md §5.1).",
+  "enum": [1e400, 0.10000000000000000000001, -0e-7, [1.0, {"z": null, "a": true}]],
+  "const": { "k\"ey/~1": { "b\n": [1e400, "é\t"], "a": {} }, "ñ": false }
+}

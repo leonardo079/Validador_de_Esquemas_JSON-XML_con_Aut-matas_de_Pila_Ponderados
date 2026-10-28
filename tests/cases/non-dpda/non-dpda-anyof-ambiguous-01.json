@@ -1,0 +1,16 @@
+{
+  "_id": "non-dpda-anyof-ambiguous-01",
+  "category": "non-dpda",
+  "format": "json",
+  "description": "anyOf de dos objetos que no se distinguen por el primer token: hace falta determinización acotada.",
+  "phase": 3,
+  "strategy": "bounded-determinization",
+  "schema": {
+    "anyOf": [
+      { "type": "object", "required": ["a"] },
+      { "type": "object", "required": ["b"] }
+    ]
+  },
+  "payload": "{\"b\": 1}",
+  "expected": { "valid": true, "violations": 0 }
+}

@@ -257,6 +257,8 @@ Como el lexer no reserva memoria ni guarda bytes de la entrada, es `no_std` y se
 
 **Salida sin copias.** En lugar de tokens con su texto, el tokenizador es una **máquina de Mealy** que emite eventos a un `Sink`: las cadenas llegan carácter a carácter ya decodificadas y los números byte a byte con su parte (signo, entero, fracción, exponente). Así la Fase 4 puede aplicar tries, `pattern`, `minLength` o comparaciones decimales exactas directamente sobre el flujo.
 
+**Texto del usuario en los mensajes (`short`).** El crate `lexer` aloja también `lexer::Short` (`crates/lexer/src/short.rs`): recorta a 32 caracteres y escapa los controles del texto del usuario que repiten los mensajes de error del compilador (parser, Fase 3 y verificador de la IR, tarea 4.2). No es parte del tokenizador ni lo usa el validador generado; vive aquí porque `lexer` es la única dependencia común de esas fases, y es `no_std` y sin reservas como el resto. Un crate de diagnósticos aparte queda como mejora ([pendientes.md](pendientes.md)).
+
 ---
 
 ## 6. Verificación

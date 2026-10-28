@@ -66,17 +66,19 @@ anotaciones descartadas, números como lexema) y exponerla con
 explícita que `schemac check` (D7).
 
 **Criterios de aceptación:**
-- [ ] Todos los esquemas válidos del corpus (`tests/schemas/parse-ok`, salvo las 2 excepciones, y `tests/cases`) bajan a una IR que pasa `Ir::verify`; cada nodo conserva su `Span` y su puntero
-- [ ] Un `$ref` no duplica su destino: el número de nodos es el de subesquemas; la recursión productiva queda como ciclo en el grafo; la salida es determinista (prueba dorada de al menos 3 esquemas)
-- [ ] `schemac ir` da código 0 con la IR, 1 con los mismos errores que `check`, 2 si no puede leer; bajada iterativa, O(n)
-- [ ] `VerifiedIr` (punto de control A, 26 oct): `Ir::verify(self) -> Result<VerifiedIr, (Ir, Vec<VerifyError>)>`; `VerifiedIr` sin campos mutables; la bajada llama siempre a `verify` en el camino normal y sus errores se presentan como un único error interno (`docs/fase3/ir.md` §4, pendientes 1 y 6 de §11); las fases siguientes solo aceptan `&VerifiedIr`
-- [ ] Exportar la IR a DOT (`schemac ir --dot`, o generada por `make docs`) y versionar en `docs/fase3/` el diagrama de al menos un esquema de ejemplo con recursión productiva; `make docs-check` verifica que el `.dot` está sincronizado, igual que los AFD de la Fase 1
+- [x] Todos los esquemas válidos del corpus (`tests/schemas/parse-ok`, salvo las 2 excepciones, y `tests/cases`) bajan a una IR que pasa `Ir::verify`; cada nodo conserva su `Span` y su puntero
+- [x] Un `$ref` no duplica su destino: el número de nodos es el de subesquemas; la recursión productiva queda como ciclo en el grafo; la salida es determinista (prueba dorada de al menos 3 esquemas)
+- [x] `schemac ir` da código 0 con la IR, 1 con los mismos errores que `check`, 2 si no puede leer; bajada iterativa, O(n)
+- [x] `VerifiedIr` (punto de control A, 26 oct): `Ir::verify(self) -> Result<VerifiedIr, (Ir, Vec<VerifyError>)>`; `VerifiedIr` sin campos mutables; la bajada llama siempre a `verify` en el camino normal y sus errores se presentan como un único error interno (`docs/fase3/ir.md` §4, pendientes 1 y 6 de §11); las fases siguientes solo aceptan `&VerifiedIr`
+- [x] Exportar la IR a DOT (`schemac ir --dot`, o generada por `make docs`) y versionar en `docs/fase3/` el diagrama de al menos un esquema de ejemplo con recursión productiva; `make docs-check` verifica que el `.dot` está sincronizado, igual que los AFD de la Fase 1
 
 **Verificación:**
-- [ ] `make lint`, `make test`
-- [ ] Manual: `cargo run -p cli -- ir tests/cases/valid/<uno>.json` muestra la IR
+- [x] `make lint`, `make test`
+- [x] Manual: `cargo run -p cli -- ir tests/schemas/parse-ok/arbol-recursivo.json` (y `--dot`) muestra la IR (corregido el 27 oct: `tests/cases/valid/*.json` son casos de prueba, no esquemas)
 
-**Arrastra de 4.1 (baratos, de texto):** SA-L1 (los mensajes de `VerifyError` repiten nombres y lexemas del usuario sin escapar ni recortar: llevar `short` a un sitio compartido; registrar solo el recuento y los N primeros errores internos); en `docs/fase3/ir.md`: decisión 9 y pendiente 6 ya decididos (punto A, 26 oct; el 6 remite al criterio `VerifiedIr`), fila `Content` de §9 marcada «propuesta, se confirma en 4.3», «2^(10⁴ − 1) caminos» en §7-§8; decir qué código de salida da el error interno de `verify` en `schemac ir`.
+**Estado (27 oct):** APROBADA en la revisión final (0 Critical, 0 Important, 0 High, 0 Medium), tras 3 rondas de corrección (Tester F1 de documentación → revisión con CR-I-1 en los literales → Tester con fallo de compilación en Windows); sin commit. Casillas marcadas: las verificó el Tester 4. Observaciones abiertas en `docs/fase3/pendientes.md` §16-§21 (4.2-S1…4.2-I1) y §15 (4.2-I2).
+
+**Arrastra de 4.1 (hecho):** SA-L1 (los mensajes de `VerifyError` repiten nombres y lexemas del usuario sin escapar ni recortar: llevar `short` a un sitio compartido; registrar solo el recuento y los N primeros errores internos); en `docs/fase3/ir.md`: decisión 9 y pendiente 6 ya decididos (punto A, 26 oct; el 6 remite al criterio `VerifiedIr`), fila `Content` de §9 marcada «propuesta, se confirma en 4.3», «2^(10⁴ − 1) caminos» en §7-§8; decir qué código de salida da el error interno de `verify` en `schemac ir`. L-3 de la revisión final de 4.1: anotar en `docs/fase3/pendientes.md` («Vigilar más adelante») las obligaciones del frontal XSD (`ir.md` §4), `location_clipped` para las Fases 4/5 (`ir.md` §11, pendiente 2) y el tope de estados para todo producto (L-1).
 
 **Dependencias:** 4.1
 
@@ -93,13 +95,17 @@ producto acotado, determinización acotada, AFD, verificación diferida), según
 criterio de terminado de la Fase 3 para JSON Schema.
 
 **Criterios de aceptación:**
-- [ ] Una sola tabla en el código, citada por `docs/fase3/clasificacion.md`, da clase y estrategia; una prueba con `match` exhaustivo comprueba que coincide con las columnas «Cat.» de `00-alcance.md` (incluidas las de XSD) y una prueba de la documentación comprueba que la tabla escrita es la del código
-- [ ] La clase de un nodo es la máxima de sus restricciones y la de los nodos que aplica sobre la misma instancia; documentado y probado con `not`/`anyOf` sobre (a) y sobre (c)
-- [ ] Todo el corpus sale clasificado; cada caso de `tests/cases/non-dpda` tiene al menos un nodo (c) y los `valid` sin combinadores ni `pattern`/`uniqueItems` no tienen ninguno
+- [x] Una sola tabla en el código, citada por `docs/fase3/clasificacion.md`, da clase y estrategia; una prueba con `match` exhaustivo comprueba que coincide con las columnas «Cat.» de `00-alcance.md` (incluidas las de XSD) y una prueba de la documentación comprueba que la tabla escrita es la del código
+- [x] La clase de un nodo es la máxima de sus restricciones y la de los nodos que aplica sobre la misma instancia; documentado y probado con `not`/`anyOf` sobre (a) y sobre (c)
+- [x] Todo el corpus sale clasificado; cada caso de `tests/cases/non-dpda` tiene al menos un nodo (c) y los `valid` sin combinadores ni `pattern`/`uniqueItems` no tienen ninguno
 
 **Verificación:**
-- [ ] `make lint`, `make test`, `make docs-check`
-- [ ] Manual: `schemac ir` sobre un caso `non-dpda` señala el nodo (c) y su estrategia
+- [x] `make lint`, `make test`, `make docs-check`
+- [x] Manual: `schemac ir` sobre un caso `non-dpda` señala el nodo (c) y su estrategia (28 oct: con el esquema extraído del campo `schema` de `non-dpda-allof-not-01`, porque los casos no son esquemas; la raíz y el `not` salen (c) con producto acotado, en JSON y en DOT con borde grueso)
+
+**Estado (28 oct):** APROBADA en la revisión final (0 Critical, 0 High, 0 Medium; el único Important era del plan general y lo corrigió el orquestador: tabla de la Fase 3 y D19-D20), tras 1 ronda de corrección (borde `maxOccurs=2` y observaciones de pruebas y documentación); sin commit. Casillas verificadas por los Testers 1 y 2. Observaciones abiertas en `docs/fase3/pendientes.md` §22-§32 (4.3-L1, 4.3-I1…I3, 4.3-S1…S7).
+
+**Arrastra de 4.2 (hecho):** 4.2-S3 (`docs/fase3/pendientes.md` §18): el corpus de `tests/cases` se prueba reserializado con `serde_json` (claves ordenadas, números por `f64`); al recorrer el corpus en 4.3, usar el texto original del esquema o activar `preserve_order` y `arbitrary_precision`. Las demás observaciones de 4.2 (S1, S2, S4, L1, I1) van con la próxima tarea que toque la CLI o `crates/ir`, y la 4.3 toca las dos: se corrigen aquí (§16, §17, §19 con el comentario de `main.rs:44-46`, §20, §21; añadido por el orquestador el 28 oct).
 
 **Dependencias:** 4.2
 
@@ -108,6 +114,6 @@ criterio de terminado de la Fase 3 para JSON Schema.
 **Tamaño:** M
 
 ## Punto de control B (cierre de la Fase 3 para JSON)
-- [ ] `make lint`, `make test`, `make docs-check` en verde
-- [ ] Plan general: casilla «Módulo de clasificación» marcada, D13 registrada, «Retomar aquí» apunta al parser XSD
+- [x] `make lint`, `make test`, `make docs-check` en verde (28 oct)
+- [x] Plan general: casilla «Módulo de clasificación» marcada, D13 registrada, «Retomar aquí» apunta al parser XSD
 - [ ] Revisión del usuario antes de empezar el parser XSD

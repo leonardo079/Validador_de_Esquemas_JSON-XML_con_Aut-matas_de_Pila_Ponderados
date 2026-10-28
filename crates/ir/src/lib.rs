@@ -21,13 +21,31 @@
 //! verificador ([`Ir::verify`]) ni la liberación de memoria recorren nada
 //! recursivamente (D7).
 //!
+//! [`Ir::verify`] consume la IR y, si cumple sus invariantes, la devuelve
+//! como [`VerifiedIr`], de solo lectura: lo único que aceptan las fases
+//! siguientes, empezando por la exportación a JSON ([`write_json`], el
+//! formato de `schemac ir`) y a DOT ([`write_dot`]). Si no los cumple, el
+//! frontal presenta sus errores como un único [`InternalError`] (D15).
+//!
+//! La clase (a)/(b)/(c) y la estrategia de cada regla y de cada nodo no se
+//! guardan en la IR: se derivan de [`RuleKind`] con una tabla aparte
+//! ([`RuleKind::classification`], [`classify`]).
+//!
 //! Teoría, invariantes y correspondencia con cada palabra clave:
-//! `docs/fase3/ir.md`.
+//! `docs/fase3/ir.md`; la bajada de JSON Schema y el formato de exportación:
+//! `docs/fase3/bajada.md`; la clasificación: `docs/fase3/clasificacion.md`.
 
+mod classify;
+mod export;
 mod verify;
 
+pub use classify::{
+    classify, write_classification_table, Assignment, Class, Classification, NodeClass, Strategy,
+    StrategySet,
+};
+pub use export::{write_dot, write_json, IR_JSON_VERSION};
 pub use lexer::{Pos, Span};
-pub use verify::{VerifyError, VerifyErrorKind};
+pub use verify::{InternalError, VerifiedIr, VerifyError, VerifyErrorKind};
 
 /// Identificador de un nodo: su posición en [`Ir::nodes`]. La raíz es el 0.
 /// Solo tiene sentido en la IR que lo creó (el verificador comprueba que
@@ -398,7 +416,8 @@ pub enum Rule {
 }
 
 /// Clase de regla, sin datos: decide qué reglas admite cada tipo de nodo,
-/// la unicidad por nodo y, en la tarea 4.3, la clase (a)/(b)/(c).
+/// la unicidad por nodo y la clase (a)/(b)/(c) con su estrategia
+/// ([`RuleKind::classification`], tarea 4.3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum RuleKind {
     Reject,
@@ -505,6 +524,21 @@ impl RuleKind {
             RuleKind::Content => "modelo de contenido",
             RuleKind::SimpleContent => "xs:simpleContent",
             RuleKind::Lexical => "tipo predefinido",
+        }
+    }
+
+    /// Identificador estable de la clase de regla en la exportación (JSON y
+    /// DOT): la palabra clave de JSON Schema (`false` para [`Rule::Reject`])
+    /// o, en las de XSD, `attributes`, `content`, `simpleContent` y
+    /// `lexical`. A diferencia de [`RuleKind::name`], es ASCII y sin
+    /// espacios.
+    pub const fn key(self) -> &'static str {
+        match self {
+            RuleKind::Attributes => "attributes",
+            RuleKind::Content => "content",
+            RuleKind::SimpleContent => "simpleContent",
+            RuleKind::Lexical => "lexical",
+            k => k.name(),
         }
     }
 

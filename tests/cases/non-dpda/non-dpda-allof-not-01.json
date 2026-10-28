@@ -1,0 +1,16 @@
+{
+  "_id": "non-dpda-allof-not-01",
+  "category": "non-dpda",
+  "format": "json",
+  "description": "allOf con un not dentro, sobre la misma instancia: producto acotado con el veredicto de not invertido.",
+  "phase": 3,
+  "strategy": "product",
+  "schema": {
+    "allOf": [
+      { "type": "object" },
+      { "not": { "required": ["x"] } }
+    ]
+  },
+  "payload": "{\"y\": 1}",
+  "expected": { "valid": true, "violations": 0 }
+}

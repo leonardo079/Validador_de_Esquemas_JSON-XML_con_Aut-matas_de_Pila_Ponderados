@@ -18,10 +18,15 @@
 //!   `$ref` y aplicadores sobre la misma instancia; teoría en
 //!   `docs/fase3/ciclos.md`.
 //!
-//! [`analyze`] encadena las tres.
+//! - la bajada a la IR común ([`lower`]): un nodo por subesquema, `$ref`
+//!   como arista, la IR siempre verificada; teoría en
+//!   `docs/fase3/bajada.md`.
+//!
+//! [`analyze`] encadena las tres primeras; [`lower`] parte de su resultado.
 
 mod cycles;
 pub mod error;
+mod lower;
 mod meta;
 mod number;
 mod pointer;
@@ -30,6 +35,7 @@ mod unsupported;
 
 pub use cycles::{application, check_cycles, Application, FRAGMENT_BYTES};
 pub use error::{Category, ErrorKind, RefProblem, SemanticError};
+pub use lower::lower;
 pub use meta::{check_meta_schema, DIALECT, TYPE_NAMES};
 pub use symbols::{Node, Ref, SchemaId, Step, SymbolTable};
 

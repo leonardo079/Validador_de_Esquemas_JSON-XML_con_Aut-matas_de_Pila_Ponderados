@@ -10,6 +10,8 @@ La columna **Cat.** indica la categoría de reconocibilidad:
 - **(b)** con registros o contadores acotados en el marco de pila (máscara de bits, contador).
 - **(c)** no determinista o no libre de contexto: se resuelve con producto de autómatas, determinización acotada o verificación diferida (T3.6–T3.8).
 
+El compilador aplica estas clases con una sola tabla en el código, comprobada contra esta columna por una prueba: [fase3/clasificacion.md](fase3/clasificacion.md).
+
 ---
 
 ## 1. Payloads aceptados
@@ -124,7 +126,7 @@ Las construcciones XSD se analizan a un **AST propio de XSD** y bajan a la **mis
 | `xs:sequence` | Concatenación ordenada de partículas. | (a) |
 | `xs:choice` | Unión de partículas. | (a) |
 | `xs:all` | Partículas en cualquier orden, cada una a lo sumo una vez: máscara de bits. | (b) |
-| `minOccurs`, `maxOccurs` | Contador acotado en el marco de pila (no se expande el modelo). | (b) |
+| `minOccurs`, `maxOccurs` | Contador acotado en el marco de pila (no se expande el modelo). | (b) cuando la ocurrencia necesita contador: `minOccurs` ≥ 2 o `maxOccurs` acotado > 1; `?`, `*` y `+` van en el autómata (a) (D16) |
 | `xs:attribute` | `name`, `type`, `use` (`required`/`optional`), `default`, `fixed`. Los requeridos usan máscara de bits. | (b) |
 | `xs:simpleContent` + `xs:extension` | Texto de tipo simple más atributos. | (a) |
 | `xs:simpleType` + `xs:restriction` | Facetas: `enumeration`, `minInclusive`, `maxInclusive`, `minExclusive`, `maxExclusive`, `length`, `minLength`, `maxLength`. | (a); facetas de longitud (b) |
@@ -155,6 +157,7 @@ Todos son configurables en tiempo de compilación o en `sv_limits_t` (T5.2, T6.4
 | Estados en la determinización acotada (T3.7) | 4 096 |
 | Referencias de entidad/carácter XML por documento | 100 000 |
 | Tiempo máximo de validación | sin límite en la librería; 10 s en la aplicación web |
+| Tamaño máximo del esquema que lee `schemac` (`check`, `ir`) | 16 MiB (16 777 216 bytes); solo archivos regulares. Pasarlo es un error de entrada, código 2 ([fase3/bajada.md](fase3/bajada.md) §5) |
 
 ---
 

@@ -9,13 +9,24 @@
 //! carácter ya decodificadas (escapes y UTF-8), de modo que el autómata de la
 //! Fase 4 puede aplicarles tries, `pattern` o `minLength` sin guardarlas en un
 //! búfer.
+//!
+//! Además del tokenizador, el crate aloja [`Short`] (texto del usuario
+//! recortado y escapado para los mensajes de error del **compilador**: parser,
+//! Fase 3 y verificador de la IR). No es parte del tokenizador: está aquí
+//! porque `lexer` es la única dependencia común de esas fases. Es `no_std`
+//! y sin reservas, como el resto del crate, y no lo usa el validador
+//! generado. Un crate de diagnósticos aparte queda como mejora
+//! (`docs/fase1/pendientes.md`).
 #![no_std]
 
 pub mod dot;
 pub mod json;
+mod short;
 mod table;
 pub mod utf8;
 pub mod xml;
+
+pub use short::{short, Short, SHORT_MAX};
 
 /// Posición de un byte en la entrada.
 ///

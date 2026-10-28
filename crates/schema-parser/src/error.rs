@@ -83,16 +83,10 @@ impl std::error::Error for ParseError {}
 
 /// Texto del usuario para un mensaje: con los caracteres de control escapados
 /// (el mensaje ocupa siempre una línea) y recortado a 32 caracteres. Público
-/// para que los errores de la Fase 3 sigan la misma regla.
+/// para que los errores de la Fase 3 sigan la misma regla; la regla vive en
+/// [`lexer::Short`], que comparte también el verificador de la IR.
 pub fn short(s: &str) -> String {
-    const MAX: usize = 32;
-    let cut: String = s.chars().take(MAX).collect();
-    let more = if s.chars().nth(MAX).is_some() {
-        "…"
-    } else {
-        ""
-    };
-    format!("{}{more}", cut.escape_debug())
+    lexer::short(s).to_string()
 }
 
 fn lex_message(k: LexErrorKind) -> &'static str {

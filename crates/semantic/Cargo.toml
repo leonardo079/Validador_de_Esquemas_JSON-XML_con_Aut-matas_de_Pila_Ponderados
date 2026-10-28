@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 schema-parser.workspace = true
+ir.workspace = true
 
 [lints]
 workspace = true

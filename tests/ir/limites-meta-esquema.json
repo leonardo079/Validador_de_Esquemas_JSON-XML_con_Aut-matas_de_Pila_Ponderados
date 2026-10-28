@@ -1,0 +1,125 @@
+{
+  "irVersion": 2,
+  "format": "json",
+  "targetNamespace": null,
+  "nodeCount": 9,
+  "edgeCount": 8,
+  "classCount": {"a": 6, "b": 2, "c": 1},
+  "nodes": [
+    {
+      "id": 0,
+      "sort": "json",
+      "span": {"line": 1, "column": 1, "start": 0, "end": 824},
+      "parent": null,
+      "step": null,
+      "class": "c",
+      "strategies": ["transition", "register", "product", "bounded-determinization"],
+      "rules": [
+        {"rule": "type", "span": {"line": 6, "column": 3, "start": 248, "end": 275}, "class": "a", "strategy": "transition", "types": ["object", "array"]},
+        {"rule": "minProperties", "span": {"line": 7, "column": 3, "start": 279, "end": 297}, "class": "b", "strategy": "register", "value": 0},
+        {"rule": "maxProperties", "span": {"line": 8, "column": 3, "start": 301, "end": 321}, "class": "b", "strategy": "register", "value": 1},
+        {"rule": "minItems", "span": {"line": 9, "column": 3, "start": 325, "end": 339}, "class": "b", "strategy": "register", "value": 0},
+        {"rule": "maxItems", "span": {"line": 10, "column": 3, "start": 343, "end": 358}, "class": "b", "strategy": "register", "value": 100},
+        {"rule": "multipleOf", "span": {"line": 11, "column": 3, "start": 362, "end": 380}, "class": "a", "strategy": "transition", "value": "1e-3"},
+        {"rule": "required", "span": {"line": 12, "column": 3, "start": 384, "end": 398}, "class": "b", "strategy": "register", "names": []},
+        {"rule": "dependentRequired", "span": {"line": 13, "column": 3, "start": 402, "end": 451}, "class": "c", "strategy": "register", "entries": [{"name": "a", "requires": ["b", "c"]}, {"name": "b", "requires": []}]},
+        {"rule": "enum", "span": {"line": 14, "column": 3, "start": 455, "end": 478}, "class": "a", "strategy": "transition", "values": [[["number", "1"]], [["number", "1.0"]], [["string", "uno"]]]},
+        {"rule": "$ref", "span": {"line": 16, "column": 3, "start": 502, "end": 521}, "class": "a", "strategy": "transition", "target": 1},
+        {"rule": "items", "span": {"line": 21, "column": 3, "start": 649, "end": 670}, "class": "a", "strategy": "transition", "prefix": [3], "rest": null},
+        {"rule": "allOf", "span": {"line": 22, "column": 3, "start": 674, "end": 687}, "class": "c", "strategy": "product", "targets": [4]},
+        {"rule": "anyOf", "span": {"line": 23, "column": 3, "start": 691, "end": 707}, "class": "c", "strategy": "bounded-determinization", "targets": [5]},
+        {"rule": "oneOf", "span": {"line": 24, "column": 3, "start": 711, "end": 726}, "class": "c", "strategy": "bounded-determinization", "targets": [6]},
+        {"rule": "properties", "span": {"line": 25, "column": 3, "start": 730, "end": 822}, "class": "a", "strategy": "transition", "declared": [{"name": "if", "target": 7}, {"name": "$id", "target": 8}], "additional": null}
+      ]
+    },
+    {
+      "id": 1,
+      "sort": "json",
+      "span": {"line": 18, "column": 10, "start": 545, "end": 565},
+      "parent": 0,
+      "step": {"keyword": "$defs", "entry": "x"},
+      "class": "b",
+      "strategies": ["transition", "register"],
+      "rules": [
+        {"rule": "$ref", "span": {"line": 18, "column": 12, "start": 547, "end": 563}, "class": "a", "strategy": "transition", "target": 2}
+      ]
+    },
+    {
+      "id": 2,
+      "sort": "json",
+      "span": {"line": 19, "column": 10, "start": 576, "end": 641},
+      "parent": 0,
+      "step": {"keyword": "$defs", "entry": "y"},
+      "class": "b",
+      "strategies": ["register"],
+      "rules": [
+        {"rule": "minLength", "span": {"line": 19, "column": 32, "start": 598, "end": 618}, "class": "b", "strategy": "register", "value": 1},
+        {"rule": "maxLength", "span": {"line": 19, "column": 54, "start": 620, "end": 639}, "class": "b", "strategy": "register", "value": 15}
+      ]
+    },
+    {
+      "id": 3,
+      "sort": "json",
+      "span": {"line": 21, "column": 19, "start": 665, "end": 669},
+      "parent": 0,
+      "step": {"keyword": "prefixItems", "index": 0},
+      "class": "a",
+      "strategies": [],
+      "rules": []
+    },
+    {
+      "id": 4,
+      "sort": "json",
+      "span": {"line": 22, "column": 13, "start": 684, "end": 686},
+      "parent": 0,
+      "step": {"keyword": "allOf", "index": 0},
+      "class": "a",
+      "strategies": [],
+      "rules": []
+    },
+    {
+      "id": 5,
+      "sort": "json",
+      "span": {"line": 23, "column": 13, "start": 701, "end": 706},
+      "parent": 0,
+      "step": {"keyword": "anyOf", "index": 0},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "false", "span": {"line": 23, "column": 13, "start": 701, "end": 706}, "class": "a", "strategy": "transition"}
+      ]
+    },
+    {
+      "id": 6,
+      "sort": "json",
+      "span": {"line": 24, "column": 13, "start": 721, "end": 725},
+      "parent": 0,
+      "step": {"keyword": "oneOf", "index": 0},
+      "class": "a",
+      "strategies": [],
+      "rules": []
+    },
+    {
+      "id": 7,
+      "sort": "json",
+      "span": {"line": 25, "column": 25, "start": 752, "end": 772},
+      "parent": 0,
+      "step": {"keyword": "properties", "entry": "if"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "type", "span": {"line": 25, "column": 27, "start": 754, "end": 770}, "class": "a", "strategy": "transition", "types": ["string"]}
+      ]
+    },
+    {
+      "id": 8,
+      "sort": "json",
+      "span": {"line": 25, "column": 54, "start": 781, "end": 820},
+      "parent": 0,
+      "step": {"keyword": "properties", "entry": "$id"},
+      "class": "a",
+      "strategies": [],
+      "rules": []
+    }
+  ]
+}
