@@ -276,7 +276,7 @@ Observaciones de la revisión final de 4.1 sobre [ir.md](ir.md) §6–§7:
   [bajada.md](bajada.md) §7, tiene 2^(10⁴ − 1) caminos y 10⁴ nodos); los combinadores se
   evalúan como un circuito, con multiplicidad en `oneOf`.
 
-### 6. CI
+### 6. CI — SIN EFECTO (D32, 3 nov)
 
 - **Permisos y versiones de las acciones** (SA-L5, anterior a la 4.1): los flujos de
   `.github/workflows/` no tienen bloque `permissions: contents: read`, y las acciones
@@ -285,6 +285,10 @@ Observaciones de la revisión final de 4.1 sobre [ir.md](ir.md) §6–§7:
 - **Paso de release** (`.github/workflows/ci.yml`, `cargo test -p semantic --release`, que
   corre las salvaguardas de §2): no se ha visto correr en GitHub; confirmarlo en el primer
   push.
+- **Resuelto (D32, 3 nov):** ya no se usa GitHub Actions (GitHub solo es el remoto de los
+  commits). Las salvaguardas de release de §2 se comprueban a mano con
+  `cargo test -p semantic --release` cuando una tarea toque `semantic`; el resto de la
+  verificación es local (`make lint`, `make test`, `make docs-check`).
 
 ### 7. Abiertas a propósito en la tarea 4.0
 

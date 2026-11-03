@@ -227,6 +227,7 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 va primero.
   - 1 con los mismos errores que `check`;
   - 2 si no puede leer el archivo;
   - 3 ante un error interno (prueba con una bajada que falla, como `fallo_interno_da_codigo_3`).
+  - un pánico en el hilo de `schemac check` da también **3**, igual que en `ir` (hoy da 2; `docs/fase3/pendientes.md` §8, decidido por el usuario el 3 nov, D33), con prueba y `bajada.md` §4 al día.
 
   Los esquemas JSON siguen dando exactamente la misma salida: las doradas de `tests/ir/` no cambian.
 - [ ] `valid-xml-pedido-01` y el esquema de `malformed-xml-billion-laughs-01` pasan por el equivalente XSD de `corpus_clasificado` (`pendientes.md` §22) usando el texto original del campo `schema`. El pedido no tiene ningún nodo (c), y sí uno (b) por `Attributes`.
