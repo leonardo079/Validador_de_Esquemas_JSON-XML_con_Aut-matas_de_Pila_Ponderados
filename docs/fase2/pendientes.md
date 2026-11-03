@@ -2,7 +2,7 @@
 
 Observaciones que dejaron abiertas las rondas de auditoría del parser LL(1)
 de `crates/schema-parser`. Las decisiones de diseño viven en el «Registro de
-decisiones» del plan (D1–D9); aquí solo se remite a ellas.
+decisiones» del plan (D1–D31); aquí solo se remite a ellas.
 
 ## Resueltos
 
@@ -66,6 +66,13 @@ decisiones» del plan (D1–D9); aquí solo se remite a ellas.
   (prueba el parser) y la Fase 3 lo rechaza con tres errores fijados en
   `crates/semantic/tests/corpus.rs`.
 
+### 15. Clave de la tabla de §2 de `lector-xsd.md` — RESUELTO (5.1-CR3-S3)
+
+- **Antes:** la tabla de §2 de [lector-xsd.md](lector-xsd.md) decía «Conjunto *hash* de
+  (URI, local)» para los atributos repetidos por nombre expandido.
+- **Resuelto (cierre de la 5.1):** la clave es `(NsId, local)`, la identidad internada del
+  URI, no su texto; la tabla ya lo dice.
+
 ## Vigilar más adelante
 
 ### 5. Margen de pila en debug
@@ -101,4 +108,135 @@ decisiones» del plan (D1–D9); aquí solo se remite a ellas.
 - **Cuándo actuar:** el tope del **servidor** (tamaño máximo de subida) sigue pendiente
   para la aplicación web (Fase 7). Va en el servidor, no en el parser, y se fija junto con
   el `RLIMIT_AS` de cada compilación ([fase3/pendientes.md](../fase3/pendientes.md) §1 y
-  §2: la compilación hasta la IR usa ≈ 143 veces el tamaño del esquema).
+  §2: la compilación de JSON Schema hasta la IR exportada (JSON v2) usa ≈ 158 veces el
+  tamaño del esquema; la cifra v1 era ≈ 143). El frontal XSD suma su lector, con una
+  amplificación de memoria de 29× a 33× de la entrada en los peores casos (§12).
+
+### 8. CDATA de solo espacios fuera del elemento raíz (tarea 5.1; 5.1-SEC2-I1)
+
+- **Estado:** el lector de esquemas (`crates/xsd`, [lector-xsd.md](lector-xsd.md) §8) acepta
+  `<![CDATA[ ]]>` antes o después de la raíz si su contenido son solo espacios, aunque XML 1.0
+  no lo admite en `Misc`: el lexer entrega su contenido como `TextChar` de un byte, igual que el
+  texto literal. Con cualquier otro contenido sí es `TextOutsideRoot`.
+- **Cuándo actuar:** si se quiere el rechazo exacto, hace falta que el lexer distinga el texto
+  de una sección CDATA (un evento de apertura de CDATA, por ejemplo); toca la tabla y las
+  cifras de `docs/fase1/lexico.md`. Afecta igual al validador de payloads (Fase 4). Riesgo
+  bajo: el documento sigue siendo inequívoco.
+
+### 9. Normalización de los valores según su tipo XSD (tareas 5.5 y 5.6)
+
+- **Estado:** el lector entrega los valores de atributo y el texto con la normalización de
+  XML 1.0 (fines de línea §2.11 y atributos CDATA §3.3.3), no la del tipo XSD. Los atributos
+  del esquema con tipo de `whiteSpace` *collapse* (`minOccurs`, `maxOccurs`, `use`, `name`,
+  los valores de facetas numéricas, `xs:boolean`…) llegan con sus espacios de los extremos.
+  `Attr::as_qname()` ya quita los espacios de los extremos del QName (*collapse*).
+  El valor de un `Attr` es de solo lectura (`Attr::value()`): la 5.2 aplica *collapse* sobre
+  una copia (o con `into_value()`), nunca modificando el `Attr`, porque `as_qname()` guarda
+  rangos del valor original.
+- **Cuándo actuar:** al leer cada atributo del esquema (5.2) o al interpretar su valor (5.5,
+  5.6): aplicar *collapse* según el tipo del atributo en el esquema de esquemas, y *replace*/
+  *collapse* a `xs:enumeration`, `default` y `fixed` según el tipo simple base.
+
+### 10. Normalización de fines de línea y de atributos en los payloads XML (Fase 4)
+
+- **Estado:** el lexer XML no normaliza (`docs/fase1/lexico.md` §7). El lector de esquemas lo
+  hace sobre los eventos, sin búfer: un carácter cuyo rango mide un byte es literal (se
+  normaliza) y uno de rango mayor viene de una referencia (se conserva), y un `\n` literal en el
+  offset siguiente a un `\r` literal es el resto de un `\r\n`.
+- **Cuándo actuar:** en el validador de payloads (Fase 4, autómata de texto y atributos): debe
+  aplicar la misma regla antes de `pattern`, `length` o la comparación de enumeraciones, o
+  `"a\r\nb"` y `"a\nb"` darán resultados distintos. La técnica no necesita memoria dinámica:
+  un registro con el offset del último `\r`.
+
+### 11. Resolución de los QName de valores en el parser XSD (tarea 5.2) — RESUELTO EN EL LECTOR; queda usarlo
+
+- **Antes (ronda 1):** `Reader::resolve_qname` solo valía mientras se consumían los tokens de
+  la etiqueta del atributo. Un parser que lee por adelantado (como el de JSON Schema, cuyo
+  `bump()` pide el token siguiente al consumir uno) habría resuelto `type="p:T"` con las
+  declaraciones de un hijo (`<xs:complexType xmlns:p="otro">`), sin error.
+- **Resuelto (ronda 2 de la 5.1):** el lector resuelve todo valor de atributo como QName al
+  cerrar su etiqueta y lo guarda en el `Attr`; `Attr::as_qname()` devuelve el resultado, sea
+  cual sea el momento en que se pida ([lector-xsd.md](lector-xsd.md) §3.3). `resolve_qname`
+  ya no existe. Prueba: `qname_resuelto_tras_leer_por_adelantado_un_hijo_que_redeclara`.
+- **Queda (5.2 y 5.3):** el parser debe llamar a `as_qname()` en los valores de `type`, `base`
+  y `ref` y guardar en el AST el `Name` con la posición del error (primer carácter del valor).
+- **Obligación de la 5.3 (no repetir el error cuadrático de la ronda 1):** las tablas de
+  símbolos se indexan por **(identidad del URI, nombre local)**, es decir
+  `(Name::ns_id(), Name::local())`, nunca por el texto del URI (`Name::expanded()` o una
+  `String`): con un URI de ~8 MiB y ~5·10⁵ referencias `type="p:T"`, hashear el URI en cada
+  consulta es O(referencias · |URI|), alcanzable desde la Fase 7. El `NsId` solo es comparable
+  dentro de un mismo `Reader` ([lector-xsd.md](lector-xsd.md) §3). Hace falta una prueba de
+  regresión con un URI largo y muchas referencias, sin reloj (D1).
+- **5.1-CR3-I1 — `targetNamespace` lo interna la 5.2, no la 5.3** (`docs/fase2/pendientes.md`
+  §11 y `lector-xsd.md` §3, ya corregidos; `crates/xsd/src/reader.rs:1143-1147`,
+  `Reader::intern`). `Reader::intern` necesita el lector vivo (`&mut self`) y en la 5.3 ya no
+  existe. Además `targetNamespace` es `xs:anyURI` (*collapse*) y los URI de `xmlns:p` no se
+  recortan: con `xmlns:t='urn:t' targetNamespace=' urn:t '`, `r.intern(value())` da un `NsId`
+  distinto del de `type='t:T'`. **Arreglo (tarea 5.2):** el parser recorta (*collapse*) el
+  `targetNamespace`, lo interna con `Reader::intern` mientras el lector existe y guarda el
+  `Option<NsId>` en la raíz del AST; la 5.3 lo usa con `(ns_id(), local())`. En la 5.2, además,
+  corregir la documentación de `Reader::intern` (`reader.rs:1143-1146`) para que diga que
+  interna el valor **ya normalizado**. Alternativa en código: `Reader::into_namespaces()`.
+- **5.1-SEC3-I1 — `NsId` hashea por dirección** (`reader.rs`, `impl Hash for NsId`). Es
+  correcto con `RandomState` (la tabla de `std`). **Tarea 5.3:** prohibido usar `NsId` como
+  clave en tablas con un *hasher* determinista (Fx, ahash con semilla fija): las direcciones
+  de las reservas no son aleatorias y la distribución quedaría a merced del asignador.
+- **5.1-SEC3-I2 — `Reader::intern` retiene los URI hasta el fin del lector, sin límite.**
+  **Tarea 5.2:** llamarlo solo para `targetNamespace`, nunca por cada valor de atributo (un
+  esquema hostil haría crecer la tabla con cada valor distinto).
+- **5.1-SEC3-I3 — `as_qname` copia el QName** (O(|valor|) por llamada en el caso resuelto).
+  **Tarea 5.2:** llamarlo una sola vez por atributo y guardar el `Name`; llamadas repetidas
+  sobre un valor de 16 MiB serían cuadráticas.
+
+### 12. El lector de esquemas no tiene límites propios (tarea 5.2 y Fase 7; 5.1-SEC3-L2 = SEC-M1)
+
+- **Seguimiento:** la auditoría final de la 5.1 lo dejó abierto como **5.1-SEC3-L2** (igual
+  que SEC-M1 de la ronda 2): amplificación de memoria de 29× a 33× sin tope en
+  `crates/xsd/src/reader.rs` (`Assembler::attrs`, la cola de tokens, `Scope::map`/`undo`).
+  Arreglo: límites en el lector o en la 5.2 (profundidad, atributos por etiqueta,
+  declaraciones), y en la Fase 7 tope de concurrencia de compilaciones o `RLIMIT_AS` por
+  compilación, junto con el tope de subida.
+
+- **Estado:** el lector (`crates/xsd`) es lineal en tiempo y memoria, pero con una constante
+  grande. Medido con 16 MiB (el tope de `schemac`), la memoria de pico llega a unas 30 veces la
+  entrada: una etiqueta con 1,4 M atributos (31×) o con 1,2 M atributos con prefijo (32×),
+  5,6 M niveles sin cerrar (29×), 0,7 M declaraciones `xmlns:pK` (33×). Detalle en [lector-xsd.md](lector-xsd.md) §5, «Memoria». No
+  tiene `limit` ni ningún tope configurable.
+- **Cuándo actuar:**
+  - **Tarea 5.2:** el parser debe cortar en cuanto la profundidad pase su tope (D7,
+    `MAX_DEPTH_LIMIT`), sin esperar al final del documento: así la pila de elementos abiertos
+    del lector no pasa de ese tope.
+  - **Fase 7 (servidor):** los esquemas vienen de terceros. Son requisito del servidor los
+    límites de atributos por etiqueta, de declaraciones de espacio de nombres y de tamaño de
+    subida, o en su lugar `RLIMIT_AS` por compilación más el tope de subida, junto con lo de
+    [../fase3/pendientes.md](../fase3/pendientes.md) §1-§2. El factor ρ (memoria / tamaño
+    del esquema) de la compilación XSD completa lo medirá la tarea 5.4 y debe incluir estos
+    peores casos del lector.
+  - Si se añaden límites al lector, que pasarlos sea un error `limit` con posición
+    (decisión B2), nunca un pánico.
+
+### 13. Recorte de los textos de error garantizado por el tipo (tarea 5.2; 5.1-CR3-S1 y 5.1-CR3-S2)
+
+- **5.1-CR3-S1** (`crates/xsd/src/reader.rs:538-554` frente a `crates/xsd/src/error.rs:20-25`):
+  el recorte de los textos de un error a 33 caracteres no lo garantiza el tipo; solo lo
+  aplican `err` y `keep`, privadas de `reader.rs`, y los módulos de la 5.2 en adelante
+  construirán `XsdError { kind, at }` directamente. **Arreglo (tarea 5.2):** un
+  `pub(crate) fn XsdError::new(kind, at)` en `error.rs` que llame a `ErrorKind::clipped()`,
+  usado por `err`/`keep` y documentado como único constructor.
+- **5.1-CR3-S2** (= SEC3-L1, observación del Tester 4; `reader.rs:688, 702, 707, 754, 774,
+  784, 901`): `keep` y `UnclosedElement` reciben el nombre entero clonado
+  (`self.tag_name.clone()`, `a.name.clone()`, `o.name.raw.clone()`) y lo recortan después: una
+  copia transitoria O(|nombre|), hasta 16 MiB, aunque `keep` descarte el error. La
+  documentación de `ErrorKind` sugiere que nunca se copia un nombre largo. **Arreglo (tarea
+  5.2, junto con CR3-S1):** construir los errores con `clip(&nombre)`, o aclarar la
+  documentación de `ErrorKind`.
+
+### 14. Detalles del lector sin tarea fija (5.1-T4-1 y 5.1-CR2-S3)
+
+- **5.1-T4-1** (`crates/xsd/src/reader.rs:819`, `saturating_add`, y `span_len`): no hay prueba
+  directa de la saturación ni de `span_len`; el desbordamiento es inalcanzable con entradas
+  reales (offsets `u64`). Abierta a propósito. **Cuándo:** si se toca el lector.
+- **5.1-CR2-S3** (`crates/xsd/src/reader.rs`: `check_xml_decl(data, first, fin)`,
+  `problema`, `bad`…): identificadores mezclados de inglés y español, frente al inglés de
+  `crates/lexer` y `crates/schema-parser`. Cosmético. **Cuándo:** la próxima tarea que toque
+  `reader.rs`.

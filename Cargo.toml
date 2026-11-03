@@ -5,6 +5,7 @@ members = [
     "crates/schema-parser",
     "crates/semantic",
     "crates/ir",
+    "crates/xsd",
     "crates/automaton",
     "crates/codegen",
     "crates/runtime-rs",
@@ -25,6 +26,7 @@ lexer = { path = "crates/lexer" }
 schema-parser = { path = "crates/schema-parser" }
 semantic = { path = "crates/semantic" }
 ir = { path = "crates/ir" }
+xsd = { path = "crates/xsd" }
 automaton = { path = "crates/automaton" }
 codegen = { path = "crates/codegen" }
 runtime-rs = { path = "crates/runtime-rs" }

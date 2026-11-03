@@ -276,7 +276,7 @@ El oráculo de XML encontró un error real durante el desarrollo: un documento c
 ## 7. Simplificaciones
 
 - Los nombres XML aceptan cualquier carácter no ASCII; la especificación excluye algunos rangos.
-- No se normalizan los fines de línea (`\r\n` → `\n`) ni los espacios de los valores de atributo.
+- No se normalizan los fines de línea (`\r\n` → `\n`) ni los espacios de los valores de atributo. El lector de documentos de esquema sí lo hace, sobre los eventos ([fase2/lector-xsd.md](../fase2/lector-xsd.md) §1); para los payloads queda pendiente ([fase2/pendientes.md](../fase2/pendientes.md) §10).
 - La columna de las posiciones cuenta puntos de código, no unidades UTF-16.
 
 ### Decisión tomada (D10): prefijo de BOM seguido de otro byte (JSON)

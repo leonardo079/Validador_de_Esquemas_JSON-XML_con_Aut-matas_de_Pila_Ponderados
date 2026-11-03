@@ -198,7 +198,7 @@ y que se resuelven en otra fase. Las decisiones de diseño viven en el
      medido es ≈ 1,5 GiB de salida JSON y ≈ 2,5 GiB de memoria por compilación (≈ 1,6 GB y
      ≈ 2,7 GB, §1), que ningún cliente web necesita recibir.
 
-### 3. Obligaciones del frontal XSD (tarea XSD de la semana 2)
+### 3. Obligaciones del frontal XSD (tareas 5.3, 5.5, 5.6 y 5.7 de la semana 2)
 
 Observaciones de la revisión final de 4.1 (L-3, I-1, I-2, S-5). `verify` es defensa en
 profundidad ([ir.md](ir.md) §4): todo lo que un XSD del **usuario** pueda romper lo tiene
@@ -215,13 +215,37 @@ que rechazar antes el frontal, **con su posición**, no como el error interno de
   general:** el frontal rechaza con su posición toda *Schema Component Constraint* y toda
   restricción `src-*` de XSD 1.0 que caiga en el subconjunto; ampliar la lista de
   [ir.md](ir.md) §4 con ella.
+  - **Reparto entre las subtareas de `tasks/todo.md` (3 nov):**
+    - **Tarea 5.3** (invariantes estructurales): I10 (dos `xs:attribute` con el mismo nombre
+      en un tipo), I11 (`minOccurs` > `maxOccurs`), I12 y la parte de I13 que viene del
+      usuario.
+    - **Tarea 5.6** (tipos simples): I4 (faceta repetida, `length` con `minLength`/
+      `maxLength`), derivación circular de `base` (iterativa, D7), `min*`/`max*` inclusivo y
+      exclusivo a la vez, y que `default`/`fixed` sean valores del tipo.
+    - **Tarea 5.7:** *Unique Particle Attribution* (conservadora, D25) y la ampliación de la
+      lista de [ir.md](ir.md) §4. **Aplazada** a después del hito de la semana 3 por D28
+      (aplicado el 3 nov); mientras, el Glushkov de la Fase 4 es la defensa.
+  - *Avance de la tarea 5.1 (base de I10):* **resuelto** que un mismo atributo XML no se
+    repita en una etiqueta del documento de esquema, por nombre escrito y por nombre
+    expandido (`duplicate-attribute`, [../fase2/lector-xsd.md](../fase2/lector-xsd.md) §2).
+    **Sigue pendiente** I10 en sí: dos `xs:attribute` con el mismo nombre en un tipo
+    complejo (`duplicate-name`, tareas 5.3-5.6).
 - **`xs:float`/`xs:double`** (I-2; frontal XSD y Fase 4): se comparan en IEEE
   binary32/binary64 (XSD 1.0 Parte 2 §3.2.4–3.2.5), no en decimal exacto como dicen hoy
   [ir.md](ir.md) §5.1 y §7 (fila Q). Hay que corregir §5.2, §7 y el pendiente 3 de §11, o
   documentar la desviación en `00-alcance.md` §3.2. No se corrigió en la 4.2.
-- **Orígenes sin fijar** (S-5): el de un tipo anónimo dentro de un `xs:element`
-  **global**, y qué hacer con `xs:simpleContent` + `xs:extension` sobre un tipo complejo
-  de contenido simple.
+  **Tarea 5.5.** **DECIDIDO (D24, 29 oct):** `INF`, `-INF`, `NaN` y los valores que
+  desbordan al redondear a binary32/64 (`1e39` en `xs:float`) se rechazan en facetas y
+  enumeraciones de `xs:float`/`xs:double` con un mensaje que lo diga; no se amplían `Num` ni
+  I8.
+- **Orígenes sin fijar** (S-5):
+  - Primera mitad, el origen de un tipo anónimo dentro de un `xs:element` **global**:
+    **tarea 5.3**, con la decisión B3 del plan de la tarea (padre el documento y paso
+    `Entry("element", nombre)`).
+  - Segunda mitad, `xs:simpleContent` + `xs:extension` sobre un tipo complejo de contenido
+    simple: **DECIDIDO (D27, 29 oct)**, se rechaza con un mensaje claro (derivar un tipo
+    complejo de otro queda fuera del alcance, como `xs:complexContent`). Lo implementa la
+    **tarea 5.3**.
 
 ### 4. Ubicación recortada para los mensajes del validador (Fases 4 y 5)
 
@@ -475,11 +499,11 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   producto; el tope de estados de §5 (L-1) ya lo cubre. Si la Fase 4 mide que se comporta
   como el producto de `allOf`, proponer al usuario cambiar la fila de `$ref` en el alcance
   ([clasificacion.md](clasificacion.md) §8, pendiente 1). Mientras, manda el alcance.
-- **Frontal XSD (tarea XSD de la semana 2).** La tabla ya clasifica las reglas de XSD y
+- **Frontal XSD (tarea 5.4).** La tabla ya clasifica las reglas de XSD y
   `tabla_coincide_con_el_alcance` cubre sus filas de §3.1, pero ningún XSD real pasa todavía
-  por `classify`: el frontal añade sus esquemas (y el caso `valid-xml-pedido-01`) a
-  `corpus_clasificado` (`crates/semantic/tests/corpus.rs`, o su equivalente en el crate del
-  frontal).
+  por `classify`. Lo hace la **tarea 5.4** (criterio de `tasks/todo.md`): el equivalente de
+  `corpus_clasificado` en `crates/xsd/tests/corpus.rs`, con los esquemas XSD del corpus y el
+  caso `valid-xml-pedido-01`.
 - **Regenerar la tabla escrita (CR1-S7, en parte).** El bloque de [clasificacion.md](clasificacion.md) §3 no
   lo regenera `make docs`: lo comprueba la prueba `tabla_escrita_es_la_del_codigo`, que al
   fallar imprime la tabla que hay que copiar. Si se quiere en `make docs`/`make docs-check`,
@@ -497,7 +521,7 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
 
 ### Abiertas por la revisión final de la 4.3
 
-### 23. 4.3-L1: carrera entre `fs::metadata` y `File::open` en `leer` (próxima tarea que toque la CLI)
+### 23. 4.3-L1: carrera entre `fs::metadata` y `File::open` en `leer` (próxima tarea que toque la CLI: tarea 5.4)
 
 - **Dónde:** `crates/cli/src/main.rs:152-164` (`leer`).
 - **Estado:** el arreglo de §19 comprueba que la ruta es un archivo regular con
@@ -511,7 +535,7 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   `open` de una FIFO no espera al escritor) y decidir solo con `is_file()` sobre el
   descriptor, sin la primera comprobación; en Windows basta lo de hoy. `O_NONBLOCK` vale
   distinto en Linux y macOS: tomarlo de `libc` o del sistema, sin `unsafe`.
-- **Cuándo:** la próxima tarea que toque la CLI.
+- **Cuándo:** la próxima tarea que toque la CLI (tarea 5.4).
 
 ### 24. 4.3-I2: directorios temporales con nombre predecible en las pruebas de la CLI (opcional)
 
@@ -523,7 +547,7 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   Info.
 - **Arreglo propuesto:** usar `tempfile` (directorio con nombre aleatorio y permisos 0700)
   como dev-dependency, o aceptarlo y dejarlo escrito.
-- **Cuándo:** opcional; la próxima tarea que toque las pruebas de la CLI.
+- **Cuándo:** opcional; la próxima tarea que toque las pruebas de la CLI (tarea 5.4).
 
 ### 25. 4.3-I3: `schemac ir /proc/self/mem` da un error de E/S, no «no es un archivo regular» (cosmético)
 
@@ -534,7 +558,7 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   Info.
 - **Arreglo propuesto:** ninguno obligatorio; si se quiere, nombrar el caso en
   [bajada.md](bajada.md) §5.
-- **Cuándo:** cosmético; cuando se toque `leer`.
+- **Cuándo:** cosmético; cuando se toque `leer` (tarea 5.4).
 
 ### 26. 4.3-S1: la fila `minOccurs`/`maxOccurs` del alcance, columna «Soporte» (frontal XSD o punto de control B)
 
@@ -547,8 +571,9 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   falta (no se expande el modelo); el resto, estados del Glushkov»; y en «Cat.», añadir
   «una vez y `maxOccurs="0"`» a la lista de (a). Es un cambio del alcance (fuente de verdad
   3): lo revisa el usuario.
-- **Cuándo:** la tarea del frontal XSD, o antes, con la revisión del usuario del punto de
-  control B.
+- **Cuándo:** **aprobado por el usuario en D29 (29 oct).** Lo aplica la **tarea 5.7** al
+  tocar `00-alcance.md` (aplazada a después del hito de la semana 3 por D28). Como ya está
+  aprobado, cualquier tarea anterior que lo necesite puede aplicarlo.
 
 ### 27. 4.3-S2: «en un solo marco» en `clasificacion.md` §4.2 supone que E₌ se expande (Fase 4)
 
@@ -561,7 +586,7 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   aporta los mismos registros y estrategias)».
 - **Cuándo:** la Fase 4, al elegir entre expansión y llamada ε.
 
-### 28. 4.3-S3: la prueba `ir_senala_el_nodo_c_y_su_estrategia` reserializa el esquema del caso (próxima tarea que toque la CLI)
+### 28. 4.3-S3: la prueba `ir_senala_el_nodo_c_y_su_estrategia` reserializa el esquema del caso (próxima tarea que toque la CLI: tarea 5.4)
 
 - **Dónde:** `crates/cli/tests/ir.rs:179` (`caso["schema"].to_string()`).
 - **Estado:** lee el caso con `serde_json` y lo reescribe, que es lo que §18 quiso evitar
@@ -570,7 +595,7 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
 - **Arreglo propuesto:** recortar el texto original del valor `schema` como hace
   `crates/semantic/tests/common/mod.rs` (`texto_del_esquema`), añadiendo `schema-parser`
   como dev-dependency de `cli` o moviendo esa ayuda a un sitio común.
-- **Cuándo:** la próxima tarea que toque la CLI.
+- **Cuándo:** la próxima tarea que toque la CLI (tarea 5.4).
 
 ### 29. 4.3-S4: `menciona_palabra_c` hace `unwrap` sin nombre de archivo (próxima tarea que toque el corpus)
 

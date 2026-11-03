@@ -1,90 +1,68 @@
-# Plan de implementación: tarea 4 de la semana 2 — IR común y clasificación (a)/(b)/(c)
+# Plan de implementación: tarea 5 de la semana 2 — frontal XSD (parser → AST → IR)
 
-Fecha: 20 oct 2026. Fuente: «Retomar aquí» del plan general
-(`../Plan de desarrollo — Validador JSON XML con DPDA ponderado.md`), D3 y la
-Fase 3 de `docs/00-alcance.md`. Este archivo detalla solo la tarea 4; el
-cronograma, las decisiones y los invariantes siguen en el plan general.
+Fecha: 28 oct 2026. Fuente: «Retomar aquí» del plan general, D3, D13-D16, D19,
+`docs/fase3/ir.md` §4-§5.2 y §11, `docs/fase3/pendientes.md` §3, §22 y §26,
+`docs/00-alcance.md` §1.2, §3 y §4.
 
 ## Resumen
-
-Hoy la Fase 3 termina en una `SymbolTable` verificada (meta-esquema, `$ref`
-resueltos, sin ciclos no productivos). Falta lo que cierra la Fase 3 según su
-criterio de terminado: *cada esquema del corpus sale como IR con cada nodo
-marcado con su clase y estrategia*. La IR es además el contrato entre los
-dos frontales (JSON Schema ahora, XSD después) y el constructor del DPDA de
-la Fase 4, así que su forma se audita antes de construir nada encima (D3).
+Hoy solo JSON Schema llega a la IR. Esta tarea añade el segundo frontal (D3): un lector XML
+de esquemas con espacios de nombres, una gramática LL(1) del subconjunto XSD con su AST
+propio, el análisis que rechaza con posición toda *Schema Component Constraint* del
+subconjunto (D15; `verify` queda como defensa en profundidad) y la bajada a la IR común de
+`ir.md` §5.2, expuesta por `schemac check|ir`. Cierra el hito de la semana 2 («un esquema
+JSON o XSD sale como IR verificada») y la entrada XSD del hito de la semana 3.
 
 ## Grafo de dependencias
+5.1 lector XML + espacios de nombres
+ └── 5.2 gramática LL(1) XSD + parser → AST (docs/fase2)
+      └── 5.3 nombres, restricciones estructurales (I10-I12, D14) y bajada de tipos complejos
+           └── 5.4 schemac check|ir con XSD, corpus_clasificado, doradas, ρ
+                │   ── Punto de control C (imprescindible para la semana 3) ──
+                ├── 5.6 tipos simples, facetas, ciclos de base, default/fixed ◀── 5.5 números XSD (independiente)
+                └── 5.7 UPA y cierre del frontal (docs, alcance, pendientes)
+                    ── Punto de control D (casilla cerrada) ──
+            (Fase 4) constructor del DPDA — consume la IR verificada y clasificada
 
-```
-4.0 observaciones de la tarea 3 (semantic)        — independiente, se cierra primero
-4.1 diseño de la IR (crate ir + docs/fase3/ir.md)  — contrato; lo revisa el usuario
- ├── 4.2 bajada JSON Schema → IR + `schemac ir`     (semantic, cli)
- │    └── 4.3 clasificación (a)/(b)/(c) y estrategia sobre la IR (ir, cli, docs)
- └── (semana 2, después) parser XSD → AST XSD → IR — fuera de este plan
-          (Fase 4) constructor del DPDA — consume la IR clasificada
-```
-
-## Decisiones de arquitectura propuestas (las confirma el auditor en 4.1)
-
-- **Crate nuevo `crates/ir`**, sin dependencias salvo `lexer` (por `Span`).
-  `semantic` (bajada JSON), el futuro frontal XSD y `automaton` dependen de
-  él; ninguno depende de los otros frontales. La clasificación vive en `ir`
-  porque opera sobre la IR: el frontal XSD la obtiene gratis. Se registra
-  como **D13** en el plan general al aprobar 4.1.
-- **IR como grafo en arena** (`Vec<Node>` + `NodeId`), no árbol: un `$ref`
-  es una arista a un nodo ya existente, así la recursión productiva se
-  conserva sin duplicar subesquemas y el tamaño de la IR es O(n).
-- **Mínimos que la IR debe expresar (D3):** nodo, restricciones tipadas por
-  palabra clave, clase y estrategia (derivables de la clase de cada regla,
-  `RuleKind`; la tabla clase/estrategia vive aparte y la construye 4.3),
-  orden de hijos (`xs:sequence`),
-  atributo frente a elemento, `minOccurs`/`maxOccurs`, contenido simple.
-  Números como lexema exacto; la ubicación de origen (`Span` y puntero o
-  ruta) para los errores de las fases siguientes.
-- **Los pendientes de `docs/00-alcance.md` §5** se resuelven en
-  `docs/fase3/ir.md` dentro de 4.1: correspondencia `xs:sequence` ↔ objeto
-  JSON, `additionalProperties` con `allOf` (semántica 2020-12: no ve las
-  `properties` de las ramas) y la estrategia de `not`.
-- **Sin recursión sobre el AST ni la IR** (D7): bajada y clasificación
-  iterativas.
-
-## Lista de tareas
-
-Cada tarea pasa por el ciclo desarrollador → auditor (`/tarea`, máximo 3
-rondas) y el usuario hace el commit antes de empezar la siguiente.
-
-### Fase A: deuda y contrato
-- [x] 4.0 Cerrar las 6 observaciones de la tarea 3 (S)
-- [ ] 4.1 Diseño de la IR: tipos, invariantes y teoría (M)
-
-### Punto de control A (usuario)
-- [ ] `make lint`, `make test`, `make docs-check` en verde
-- [ ] El usuario aprueba la forma de la IR y D13 antes de bajar nada a ella
-
-### Fase B: JSON Schema de extremo a extremo hasta la IR clasificada
-- [ ] 4.2 Bajada JSON Schema → IR y `schemac ir` (M)
-- [ ] 4.3 Clasificación (a)/(b)/(c) y estrategia (M)
-
-### Punto de control B (cierre de la Fase 3 para JSON)
-- [ ] Todo el corpus sale como IR con clase y estrategia en cada nodo
-- [ ] Plan general actualizado: casillas, D13, «Retomar aquí» apuntando al parser XSD
+## Decisiones de arquitectura
+- Crate `crates/xsd` (lexer + ir), sin depender de `semantic` (D13, `ir.md` §1) — U1.
+- Formato del esquema detectado por el contenido (`<` inicial) en `schemac` y el servidor — U2 (toca D17).
+- Parser LL(1) descendente al estilo de `schema-parser`, con tope de profundidad 256 en un hilo con pila explícita (D7);
+  análisis y bajada iterativos, O(n) salvo UPA, acotada por un límite de partículas (U6).
+- Errores con `code()` estable y por etapas, como `semantic::analyze`; un error de `verify` es siempre interno (D15, código 3).
+- Bajada determinista según `ir.md` §5.2; predefinidos y envoltorios de contenido simple creados una vez, al usarse.
+- Comparación decimal exacta en `ir::num` (la reutiliza la Fase 4); `xs:float`/`xs:double` redondeados a IEEE (I-2).
 
 ## Riesgos y mitigaciones
-
 | Riesgo | Impacto | Mitigación |
 | --- | --- | --- |
-| La IR no alcanza para XSD y hay que rehacerla con la bajada JSON ya hecha | Alto | 4.1 exige construir a mano, en pruebas, la IR de un XSD con `sequence`, `choice`, atributos y `maxOccurs="unbounded"` antes de aprobar el diseño |
-| La IR se queda corta para la Fase 4 (falta información para el DPDA) | Medio | 4.1 recorre la construcción composicional del DPDA de `docs/` y comprueba que cada transición sale de un dato de la IR |
-| Explosión de tamaño por `$ref` | Medio | Grafo con aristas compartidas; prueba de tamaño O(n) con referencias en cadena |
-| La clasificación diverge de `docs/00-alcance.md` | Medio | Una prueba recorre todas las variantes de restricción (`match` exhaustivo) y compara con una tabla única citada por la documentación |
-| Semana 2 se alarga y la semana 3 (crítica) empieza tarde | Alto | 4.0 es pequeña; si 4.1 necesita una tercera ronda, se avisa antes de seguir |
+| La semana 2 termina sin XSD → IR (señal del plan general) | Alto | 5.1-5.4 primero (punto C); 5.5-5.7 aplazables según U8 |
+| UPA o FIRST/FOLLOW cuadráticos ante un esquema hostil | Alto | Límite de partículas por modelo (U6), comprobado antes de calcular; prueba sin reloj (D1) |
+| «Toda SCC del subconjunto» es más de lo que cabe | Medio | Lista explícita en `ir.md` §4; `pattern` en valores aplazado a la tarea `pattern` → AFD (U9) |
+| Un XSD del usuario llega a `verify` y sale como error interno (código 3) | Medio | Cada tarea que baja una construcción comprueba en el frontal los invariantes que la tocan; prueba de corpus «nunca `InternalError`» |
+| Espacios de nombres y QName (prefijos arbitrarios, espacio por defecto, `targetNamespace`) | Medio | 5.1 los resuelve por URI; casos con `xsd:`, espacio por defecto y `tns:` en el corpus |
+| Desbordamiento de pila en debug con anidamiento profundo | Medio | Tope 256 medido en un hilo de 2 MiB (`fase2/pendientes.md` §5), o parser iterativo (B1) |
+| Romper la salida JSON de `schemac` al integrar XSD | Bajo | Las doradas de `tests/ir/` no deben cambiar (criterio de 5.4) |
 
-## Preguntas abiertas
+## Decisiones del usuario
+U1-U9 aprobadas el 29 oct como D21-D29 del plan general (todas según la recomendación del Planner).
 
-1. ¿Crate `ir` aparte (recomendado) o módulo dentro de `semantic`? El crate
-   separado evita que el frontal XSD dependa del análisis de JSON Schema.
-2. Formato de `schemac ir`: se propone JSON estable (lo usará la web en la
-   Fase 7) y, si sobra tiempo, DOT.
-3. Este `tasks/` queda sin seguimiento en git. ¿Se versiona, se añade a
-   `.gitignore` o se mueve junto al plan general?
+## Decisiones que puede tomar el Builder (B1-B7; se registran en el plan general al tomarlas)
+
+- **B1. Parser y AST.** Imitar `schema-parser`: descendente recursivo LL(1), con tope de profundidad 256 (`MAX_DEPTH_LIMIT`, solo configurable a la baja), garantizado en un hilo de 2 MiB y medido en debug, como en `fase2/pendientes.md` §5. O bien un parser iterativo. En los dos casos, el AST sin `Drop` recursivo profundo.
+- **B2. Errores.** Un tipo propio con `code()` estable (`lexical`, `syntax`, `unsupported`, `duplicate-name`, `unresolved`, `cycle`, `facet`, `value`, `content-model`, `upa`, `limit`…) y mensajes de una línea con `lexer::short`.
+  - La Fase 2 se detiene en el primer error.
+  - El análisis informa por etapas, todos los errores de la primera etapa que falla, igual que `semantic::analyze`: nombres y resolución → tipos simples → modelos de contenido.
+- **B3. Bajada determinista.**
+  - Orden de los `NodeId`: el documento, después las declaraciones en preorden, después los nodos sintéticos (`builtin`, `simpleContent/xs:…`) por orden de primer uso.
+  - Los predefinidos se crean solo si se usan, como en `pedido_xsd`.
+  - Origen de un tipo anónimo dentro de un `xs:element` global (S-5, primera mitad): padre el documento y paso `Entry("element", nombre)`.
+- **B4. Comparación decimal exacta y aritmética de lexemas** (para facetas «valid restriction», rangos de los predefinidos y `default`/`fixed`). Recomiendo ponerla en `crates/ir` (`ir::num`), porque la Fase 4 también compara por valor. Alternativa: en `crates/xsd`.
+  - `xs:float`/`xs:double`: guardar en `Num` el decimal más corto del valor redondeado (`f32`/`f64` de `std`, sin `unsafe`), o el lexema exacto con una nota de que la Fase 4 redondea los dos lados. En cualquier caso hay que corregir `ir.md` §5.2, §7 (fila Q) y §11.3.
+- **B5. Espacios de nombres.** Ámbito completo de las declaraciones `xmlns`/`xmlns:p` con una pila.
+  - Resolución de los QName (`type`, `base`, `ref`) por (URI, nombre local).
+  - Los tipos complejos y los simples comparten un mismo espacio de símbolos; los elementos tienen otro.
+  - Normalización de espacios de los valores de atributo según su tipo XSD (el lexer no la hace).
+- **B6. Pruebas.**
+  - Corpus en `tests/schemas/xsd/{parse-ok,parse-error,semantic-error}`, con manifiestos `errores-xsd.json` y `errores-semanticos-xsd.json` (línea y columna), en el estilo de `tests/schemas/errores.json`.
+  - El equivalente de `corpus_clasificado` en `crates/xsd/tests/corpus.rs`, que lee los casos `format: "xml"` de `tests/cases`.
+- **B7. Algoritmo de UPA y de *Element Declarations Consistent* (EDC).** Iterativo, sin recursión sobre el árbol de partículas (D7).

@@ -42,7 +42,7 @@ Comprobación de las condiciones LL(1):
 | `attrs` | {`ATTR`} · ε | {`/>`, `>`} | Sí |
 | `content` | {`TEXT`} · {`PI`} · {`STAG`} · ε | {`ETAG`} | Sí |
 
-**Restricciones que no expresa la gramática** y que se verifican aparte: el texto de `misc` (fuera del elemento raíz) solo puede tener espacios; dos atributos de la misma etiqueta no pueden llamarse igual; una `PI` de nombre `xml` (la declaración) solo puede ser el primer token del documento y, si trae `encoding`, debe ser `UTF-8`.
+**Restricciones que no expresa la gramática** y que se verifican aparte: el texto de `misc` (fuera del elemento raíz) solo puede tener espacios; dos atributos de la misma etiqueta no pueden llamarse igual; una `PI` de nombre `xml` (la declaración) solo puede ser el primer token del documento y, si trae `encoding`, debe ser `UTF-8`. Para los documentos de esquema las comprueba el lector XML del frontal XSD (`crates/xsd`, tarea 5.1), junto con el emparejamiento de nombres de §3 y los espacios de nombres: ver [lector-xsd.md](lector-xsd.md).
 
 ## 3. El emparejamiento de nombres no es libre de contexto
 

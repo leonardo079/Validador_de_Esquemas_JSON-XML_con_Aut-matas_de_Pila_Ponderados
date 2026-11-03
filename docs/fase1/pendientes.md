@@ -2,7 +2,7 @@
 
 Observaciones que dejaron abiertas las rondas de auditoría de `crates/lexer`
 y que se anotan aquí para no perderlas. Las decisiones de diseño viven en el
-«Registro de decisiones» del plan (D1–D16); aquí solo se remite a ellas.
+«Registro de decisiones» del plan (D1–D31); aquí solo se remite a ellas.
 
 ## Vigilar más adelante
 
