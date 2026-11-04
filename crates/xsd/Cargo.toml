@@ -1,6 +1,6 @@
 [package]
 name = "xsd"
-description = "Frontal XSD: lector XML de esquemas con espacios de nombres (y, en las tareas siguientes, gramática, AST, análisis y bajada a la IR)"
+description = "Frontal XSD: lector XML de esquemas con espacios de nombres y parser LL(1) del subconjunto XSD al AST (y, en las tareas siguientes, análisis y bajada a la IR)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

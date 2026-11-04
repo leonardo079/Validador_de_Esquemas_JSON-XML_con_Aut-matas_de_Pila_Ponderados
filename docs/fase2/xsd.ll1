@@ -1,0 +1,55 @@
+# GLC del subconjunto XSD (docs/00-alcance.md §3) en forma LL(1), sobre los
+# tokens del lector de esquemas de la tarea 5.1 (lector-xsd.md §1):
+#   STAG ATTR > /> ETAG TEXT  (las PI y los TEXT de solo espacios se
+#   descartan antes, como el lexer descarta los comentarios).
+# Un STAG del espacio de nombres de XML Schema se refina en una clase S_*
+# por su nombre local (gramatica-xsd.md §1), como las K_* de esquema.ll1:
+#   S_SCHEMA S_ELEMENT S_COMPLEXTYPE S_SEQUENCE S_CHOICE S_ALL S_ATTRIBUTE
+#   S_SIMPLECONTENT S_EXTENSION S_SIMPLETYPE S_RESTRICTION S_ANNOTATION
+#   S_DOCUMENTATION S_APPINFO y una por faceta (S_ENUMERATION … S_PATTERN).
+# La clasificación solo se aplica fuera de `any` (contenido de
+# xs:documentation y xs:appinfo), donde todo STAG es un STAG cualquiera.
+# Las ETAG no llevan clase: el lector ya garantiza que cierran su apertura.
+# Los STAG de XSD fuera del subconjunto (xs:import, xs:any…), los de otros
+# espacios de nombres y el TEXT fuera de `any` no están en ninguna fila: son
+# celdas vacías, con su propio mensaje (gramatica-xsd.md §4).
+document       -> S_SCHEMA attrs schema_rest
+schema_rest    -> /> | > top_items ETAG
+top_items      -> top_item top_items | ε
+top_item       -> annotation | element | complex_type | simple_type | attribute
+attrs          -> ATTR attrs | ε
+annot_opt      -> annotation | ε
+annotation     -> S_ANNOTATION attrs annot_rest
+annot_rest     -> /> | > annot_items ETAG
+annot_items    -> S_DOCUMENTATION attrs any_rest annot_items | S_APPINFO attrs any_rest annot_items | ε
+any_rest       -> /> | > any ETAG
+any            -> STAG attrs any_rest any | TEXT any | ε
+element        -> S_ELEMENT attrs element_rest
+element_rest   -> /> | > annot_opt element_type ETAG
+element_type   -> complex_type | simple_type | ε
+complex_type   -> S_COMPLEXTYPE attrs ct_rest
+ct_rest        -> /> | > annot_opt ct_content ETAG
+ct_content     -> simple_content | model_opt attr_decls
+model_opt      -> sequence | choice | all | ε
+attr_decls     -> attribute attr_decls | ε
+sequence       -> S_SEQUENCE attrs group_rest
+choice         -> S_CHOICE attrs group_rest
+group_rest     -> /> | > annot_opt particles ETAG
+particles      -> particle particles | ε
+particle       -> element | sequence | choice
+all            -> S_ALL attrs all_rest
+all_rest       -> /> | > annot_opt all_items ETAG
+all_items      -> element all_items | ε
+attribute      -> S_ATTRIBUTE attrs attr_rest
+attr_rest      -> /> | > annot_opt simple_opt ETAG
+simple_opt     -> simple_type | ε
+simple_content -> S_SIMPLECONTENT attrs > annot_opt extension ETAG
+extension      -> S_EXTENSION attrs ext_rest
+ext_rest       -> /> | > annot_opt attr_decls ETAG
+simple_type    -> S_SIMPLETYPE attrs > annot_opt restriction ETAG
+restriction    -> S_RESTRICTION attrs restr_rest
+restr_rest     -> /> | > annot_opt simple_opt facets ETAG
+facets         -> facet facets | ε
+facet          -> facet_tag attrs facet_rest
+facet_tag      -> S_ENUMERATION | S_MININCLUSIVE | S_MAXINCLUSIVE | S_MINEXCLUSIVE | S_MAXEXCLUSIVE | S_LENGTH | S_MINLENGTH | S_MAXLENGTH | S_PATTERN
+facet_rest     -> /> | > annot_opt ETAG

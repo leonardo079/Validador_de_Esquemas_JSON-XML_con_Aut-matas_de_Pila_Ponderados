@@ -1,0 +1,13 @@
+<!-- El espacio de XML Schema como espacio por defecto: los nombres de tipo
+     sin prefijo (`string`) resuelven a XSD (XSD 1.0, QName resolution). Y
+     un targetNamespace con espacios, que se recorta antes de internarlo. -->
+<schema xmlns="http://www.w3.org/2001/XMLSchema"
+        xmlns:t="urn:ejemplo:t"
+        targetNamespace="  urn:ejemplo:t  ">
+  <element name="r" type="t:R"/>
+  <complexType name="R">
+    <sequence>
+      <element name="s" type="string"/>
+    </sequence>
+  </complexType>
+</schema>

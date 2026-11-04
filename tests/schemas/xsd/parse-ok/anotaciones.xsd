@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<?procesador instruccion que se descarta?>
+<!-- D23: xs:annotation, xs:documentation, xs:appinfo y el atributo id se
+     aceptan y se ignoran; el contenido de documentation/appinfo es XML bien
+     formado cualquiera, de cualquier espacio de nombres. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" id="esquema"
+           xmlns:h="http://www.w3.org/1999/xhtml">
+  <xs:annotation id="a1">
+    <xs:documentation source="http://ejemplo.org/doc" xml:lang="es">
+      Texto libre con <h:b>marcas</h:b> &amp; entidades, <![CDATA[<cdata>]]>
+      y hasta <xs:element name="no-cuenta"/> (dentro no se refina).
+    </xs:documentation>
+    <xs:appinfo source="urn:herramienta"><conf a="1"><x/></conf></xs:appinfo>
+  </xs:annotation>
+  <xs:element name="raiz" id="e1">
+    <xs:annotation><xs:documentation>El elemento raíz.</xs:documentation></xs:annotation>
+    <xs:complexType id="t1">
+      <xs:annotation/>
+      <xs:sequence id="s1">
+        <xs:annotation><xs:appinfo/></xs:annotation>
+        <xs:element name="hoja" type="Codigo">
+          <xs:annotation><xs:documentation/></xs:annotation>
+        </xs:element>
+      </xs:sequence>
+      <xs:attribute name="v" type="xs:string" id="at1">
+        <xs:annotation><xs:documentation>Atributo.</xs:documentation></xs:annotation>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+  <xs:annotation><xs:documentation>Entre declaraciones globales.</xs:documentation></xs:annotation>
+  <xs:simpleType name="Codigo" id="st1">
+    <xs:annotation><xs:documentation>Código.</xs:documentation></xs:annotation>
+    <xs:restriction base="xs:string" id="r1">
+      <xs:annotation><xs:documentation>Restricción.</xs:documentation></xs:annotation>
+      <xs:pattern value="[A-Z]{3}" id="f1">
+        <xs:annotation><xs:documentation>Faceta.</xs:documentation></xs:annotation>
+      </xs:pattern>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

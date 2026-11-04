@@ -152,14 +152,14 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 va primero.
 **Descripción:** Gramática del metalenguaje XSD sobre los tokens de 5.1. El `STAG` del espacio de nombres de XSD se refina en una clase por construcción (`S_SCHEMA`, `S_ELEMENT`, `S_COMPLEXTYPE`, `S_SEQUENCE`, `S_CHOICE`, `S_ALL`, `S_ATTRIBUTE`, `S_SIMPLECONTENT`, `S_EXTENSION`, `S_SIMPLETYPE`, `S_RESTRICTION`, una por faceta y, según U3, `S_ANNOTATION`), como las clases `K_*` de `esquema.ll1`. El parser construye el AST propio de XSD (D3) con el `Span` de cada construcción y aplica la lista blanca de atributos por construcción (`00-alcance.md` §3.1).
 
 **Criterios de aceptación:**
-- [ ] `docs/fase2/xsd.ll1` sin conflictos LL(1); `ll1-xsd.md` lo generan `make docs` y `make docs-check` (añadir `xsd` a los bucles del `Makefile`); `docs/fase2/gramatica-xsd.md` con tokens, gramática, FIRST/FOLLOW resumidos y las restricciones que la gramática no expresa.
-- [ ] Todo `tests/schemas/xsd/parse-ok` (con los dos esquemas de `tests/cases` y el `pedido_xsd` de `forma.rs`) da un AST. Cada entrada de `parse-error` da el error y la línea/columna del manifiesto, entre ellas:
+- [x] `docs/fase2/xsd.ll1` sin conflictos LL(1); `ll1-xsd.md` lo generan `make docs` y `make docs-check` (añadir `xsd` a los bucles del `Makefile`); `docs/fase2/gramatica-xsd.md` con tokens, gramática, FIRST/FOLLOW resumidos y las restricciones que la gramática no expresa.
+- [x] Todo `tests/schemas/xsd/parse-ok` (con los dos esquemas de `tests/cases` y el `pedido_xsd` de `forma.rs`) da un AST. Cada entrada de `parse-error` da el error y la línea/columna del manifiesto, entre ellas:
   - cada construcción de §3.3 (`xs:import`, `xs:any`, `xs:group`, `mixed="true"`, `xs:complexContent`, `xs:list`, `xs:union`, `xs:key`, `totalDigits`…), rechazada con su categoría y su motivo (D6);
   - un atributo no admitido (`form`, `nillable`, `abstract`, `default` en `xs:element`);
   - texto en contenido de solo elementos;
   - un elemento ajeno al espacio de nombres de XSD.
-- [ ] Pasar el tope de profundidad (256) es un error `limit`, nunca un desbordamiento de pila: probado en un hilo de 2 MiB en debug, con el margen medido y documentado como en `gramatica-esquema.md` §6. El análisis es O(n).
-- [ ] Obligaciones que deja la 5.1 (`docs/fase2/pendientes.md` §11-§13; añadidas el 3 nov):
+- [x] Pasar el tope de profundidad (256) es un error `limit`, nunca un desbordamiento de pila: probado en un hilo de 2 MiB en debug, con el margen medido y documentado como en `gramatica-esquema.md` §6. El análisis es O(n).
+- [x] Obligaciones que deja la 5.1 (`docs/fase2/pendientes.md` §11-§13; añadidas el 3 nov):
   - el corte por profundidad ocurre en cuanto se pasa el tope, sin seguir leyendo el documento (la pila de elementos abiertos del lector no pasa de 256; §12, D7), con prueba de un documento de 10⁶ niveles;
   - `targetNamespace` se recorta (*collapse*), se interna con `Reader::intern` mientras el lector existe y su `Option<NsId>` se guarda en la raíz del AST; `intern` no se llama para ningún otro valor; la doc de `Reader::intern` dice que interna el valor ya normalizado (5.1-CR3-I1, 5.1-SEC3-I2); prueba con `targetNamespace=' urn:t '` y `type='t:T'` que dan el mismo `NsId`;
   - `as_qname()` se llama una sola vez por atributo `type`/`base`/`ref` y el AST guarda el `Name` resuelto con su posición (5.1-SEC3-I3, §11); prueba de lectura anticipada con un hijo que redeclara el prefijo;
@@ -176,6 +176,8 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 va primero.
 
 **Arrastra:** `fase2/pendientes.md` §5 (margen de pila), §9, §11, §12 (profundidad) y §13 (ver el último criterio).
 
+**Estado (3 nov):** APROBADA CON OBSERVACIONES en la revisión final (0 Critical; el único Important era de documentación y se corrigió en el cierre), tras 2 rondas de corrección (revisión 1: D34 sin aplicar, orden de errores dentro de la etiqueta, cobertura de la lista blanca; revisión 2: `fixed` en `enumeration`/`pattern`, segunda excepción de orden, cobertura). Desde la revisión 2 solo revisa el code-reviewer (D35). Casillas verificadas por el Tester 3 (`crates/xsd/tests/parser.rs`, 22 pruebas; corpus `tests/schemas/xsd/` con 10 `parse-ok` y 82 `parse-error`). Sin commit. Observaciones abiertas en `docs/fase2/pendientes.md` §5, §9, §11, §12, §16-§19 y `docs/fase1/pendientes.md` §3.
+
 ## Tarea 5.3: Resolución de nombres, restricciones estructurales y bajada de tipos complejos a `VerifiedIr`
 
 **Descripción:**
@@ -186,7 +188,7 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 va primero.
 - **Restricciones de componente del subconjunto que la IR exige** (con posición, antes de bajar):
   - D14 (`xs:element` sin `type`, `ref` ni tipo anónimo);
   - `name` con `ref`, o `type` con un tipo anónimo;
-  - `minOccurs`/`maxOccurs` en un elemento global;
+  - ~~`minOccurs`/`maxOccurs` en un elemento global~~ (ya lo rechaza el parser de la 5.2 como `syntax`, `parse-error/min-occurs-global.xsd`);
   - `minOccurs` > `maxOccurs` (I11);
   - atributos repetidos (I10);
   - *all-group limited* (I12);
@@ -215,6 +217,8 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 va primero.
 **Arrastra:**
 - `pendientes.md` §3 (S-5, primera mitad; la segunda la cierra D27 rechazando la construcción);
 - `docs/fase2/pendientes.md` §11 (tablas por `NsId`);
+- `docs/fase2/pendientes.md` §16 (restricciones que el parser de la 5.2 deja a la 5.3, incl. 5.2-CR-S2: `xs:attribute` globales) y §19 (5.2-CR3-S1: casos de corpus de las mutaciones vivas de `subset.rs` y `texto-con-comentario-malo.xsd`; 5.2-CR2-S3: comparar las copias de `parse-ok` con `tests/cases`);
+- `docs/fase2/pendientes.md` §5: recorrer el AST con pila explícita; `clone`/`{:?}`/`==` del `Schema` solo en el hilo con `stack_size` (D7).
 - `pendientes.md` §32 (4.3-S7: cosméticos de `ir`, solo si la tarea toca `crates/ir`).
 
 ## Tarea 5.4: `schemac check|ir` con XSD, corpus clasificado y doradas

@@ -46,6 +46,7 @@ docs:
 	python3 scripts/ll1.py docs/fase2/json.ll1 > docs/fase2/ll1-json.md
 	python3 scripts/ll1.py docs/fase2/xml.ll1 > docs/fase2/ll1-xml.md
 	python3 scripts/ll1.py docs/fase2/esquema.ll1 > docs/fase2/ll1-esquema.md
+	python3 scripts/ll1.py docs/fase2/xsd.ll1 > docs/fase2/ll1-xsd.md
 	python3 scripts/ll1.py docs/fase2/json-izquierda.ll1 > docs/fase2/ll1-json-izquierda.md || true
 
 # Comprueba que los artefactos deterministas de `make docs` coinciden con los
@@ -70,7 +71,7 @@ docs-check:
 		cargo run -q -p cli -- ir --dot tests/schemas/parse-ok/$$e.json > $(DOCS_TMP)/ir-$$e.dot || exit 1; \
 		diff -u docs/fase3/ir-$$e.dot $(DOCS_TMP)/ir-$$e.dot || fallo=1; \
 	done; \
-	for g in json xml esquema; do \
+	for g in json xml esquema xsd; do \
 		python3 scripts/ll1.py docs/fase2/$$g.ll1 > $(DOCS_TMP)/ll1-$$g.md || exit 1; \
 		diff -u docs/fase2/ll1-$$g.md $(DOCS_TMP)/ll1-$$g.md || fallo=1; \
 	done; \

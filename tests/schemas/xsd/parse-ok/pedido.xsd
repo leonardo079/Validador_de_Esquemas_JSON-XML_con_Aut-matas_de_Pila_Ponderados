@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Equivalente de `pedido_xsd` (crates/ir/tests/forma.rs), la IR hecha a
+     mano: `choice`, `subpedido` opcional y recursivo por el tipo con nombre,
+     atributo requerido, `maxOccurs="unbounded"` y `simpleContent` con
+     extensión. La tarea 5.3 compara su bajada con esa IR. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="pedido" type="Pedido"/>
+  <xs:complexType name="Pedido">
+    <xs:sequence>
+      <xs:element name="cliente" type="xs:string"/>
+      <xs:choice>
+        <xs:element name="tarjeta" type="xs:string"/>
+        <xs:element name="efectivo" type="xs:decimal"/>
+      </xs:choice>
+      <xs:element name="item" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:simpleContent>
+            <xs:extension base="xs:decimal">
+              <xs:attribute name="sku" type="xs:string" use="required"/>
+              <xs:attribute name="moneda" type="xs:string" default="COP"/>
+            </xs:extension>
+          </xs:simpleContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="subpedido" type="Pedido" minOccurs="0"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:int" use="required"/>
+  </xs:complexType>
+</xs:schema>

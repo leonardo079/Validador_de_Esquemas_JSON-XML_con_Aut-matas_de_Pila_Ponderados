@@ -87,6 +87,11 @@ Prueba el parser del metalenguaje (Fase 2, `crates/schema-parser/tests/corpus.rs
 
 Los esquemas JSON de `cases/` también pasan por el parser.
 
+Los esquemas XSD tienen su propio corpus, con la misma forma (parser del subconjunto XSD, tarea 5.2: `crates/xsd/tests/parser.rs`, [docs/fase2/gramatica-xsd.md](../docs/fase2/gramatica-xsd.md) §11):
+
+- `schemas/xsd/parse-ok/*.xsd`: deben dar un AST. Incluye una copia de cada esquema XSD de `cases/` con el `_id` del caso como nombre (la prueba exige que exista) y `pedido.xsd`, el equivalente de la IR `pedido_xsd` de `crates/ir/tests/forma.rs`.
+- `schemas/xsd/parse-error/*.xsd`: deben fallar. Cada archivo tiene una entrada en `schemas/errores-xsd.json` con los campos de `errores.json` (`code` es `lexical`, `syntax`, `namespace`, `unsupported`, `value` o `limit`).
+
 La Fase 3 (`crates/semantic/tests/corpus.rs`: meta-esquema y, por etapas, tabla de símbolos con la resolución de `$ref` y ciclos no productivos) usa el mismo corpus:
 
 - `schemas/parse-ok/*.json` y los esquemas JSON de `cases/` deben pasarla, salvo dos esquemas de `parse-ok` que existen para probar el parser y fallan a propósito en la Fase 3 (`combinadores.json` y `fuera-del-subconjunto.json`; sus errores exactos están fijados en la prueba).

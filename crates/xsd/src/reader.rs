@@ -456,7 +456,7 @@ fn split_qname(s: &str) -> Option<usize> {
     }
 }
 
-fn is_xml_space(c: char) -> bool {
+pub(crate) fn is_xml_space(c: char) -> bool {
     matches!(c, ' ' | '\t' | '\n' | '\r')
 }
 
@@ -503,6 +503,9 @@ struct Assembler {
     prev: Pos,
     /// [`XMLNS_NS`], internado en `scope`.
     xmlns_ns: NsId,
+    /// Profundidad máxima de anidamiento de elementos (D7); `u32::MAX` si no
+    /// hay tope ([`Reader::with_max_depth`]).
+    max_depth: u32,
 
     text: String,
     text_start: Pos,
@@ -537,20 +540,15 @@ struct Assembler {
 /// Conserva el error de menor offset (el primero en el orden de la entrada).
 fn keep(first: &mut Option<XsdError>, kind: ErrorKind, at: Pos) {
     if first.as_ref().is_none_or(|e| at.offset < e.at.offset) {
-        *first = Some(XsdError {
-            kind: kind.clipped(),
-            at,
-        });
+        *first = Some(XsdError::new(kind, at));
     }
 }
 
-/// Todo error del lector pasa por aquí o por [`keep`]: el texto del usuario
-/// que lleva se recorta ([`ErrorKind::clipped`]).
+/// Todo error del lector pasa por aquí o por [`keep`], y los dos por
+/// [`XsdError::new`]: el texto del usuario que lleva se recorta. Quien llama
+/// pasa ya una copia recortada (`clip(&nombre)`), nunca el nombre entero.
 fn err<T>(kind: ErrorKind, at: Pos) -> Result<T, XsdError> {
-    Err(XsdError {
-        kind: kind.clipped(),
-        at,
-    })
+    Err(XsdError::new(kind, at))
 }
 
 impl Assembler {
@@ -565,6 +563,7 @@ impl Assembler {
             here: Pos::START,
             prev: Pos::START,
             xmlns_ns,
+            max_depth: u32::MAX,
             text: String::new(),
             text_start: Pos::START,
             text_end: 0,
@@ -685,7 +684,7 @@ impl Assembler {
         match el_split {
             None => keep(
                 &mut first,
-                ErrorKind::InvalidQName(self.tag_name.clone()),
+                ErrorKind::InvalidQName(clip(&self.tag_name)),
                 self.tag_name_at,
             ),
             Some(ls) if ls > 0 && &self.tag_name[..ls - 1] == "xmlns" => keep(
@@ -699,12 +698,12 @@ impl Assembler {
         let mut seen = HashSet::with_capacity(attrs.len());
         for (a, s) in attrs.iter().zip(&splits) {
             if s.is_none() {
-                keep(&mut first, ErrorKind::InvalidQName(a.name.clone()), a.at);
+                keep(&mut first, ErrorKind::InvalidQName(clip(&a.name)), a.at);
             }
             if !seen.insert(a.name.as_str()) {
                 keep(
                     &mut first,
-                    ErrorKind::DuplicateAttribute(a.name.clone()),
+                    ErrorKind::DuplicateAttribute(clip(&a.name)),
                     a.at,
                 );
             }
@@ -721,7 +720,7 @@ impl Assembler {
                 _ => continue,
             };
             let v = a.value.as_str();
-            let problema = if prefix == "xmlns" {
+            let problem = if prefix == "xmlns" {
                 Some("el prefijo xmlns no se puede declarar")
             } else if prefix == "xml" && v != XML_NS {
                 Some("el prefijo xml solo puede ligarse a http://www.w3.org/XML/1998/namespace")
@@ -734,7 +733,7 @@ impl Assembler {
             } else {
                 None
             };
-            if let Some(m) = problema {
+            if let Some(m) = problem {
                 keep(&mut first, ErrorKind::ReservedNamespace(m), a.at);
             }
             let uri = (!v.is_empty() || !prefix.is_empty()).then(|| self.scope.intern(v));
@@ -750,7 +749,7 @@ impl Assembler {
             Ok(ns) => ns,
             Err(()) => {
                 if el_split.is_some() && el_prefix != Some("xmlns") {
-                    let p = el_prefix.unwrap_or_default().to_owned();
+                    let p = clip(el_prefix.unwrap_or_default());
                     keep(&mut first, ErrorKind::UndeclaredPrefix(p), self.tag_name_at);
                 }
                 None
@@ -770,7 +769,7 @@ impl Assembler {
                     Ok(ns) => ns,
                     Err(()) => {
                         if s.is_some() {
-                            let p = prefix.unwrap_or_default().to_owned();
+                            let p = clip(prefix.unwrap_or_default());
                             keep(&mut first, ErrorKind::UndeclaredPrefix(p), a.at);
                         }
                         None
@@ -781,7 +780,7 @@ impl Assembler {
                 if prefix.is_some() && !expanded.insert((uri.clone(), &a.name[ls..])) {
                     keep(
                         &mut first,
-                        ErrorKind::DuplicateAttribute(a.name.clone()),
+                        ErrorKind::DuplicateAttribute(clip(&a.name)),
                         a.at,
                     );
                 }
@@ -859,7 +858,7 @@ impl Assembler {
                 return err(ErrorKind::XmlDeclNotFirst, self.pi_lt);
             }
         } else if t.eq_ignore_ascii_case("xml") {
-            return err(ErrorKind::ReservedPiTarget(t.clone()), self.pi_lt);
+            return err(ErrorKind::ReservedPiTarget(clip(t)), self.pi_lt);
         }
         Ok(())
     }
@@ -898,7 +897,7 @@ impl Assembler {
     fn finish(&mut self, at: Pos) -> Result<(), XsdError> {
         self.flush_text();
         if let Some(o) = self.open.last() {
-            return err(ErrorKind::UnclosedElement(o.name.raw.clone()), at);
+            return err(ErrorKind::UnclosedElement(clip(&o.name.raw)), at);
         }
         if !self.root_seen {
             return err(ErrorKind::NoRootElement, at);
@@ -918,6 +917,13 @@ impl Sink<Event> for Assembler {
                 self.flush_text();
                 if self.open.is_empty() && self.root_seen {
                     return err(ErrorKind::MultipleRootElements, span.start);
+                }
+                // D7: el elemento que pasa el tope se rechaza en su `<`, antes
+                // de leer su nombre; así la pila `open` nunca pasa del tope y
+                // el resto del documento no se lee.
+                if self.open.len() >= self.max_depth as usize {
+                    let max = self.max_depth;
+                    return err(ErrorKind::TooDeep { max }, span.start);
                 }
                 self.into = In::STagName;
                 self.tag_lt = span.start;
@@ -982,17 +988,17 @@ impl Sink<Event> for Assembler {
 /// seguido de dígitos y `encoding`, si está, UTF-8 (sin distinguir
 /// mayúsculas). `data` es el contenido tras el primer espacio, con los bytes
 /// de la entrada (la sintaxis es ASCII, así que se recorre por bytes);
-/// `first`, la posición de su primer carácter; `fin`, la de la declaración
+/// `first`, la posición de su primer carácter; `end`, la de la declaración
 /// (para lo que falta al final). La posición de un error se reconstruye
 /// avanzando `first` sobre los bytes anteriores, una sola vez.
-fn check_xml_decl(data: &str, first: Option<Pos>, fin: Pos) -> Result<(), XsdError> {
+fn check_xml_decl(data: &str, first: Option<Pos>, end: Pos) -> Result<(), XsdError> {
     let b = data.as_bytes();
     let at = |i: usize| match first {
         Some(mut p) if i < b.len() => {
             b[..i].iter().for_each(|&x| p.advance(x));
             p
         }
-        _ => fin,
+        _ => end,
     };
     let bad = |i: usize, m: &'static str| err(ErrorKind::BadXmlDecl(m), at(i));
     let is_ws = |x: u8| matches!(x, b' ' | b'\t' | b'\n' | b'\r');
@@ -1057,7 +1063,7 @@ fn check_xml_decl(data: &str, first: Option<Pos>, fin: Pos) -> Result<(), XsdErr
             }
             2 => {
                 if !value.eq_ignore_ascii_case("UTF-8") {
-                    return err(ErrorKind::UnsupportedEncoding(value.to_owned()), at(v0));
+                    return err(ErrorKind::UnsupportedEncoding(clip(value)), at(v0));
                 }
             }
             _ => {
@@ -1140,10 +1146,26 @@ where
         }
     }
 
-    /// Interna un URI en la misma tabla que los del documento (por ejemplo
-    /// el `targetNamespace` de `xs:schema`, que llega como valor): su
-    /// [`NsId`] es igual al de todo nombre del documento con ese URI.
-    /// O(|uri|).
+    /// Pone un tope a la profundidad de anidamiento de elementos (D7): el
+    /// elemento número `max + 1` de una cadena de anidados es el error
+    /// [`ErrorKind::TooDeep`] (código `limit`) en su `<`, y el lector se
+    /// detiene ahí sin leer el resto de la entrada. Así la pila de elementos
+    /// abiertos nunca guarda más de `max` nombres. Sin llamarlo no hay tope
+    /// (la pila es explícita, sin recursión); el parser de la 5.2 lo fija en
+    /// su profundidad máxima (`MAX_DEPTH_LIMIT` = 256).
+    pub fn with_max_depth(mut self, max: u32) -> Self {
+        self.sink.max_depth = max;
+        self
+    }
+
+    /// Interna un URI en la misma tabla que los del documento: su [`NsId`]
+    /// es igual al de todo nombre del documento con ese URI. Interna `uri`
+    /// **tal como se le pasa**: el valor de un atributo de tipo `xs:anyURI`
+    /// (el `targetNamespace` de `xs:schema`) hay que normalizarlo antes
+    /// (*collapse*: sin espacios en los extremos), porque los URI de las
+    /// declaraciones `xmlns:p` se internan sin recortar. Los URI internados
+    /// viven hasta el fin del lector, sin límite: el parser lo llama solo
+    /// para `targetNamespace`, nunca por cada valor de atributo. O(|uri|).
     pub fn intern(&mut self, uri: &str) -> NsId {
         self.sink.scope.intern(uri)
     }
@@ -1195,10 +1217,7 @@ where
             };
             if let Err(e) = res {
                 self.pending = Some(match e {
-                    Error::Lex(e) => XsdError {
-                        kind: ErrorKind::Lex(e.kind),
-                        at: e.at,
-                    },
+                    Error::Lex(e) => XsdError::new(ErrorKind::Lex(e.kind), e.at),
                     Error::Sink(e) => e,
                 });
             }

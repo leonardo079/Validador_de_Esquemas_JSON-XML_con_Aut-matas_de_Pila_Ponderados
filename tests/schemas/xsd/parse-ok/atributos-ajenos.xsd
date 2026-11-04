@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<!-- D34: los atributos de otro espacio de nombres que el de XSD se aceptan
+     y se ignoran en cualquier construcción (xml:*, xsi:*, extensiones), como
+     las anotaciones de D23; no llegan al AST. También: mixed="0" y source en
+     xs:documentation y xs:appinfo. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:x="urn:extension"
+           xml:lang="es" x:version="2" xsi:schemaLocation="urn:a a.xsd">
+  <xs:annotation x:a="1">
+    <xs:documentation xml:lang="es" source="urn:doc" x:b="2">Doc.</xs:documentation>
+    <xs:appinfo source="urn:app" xml:lang="en"/>
+  </xs:annotation>
+  <xs:element name="a" xsi:type="xs:int" x:c="3">
+    <xs:complexType mixed="0" x:d="4">
+      <xs:sequence x:e="5">
+        <xs:element name="b" type="xs:string" xsi:nil="true" xml:lang="es"/>
+      </xs:sequence>
+      <xs:attribute name="k" type="xs:string" x:f="6"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:simpleType name="S" x:g="7">
+    <xs:restriction base="xs:string" x:h="8">
+      <xs:enumeration value="v" x:i="9"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

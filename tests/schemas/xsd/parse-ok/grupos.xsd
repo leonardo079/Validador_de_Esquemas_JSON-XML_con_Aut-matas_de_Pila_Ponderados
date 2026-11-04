@@ -1,0 +1,39 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+  <!-- xs:all, grupos anidados con ocurrencias, contenido vacío y
+       mixed="false". -->
+  <xs:element name="ficha">
+    <xs:complexType>
+      <xs:all minOccurs="0">
+        <xs:element name="a" type="xs:string"/>
+        <xs:element name="b" type="xs:string" minOccurs="0"/>
+      </xs:all>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="lista">
+    <xs:complexType mixed="false">
+      <xs:sequence minOccurs="1" maxOccurs="3">
+        <xs:choice maxOccurs="unbounded">
+          <xs:element ref="ficha"/>
+          <xs:sequence>
+            <xs:element name="x" type="xs:int" minOccurs=" 0 " maxOccurs="2"/>
+          </xs:sequence>
+          <xs:choice/>
+        </xs:choice>
+        <xs:sequence/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="vacio">
+    <xs:complexType/>
+  </xs:element>
+  <xs:element name="solo-atributos">
+    <xs:complexType>
+      <xs:attribute name="k" type="xs:string" use="required"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:complexType name="Vacio">
+    <xs:sequence/>
+  </xs:complexType>
+  <xs:complexType name="SinNada"/>
+</xs:schema>

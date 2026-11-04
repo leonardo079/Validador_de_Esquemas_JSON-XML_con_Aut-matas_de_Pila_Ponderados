@@ -1,15 +1,20 @@
 //! Errores del frontal XSD, con línea y columna.
 //!
-//! Hoy los produce solo el lector XML ([`crate::Reader`]); las tareas
-//! siguientes (gramática, análisis) añaden sus clases a [`ErrorKind`] y sus
-//! códigos a [`XsdError::code`].
+//! Los producen el lector XML ([`crate::Reader`], tarea 5.1) y el parser del
+//! subconjunto XSD ([`crate::parse`], tarea 5.2); las tareas siguientes
+//! (análisis) añaden sus clases a [`ErrorKind`] y sus códigos a
+//! [`XsdError::code`]. Todo error del crate se construye con
+//! [`XsdError::new`], que recorta los textos del usuario.
 
 use core::fmt;
 
 use lexer::{short, LexErrorKind, Pos, SHORT_MAX};
 
+use crate::XS_NS;
+
 /// Primer error encontrado en el documento de esquema. El lector se detiene
-/// en él y lo repite si se le piden más tokens.
+/// en él y lo repite si se le piden más tokens; el parser también se detiene
+/// en el primero.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct XsdError {
     pub kind: ErrorKind,
@@ -57,6 +62,81 @@ pub enum ErrorKind {
     /// Declaración de espacio de nombres prohibida por Namespaces in XML 1.0
     /// (prefijos `xml`/`xmlns`, `xmlns:p=""`); el texto dice cuál.
     ReservedNamespace(&'static str),
+
+    // --- Parser del subconjunto XSD (tarea 5.2, `docs/fase2/gramatica-xsd.md`).
+    /// Un elemento pasa la profundidad máxima de anidamiento (D7). Lo detecta
+    /// el lector en el `<` del elemento, sin leer más.
+    TooDeep { max: u32 },
+    /// Celda vacía de la tabla LL(1) (`docs/fase2/xsd.ll1`): el token no
+    /// puede seguir aquí. `expected` lista lo que admitía la fila.
+    Unexpected {
+        expected: &'static str,
+        found: Found,
+    },
+    /// Texto que no es de espacios en un contenido de solo elementos (todo
+    /// elemento de XSD salvo `xs:documentation` y `xs:appinfo`).
+    TextNotAllowed { parent: &'static str },
+    /// Elemento fuera del espacio de nombres de XML Schema donde el esquema
+    /// solo admite elementos de XSD.
+    ForeignElement(String),
+    /// Nombre del espacio de nombres de XML Schema que no es ningún elemento
+    /// de XSD 1.0.
+    UnknownElement(String),
+    /// Construcción de XSD fuera del subconjunto (`00-alcance.md` §3.3, D6):
+    /// su categoría y por qué no se soporta.
+    UnsupportedElement {
+        name: String,
+        category: &'static str,
+        reason: &'static str,
+    },
+    /// Atributo de XSD que el subconjunto no admite en esta construcción
+    /// (`form`, `nillable`, `abstract`…; D6).
+    UnsupportedAttribute {
+        element: &'static str,
+        name: String,
+        category: &'static str,
+        reason: &'static str,
+    },
+    /// Atributo que no está en la lista blanca de su construcción y que XSD
+    /// tampoco define ahí.
+    UnknownAttribute {
+        element: &'static str,
+        name: String,
+        allowed: &'static [&'static str],
+    },
+    /// Falta un atributo obligatorio de la construcción.
+    MissingAttribute {
+        element: &'static str,
+        name: &'static str,
+    },
+    /// Valor de atributo que no tiene la forma que la gramática necesita
+    /// (`use`, `mixed`, `elementFormDefault`, `targetNamespace` vacío…).
+    InvalidValue {
+        attr: &'static str,
+        expected: &'static str,
+        found: String,
+    },
+    /// Valor que XSD admite pero el subconjunto no (`mixed="true"`,
+    /// `use="prohibited"`; D6).
+    UnsupportedValue {
+        attr: &'static str,
+        found: String,
+        category: &'static str,
+        reason: &'static str,
+    },
+}
+
+/// Token encontrado en una celda vacía de la tabla LL(1), para el mensaje.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Found {
+    /// `<nombre` (el nombre tal como está escrito).
+    Tag(String),
+    /// `</nombre>`.
+    EndTag(String),
+    /// `/>`.
+    EmptyClose,
+    /// Fin de la entrada.
+    Eof,
 }
 
 /// Copia de `s` recortada a `SHORT_MAX + 1` caracteres. O(SHORT_MAX).
@@ -77,7 +157,7 @@ fn clip_in_place(s: &mut String) {
 
 impl ErrorKind {
     /// La misma clase con sus textos recortados (ver arriba).
-    pub(crate) fn clipped(mut self) -> Self {
+    fn clipped(mut self) -> Self {
         match &mut self {
             ErrorKind::MismatchedEndTag { open, close } => {
                 clip_in_place(open);
@@ -89,20 +169,47 @@ impl ErrorKind {
             | ErrorKind::ReservedPiTarget(s)
             | ErrorKind::UnsupportedEncoding(s)
             | ErrorKind::InvalidQName(s)
-            | ErrorKind::UndeclaredPrefix(s) => clip_in_place(s),
+            | ErrorKind::UndeclaredPrefix(s)
+            | ErrorKind::ForeignElement(s)
+            | ErrorKind::UnknownElement(s)
+            | ErrorKind::Unexpected {
+                found: Found::Tag(s) | Found::EndTag(s),
+                ..
+            }
+            | ErrorKind::UnsupportedElement { name: s, .. }
+            | ErrorKind::UnsupportedAttribute { name: s, .. }
+            | ErrorKind::UnknownAttribute { name: s, .. }
+            | ErrorKind::InvalidValue { found: s, .. }
+            | ErrorKind::UnsupportedValue { found: s, .. } => clip_in_place(s),
             ErrorKind::Lex(_)
             | ErrorKind::NoRootElement
             | ErrorKind::MultipleRootElements
             | ErrorKind::TextOutsideRoot
             | ErrorKind::XmlDeclNotFirst
             | ErrorKind::BadXmlDecl(_)
-            | ErrorKind::ReservedNamespace(_) => {}
+            | ErrorKind::ReservedNamespace(_)
+            | ErrorKind::TooDeep { .. }
+            | ErrorKind::Unexpected { .. }
+            | ErrorKind::TextNotAllowed { .. }
+            | ErrorKind::MissingAttribute { .. } => {}
         }
         self
     }
 }
 
 impl XsdError {
+    /// Único constructor dentro del crate: recorta los textos del usuario
+    /// que lleve `kind` a `SHORT_MAX + 1` caracteres ([`ErrorKind`]). Quien
+    /// lo llama pasa ya una copia recortada (`clip(&nombre)`), así que crear
+    /// un error no copia un nombre o un valor entero de varios MiB; el
+    /// recorte de aquí garantiza la cota aunque alguien olvide hacerlo.
+    pub(crate) fn new(kind: ErrorKind, at: Pos) -> Self {
+        Self {
+            kind: kind.clipped(),
+            at,
+        }
+    }
+
     pub fn line(&self) -> u32 {
         self.at.line
     }
@@ -129,6 +236,17 @@ impl XsdError {
             ErrorKind::InvalidQName(_)
             | ErrorKind::UndeclaredPrefix(_)
             | ErrorKind::ReservedNamespace(_) => "namespace",
+            ErrorKind::TooDeep { .. } => "limit",
+            ErrorKind::Unexpected { .. }
+            | ErrorKind::TextNotAllowed { .. }
+            | ErrorKind::ForeignElement(_)
+            | ErrorKind::UnknownElement(_)
+            | ErrorKind::UnknownAttribute { .. }
+            | ErrorKind::MissingAttribute { .. } => "syntax",
+            ErrorKind::UnsupportedElement { .. }
+            | ErrorKind::UnsupportedAttribute { .. }
+            | ErrorKind::UnsupportedValue { .. } => "unsupported",
+            ErrorKind::InvalidValue { .. } => "value",
         }
     }
 }
@@ -180,6 +298,84 @@ impl fmt::Display for XsdError {
                 write!(f, "prefijo \"{}\" sin declarar", short(p))
             }
             ErrorKind::ReservedNamespace(m) => write!(f, "{m}"),
+            ErrorKind::TooDeep { max } => write!(
+                f,
+                "el esquema supera la profundidad máxima de {max} elementos anidados"
+            ),
+            ErrorKind::Unexpected { expected, found } => {
+                write!(f, "se esperaba {expected}, se encontró ")?;
+                match found {
+                    Found::Tag(n) => write!(f, "<{}>", short(n)),
+                    Found::EndTag(n) => write!(f, "</{}>", short(n)),
+                    Found::EmptyClose => write!(f, "`/>`"),
+                    Found::Eof => write!(f, "el fin de la entrada"),
+                }
+            }
+            ErrorKind::TextNotAllowed { parent } => write!(
+                f,
+                "texto en el contenido de {parent}, que solo admite elementos \
+                 (y espacios entre ellos)"
+            ),
+            ErrorKind::ForeignElement(n) => write!(
+                f,
+                "el elemento <{}> no es del espacio de nombres de XML Schema ({XS_NS}); \
+                 solo se admite dentro de xs:documentation o xs:appinfo",
+                short(n)
+            ),
+            ErrorKind::UnknownElement(n) => {
+                write!(f, "<{}> no es un elemento de XML Schema 1.0", short(n))
+            }
+            ErrorKind::UnsupportedElement {
+                name,
+                category,
+                reason,
+            } => write!(
+                f,
+                "elemento <{}> no soportado ({category}): {reason}",
+                short(name)
+            ),
+            ErrorKind::UnsupportedAttribute {
+                element,
+                name,
+                category,
+                reason,
+            } => write!(
+                f,
+                "atributo \"{}\" no soportado en {element} ({category}): {reason}",
+                short(name)
+            ),
+            ErrorKind::UnknownAttribute {
+                element,
+                name,
+                allowed,
+            } => write!(
+                f,
+                "atributo \"{}\" no admitido en {element}; admite: {}",
+                short(name),
+                allowed.join(", ")
+            ),
+            ErrorKind::MissingAttribute { element, name } => {
+                write!(f, "falta el atributo obligatorio \"{name}\" en {element}")
+            }
+            ErrorKind::InvalidValue {
+                attr,
+                expected,
+                found,
+            } => write!(
+                f,
+                "valor \"{}\" inválido para \"{attr}\": se esperaba {expected}",
+                short(found)
+            ),
+            ErrorKind::UnsupportedValue {
+                attr,
+                found,
+                category,
+                reason,
+            } => write!(
+                f,
+                "valor \"{}\" de \"{attr}\" no soportado ({category}): {reason}",
+                short(found)
+            ),
         }
     }
 }

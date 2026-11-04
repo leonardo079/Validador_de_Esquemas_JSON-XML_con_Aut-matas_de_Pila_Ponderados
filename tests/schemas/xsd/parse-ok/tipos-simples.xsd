@@ -1,0 +1,54 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <!-- Todas las facetas del subconjunto (00-alcance.md §3.1). -->
+  <xs:simpleType name="Talla">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="S"/>
+      <xs:enumeration value=" M "/>
+      <xs:enumeration value="L"/>
+      <xs:length value="1"/>
+      <xs:minLength value="1"/>
+      <xs:maxLength value=" 3 "/>
+      <xs:pattern value="[SML]"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Porcentaje">
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0"/>
+      <xs:maxInclusive value="100"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Abierto">
+    <xs:restriction base="xs:int">
+      <xs:minExclusive value="-1"/>
+      <xs:maxExclusive value="+10"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <!-- Base anónima: xs:restriction con un xs:simpleType hijo. -->
+  <xs:simpleType name="PocoPorcentaje">
+    <xs:restriction>
+      <xs:simpleType>
+        <xs:restriction base="Porcentaje"/>
+      </xs:simpleType>
+      <xs:maxInclusive value="10"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="talla">
+    <xs:simpleType>
+      <xs:restriction base="Talla"/>
+    </xs:simpleType>
+  </xs:element>
+  <xs:element name="prenda">
+    <xs:complexType>
+      <xs:attribute name="color">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="rojo"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+      <xs:attribute name="nota" fixed="  sin cambios  "/>
+      <xs:attribute name="uso" type="xs:boolean" use=" optional "/>
+    </xs:complexType>
+  </xs:element>
+  <xs:attribute name="global" type="xs:string" default="x"/>
+</xs:schema>

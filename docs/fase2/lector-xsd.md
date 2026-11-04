@@ -95,7 +95,7 @@ Por eso el lector resuelve **todos** los valores de atributo al cerrar cada etiq
 - Un valor que no es QName da `InvalidQName`, uno con un prefijo sin declarar `UndeclaredPrefix`, y uno con el prefijo `xmlns` `ReservedNamespace` (Namespaces in XML 1.0: `xmlns` está ligado a `http://www.w3.org/2000/xmlns/` y no se usa en QName). Todos van en el **primer carácter del valor**, el que sigue a la comilla de apertura (aunque sea un espacio que luego se quita).
 - Costo: O(|valor|) por atributo, cobrado a sus propios bytes (§5).
 
-El parser de la 5.2 debe guardar en el AST el `Name` de `type`, `base` y `ref` (`as_qname()`, una sola vez por atributo: cada llamada copia el QName) con su posición, y el `NsId` del `targetNamespace` ya recortado (§3); la 5.3 los buscará en sus tablas, con `(ns_id(), local())` como clave, cuando el lector y su ámbito ya no existan.
+El parser de la 5.2 guarda en el AST el `Name` de `type`, `base` y `ref` (`as_qname()`, una sola vez por atributo: cada llamada copia el QName) con su posición, y el `NsId` del `targetNamespace` ya recortado (§3; [gramatica-xsd.md](gramatica-xsd.md) §6); la 5.3 los buscará en sus tablas, con `(ns_id(), local())` como clave, cuando el lector y su ámbito ya no existan.
 
 ## 4. Correspondencia con la gramática XML
 
@@ -143,9 +143,9 @@ Medido en release (programa aparte, fuera del repositorio), con entradas de 16 M
 | `<?xml version='1.0' ` seguido de 16 MB sin cerrar | 17 MB | 1,0× | 0,2 s |
 | Un texto de 16 MB | 17 MB | 1,0× | 0,2 s |
 
-El tiempo es lineal en todos los casos. Antes de la ronda 2 de correcciones la declaración `<?xml` sin cerrar daba 18× (una `Pos` por carácter); ahora guarda solo su texto (§2.2). Las cifras son de la ronda 3 de correcciones. Las cuatro primeras filas son los peores casos: el lector **no tiene límites propios** (§8), así que la memoria por compilación la deben acotar el parser de la 5.2 (profundidad, D7) y el servidor de la Fase 7 ([pendientes.md](pendientes.md) §12).
+El tiempo es lineal en todos los casos. Antes de la ronda 2 de correcciones la declaración `<?xml` sin cerrar daba 18× (una `Pos` por carácter); ahora guarda solo su texto (§2.2). Las cifras son de la ronda 3 de correcciones. Las cuatro primeras filas son los peores casos. La de los niveles sin cerrar ya no se alcanza a través del parser, que fija una profundidad máxima de 256 (D7; [gramatica-xsd.md](gramatica-xsd.md) §8); las demás las debe acotar el servidor de la Fase 7 ([pendientes.md](pendientes.md) §12).
 
-**Sin recursión.** Elementos y ámbitos van en pilas explícitas (`Vec`), y ningún tipo es recursivo, así que tampoco lo es su liberación. 2·10⁵ niveles de anidamiento se leen en un hilo de prueba normal (`anidamiento_profundo_sin_recursion`). El tope de profundidad del parser (D7) lo pondrá la tarea 5.2.
+**Sin recursión.** Elementos y ámbitos van en pilas explícitas (`Vec`), y ningún tipo es recursivo, así que tampoco lo es su liberación. 2·10⁵ niveles de anidamiento se leen en un hilo de prueba normal (`anidamiento_profundo_sin_recursion`). El tope de profundidad (D7) lo fija el parser de la 5.2 con `Reader::with_max_depth` ([gramatica-xsd.md](gramatica-xsd.md) §8): el lector rechaza en su `<` el elemento que lo pasa y no lee más, así que su pila de elementos abiertos no pasa del tope.
 
 ## 6. Independencia del tamaño de bloque
 
@@ -174,7 +174,7 @@ línea 2, columna 3: error léxico: <!DOCTYPE no está permitido (sin DTD ni ent
 | `duplicate-attribute` | `DuplicateAttribute` |
 | `namespace` | `InvalidQName`, `UndeclaredPrefix`, `ReservedNamespace` |
 
-Las tareas 5.2-5.7 añadirán sus clases a `ErrorKind` (con códigos como `unsupported`, `unresolved`, `limit`…, decisión B2 del plan de la tarea).
+La tarea 5.2 añadió las clases del parser y el error `limit` de profundidad (`TooDeep`, que también puede dar el lector con `Reader::with_max_depth`); están en [gramatica-xsd.md](gramatica-xsd.md) §9. Las 5.3-5.7 añadirán las suyas (`unresolved`, `cycle`…, decisión B2 del plan de la tarea). Todo error del crate se construye con `XsdError::new(kind, at)`, único constructor, que recorta los textos del usuario (abajo).
 
 **Posición de cada error.** El de un nombre (cierre distinto, prefijo sin declarar, QName inválido, atributo repetido), en el primer carácter de ese nombre: el del `ETAG` o del atributo, el segundo atributo repetido. Texto fuera de la raíz, en el carácter. Segundo elemento raíz, en su `<`. Elemento sin cerrar o sin raíz, en el fin de la entrada. Declaración XML, §2.2. QName de un valor (`as_qname`), en el primer carácter del valor (§3.3).
 
@@ -184,7 +184,7 @@ Las tareas 5.2-5.7 añadirán sus clases a `ErrorKind` (con códigos como `unsup
 
 ## 8. Límites, simplificaciones y lo que queda para otras tareas
 
-- **Sin límites propios.** La memoria y el tiempo son lineales en la entrada, y la entrada ya está acotada: `schemac` lee como mucho 16 MiB (`00-alcance.md` §4) y el servidor tendrá su tope (Fase 7). No hay error `limit` en el lector. La constante de la memoria es grande (hasta 33 veces la entrada, §5), así que los límites quedan como obligación de la 5.2 (profundidad, D7) y del servidor (atributos por etiqueta, declaraciones y tamaño, o `RLIMIT_AS`): [pendientes.md](pendientes.md) §12.
+- **Límites.** La memoria y el tiempo son lineales en la entrada, y la entrada ya está acotada: `schemac` lee como mucho 16 MiB (`00-alcance.md` §4) y el servidor tendrá su tope (Fase 7). El único límite propio es el de profundidad, opcional (`Reader::with_max_depth`, error `limit`), que fija el parser de la 5.2 (D7). La constante de la memoria es grande (hasta 33 veces la entrada, §5), así que el resto de límites quedan como obligación del servidor (atributos por etiqueta, declaraciones y tamaño, o `RLIMIT_AS`): [pendientes.md](pendientes.md) §12.
 - **Nombres no ASCII.** Como el lexer, cualquier carácter no ASCII vale en un nombre (§3.1).
 - **CDATA fuera de la raíz.** `<![CDATA[ ]]>` antes o después de la raíz no es `Misc` en XML 1.0, pero el lexer entrega su contenido como `TextChar` con rangos de un byte, igual que el texto literal, y el lector no lo distingue: una sección CDATA **de solo espacios** fuera de la raíz se acepta (con otro contenido, es `TextOutsideRoot`). Se anota en [pendientes.md](pendientes.md) §8.
 - **Declaración XML sin normalizar.** El contenido de `<?xml …?>` se entrega con sus bytes (§2.2); el análisis trata `\r` como espacio. El de las demás PI sí se normaliza (§1).
