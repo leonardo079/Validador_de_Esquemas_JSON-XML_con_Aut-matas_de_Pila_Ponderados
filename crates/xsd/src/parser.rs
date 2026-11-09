@@ -31,8 +31,10 @@ use crate::ast::{
     TopLevel, Use,
 };
 use crate::error::{clip, ErrorKind, Found, XsdError};
-use crate::reader::is_xml_space;
-use crate::subset::{classify, unsupported_attribute, Class, Ctx, Xs, SIMPLE_CONTENT_RESTRICTION};
+use crate::reader::{is_xml_space, value_start};
+use crate::subset::{
+    classify, default_only, unsupported_attribute, Class, Ctx, Xs, SIMPLE_CONTENT_RESTRICTION,
+};
 use crate::{Attr, Name, NsId, Reader, Tok, Token, XS_NS};
 
 /// Profundidad máxima de anidamiento de elementos por defecto, la misma de
@@ -57,6 +59,8 @@ pub fn parse(input: &[u8]) -> Result<Schema, XsdError> {
 /// Como [`parse`], con otra profundidad máxima de anidamiento de elementos.
 /// `max_depth` se recorta a [`MAX_DEPTH_LIMIT`] (como en `schema-parser`):
 /// si la entrada lo supera, el error `limit` informa el máximo efectivo.
+/// `xs:schema` cuenta como el primer nivel, así que con `max_depth = 0`
+/// todo esquema es el error `limit` en el `<` de `xs:schema`.
 pub fn parse_with_max_depth(input: &[u8], max_depth: u32) -> Result<Schema, XsdError> {
     parse_chunks(std::iter::once(input), max_depth)
 }
@@ -81,6 +85,7 @@ where
             },
         },
         last_end: 0,
+        element_form: FormDefault::Unqualified,
     };
     p.document().map_err(|e| *e)
 }
@@ -107,13 +112,6 @@ fn collapse(s: &str) -> String {
         out.push_str(w);
     }
     out
-}
-
-/// Posición del primer carácter del valor de un atributo (tras la comilla).
-fn value_at(a: &Attr) -> Pos {
-    let mut at = a.value_span.start;
-    at.advance(b'"');
-    at
 }
 
 /// Valor de un atributo admitido, convertido **al llegar** (en el orden del
@@ -196,6 +194,9 @@ where
     look: Token,
     /// Desplazamiento final del último token consumido.
     last_end: u64,
+    /// `elementFormDefault` del esquema (por defecto `unqualified`): el
+    /// `form` que rige en los `xs:element` locales (D39).
+    element_form: FormDefault,
 }
 
 impl<I: Iterator> Parser<I>
@@ -373,7 +374,7 @@ where
     /// `xs:enumeration` y `xs:pattern` se guarda sin *collapse*.
     fn convert(&mut self, ctx: Ctx, name: &'static str, a: Attr) -> Res<Val> {
         let span = a.value_span;
-        let at = value_at(&a);
+        let at = value_start(a.value_span);
         let word = || collapse(a.value());
         let v = match name {
             "type" | "base" | "ref" => Val::QName(Spanned {
@@ -402,7 +403,7 @@ where
                             ErrorKind::InvalidValue {
                                 attr: "use",
                                 expected: "required u optional",
-                                found: clip(&w),
+                                found: clip(a.value()),
                             },
                             at,
                         )
@@ -432,7 +433,7 @@ where
                             ErrorKind::InvalidValue {
                                 attr: "mixed",
                                 expected: "true o false",
-                                found: clip(&w),
+                                found: clip(a.value()),
                             },
                             at,
                         )
@@ -449,7 +450,7 @@ where
                             ErrorKind::InvalidValue {
                                 attr: "elementFormDefault",
                                 expected: "qualified o unqualified",
-                                found: clip(&w),
+                                found: clip(a.value()),
                             },
                             at,
                         )
@@ -475,6 +476,60 @@ where
                     value: self.r.intern(&uri),
                     span,
                 })
+            }
+            // D39: solo el valor sin efecto, que no deja nada en el AST.
+            "attributeFormDefault" | "form" | "nillable" | "abstract" => {
+                let w = word();
+                let form = |w: &str| match w {
+                    "qualified" => Some(FormDefault::Qualified),
+                    "unqualified" => Some(FormDefault::Unqualified),
+                    _ => None,
+                };
+                let (no_effect, expected) = match name {
+                    // `attributeFormDefault` y el `form` de un atributo local:
+                    // rige `unqualified`; en un elemento local, el
+                    // `elementFormDefault` del esquema.
+                    "attributeFormDefault" | "form" => {
+                        let vigente = if ctx == Ctx::LocalElement {
+                            self.element_form
+                        } else {
+                            FormDefault::Unqualified
+                        };
+                        (form(&w).map(|f| f == vigente), "qualified o unqualified")
+                    }
+                    _ => (
+                        match w.as_str() {
+                            "false" | "0" => Some(true),
+                            "true" | "1" => Some(false),
+                            _ => None,
+                        },
+                        "true o false",
+                    ),
+                };
+                match (no_effect, default_only(name)) {
+                    (Some(true), _) => Val::Nothing,
+                    (Some(false), Some((category, reason))) => {
+                        return fail(
+                            ErrorKind::UnsupportedValue {
+                                attr: name,
+                                found: w,
+                                category,
+                                reason,
+                            },
+                            at,
+                        )
+                    }
+                    _ => {
+                        return fail(
+                            ErrorKind::InvalidValue {
+                                attr: name,
+                                expected,
+                                found: clip(a.value()),
+                            },
+                            at,
+                        )
+                    }
+                }
             }
             "default" | "fixed" => Val::Raw(Spanned {
                 value: a.into_value(),
@@ -544,6 +599,9 @@ where
         let (start, mut attrs) = self.open(Ctx::Schema)?;
         let target_namespace = attrs.namespace();
         let element_form_default = attrs.form();
+        if let Some(f) = &element_form_default {
+            self.element_form = f.value;
+        }
         let mut items = Vec::new();
         if self.tag_end(Ctx::Schema, None)? {
             loop {

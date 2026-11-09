@@ -1,0 +1,27 @@
+digraph ir {
+  rankdir=LR;
+  label="IR (xml): 8 nodos, 12 aristas; clases: 6 (a), 2 (b), 0 (c)\n(continuas: consumen entrada; discontinuas: misma instancia)";
+  labelloc=t;
+  node [shape=box, fontname="Helvetica"];
+  edge [fontname="Helvetica", fontsize=10];
+  n0 [label="0 (raíz) [element]\ncontent\n(a) transición", peripheries=2];
+  n1 [label="1 complexType/Pedido [element]\ncontent, attributes\n(b) transición, registro o contador"];
+  n2 [label="2 element/item [element]\nsimpleContent, attributes\n(b) transición, registro o contador"];
+  n3 [label="3 simpleContent/xs:string [element]\nsimpleContent\n(a) transición"];
+  n4 [label="4 builtin/string [text]\nlexical\n(a) transición"];
+  n5 [label="5 simpleContent/xs:decimal [element]\nsimpleContent\n(a) transición"];
+  n6 [label="6 builtin/decimal [text]\nlexical\n(a) transición"];
+  n7 [label="7 builtin/int [text]\nlexical, minimum, maximum\n(a) transición"];
+  n0 -> n1 [label="<pedido>"];
+  n1 -> n3 [label="<cliente>"];
+  n1 -> n3 [label="<tarjeta>"];
+  n1 -> n5 [label="<efectivo>"];
+  n1 -> n2 [label="<item>"];
+  n1 -> n1 [label="<subpedido>"];
+  n1 -> n7 [label="@id"];
+  n2 -> n6 [label="simpleContent"];
+  n2 -> n4 [label="@sku"];
+  n2 -> n4 [label="@moneda"];
+  n3 -> n4 [label="simpleContent"];
+  n5 -> n6 [label="simpleContent"];
+}

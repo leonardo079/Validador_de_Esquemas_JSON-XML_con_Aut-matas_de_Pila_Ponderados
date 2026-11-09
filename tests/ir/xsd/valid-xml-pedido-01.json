@@ -1,0 +1,96 @@
+{
+  "irVersion": 2,
+  "format": "xml",
+  "targetNamespace": null,
+  "nodeCount": 7,
+  "edgeCount": 7,
+  "classCount": {"a": 6, "b": 1, "c": 0},
+  "nodes": [
+    {
+      "id": 0,
+      "sort": "element",
+      "span": {"line": 1, "column": 1, "start": 0, "end": 442},
+      "parent": null,
+      "step": null,
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "content", "span": {"line": 1, "column": 1, "start": 0, "end": 442}, "class": "a", "strategy": "transition", "particles": [{"term": "choice", "children": [1], "min": 1, "max": 1, "span": {"line": 1, "column": 1, "start": 0, "end": 442}}, {"term": "element", "name": "pedido", "type": 1, "min": 1, "max": 1, "span": {"line": 2, "column": 3, "start": 58, "end": 429}}]}
+      ]
+    },
+    {
+      "id": 1,
+      "sort": "element",
+      "span": {"line": 3, "column": 5, "start": 89, "end": 413},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "pedido"},
+      "class": "b",
+      "strategies": ["transition", "register"],
+      "rules": [
+        {"rule": "content", "span": {"line": 4, "column": 7, "start": 112, "end": 318}, "class": "a", "strategy": "transition", "particles": [{"term": "sequence", "children": [1, 2, 3], "min": 1, "max": 1, "span": {"line": 4, "column": 7, "start": 112, "end": 318}}, {"term": "element", "name": "cliente", "type": 2, "min": 1, "max": 1, "span": {"line": 5, "column": 9, "start": 134, "end": 179}}, {"term": "element", "name": "nota", "type": 2, "min": 0, "max": 1, "span": {"line": 6, "column": 9, "start": 188, "end": 244}}, {"term": "element", "name": "total", "type": 4, "min": 1, "max": 1, "span": {"line": 7, "column": 9, "start": 253, "end": 297}}]},
+        {"rule": "attributes", "span": {"line": 9, "column": 7, "start": 325, "end": 391}, "class": "b", "strategy": "register", "attributes": [{"name": "id", "required": true, "type": 6, "default": null, "fixed": null, "span": {"line": 9, "column": 7, "start": 325, "end": 391}}]}
+      ]
+    },
+    {
+      "id": 2,
+      "sort": "element",
+      "span": {"line": 5, "column": 41, "start": 166, "end": 177},
+      "parent": 0,
+      "step": {"keyword": "simpleContent", "entry": "xs:string"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 5, "column": 41, "start": 166, "end": 177}, "class": "a", "strategy": "transition", "target": 3}
+      ]
+    },
+    {
+      "id": 3,
+      "sort": "text",
+      "span": {"line": 5, "column": 41, "start": 166, "end": 177},
+      "parent": 0,
+      "step": {"keyword": "builtin", "entry": "string"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 5, "column": 41, "start": 166, "end": 177}, "class": "a", "strategy": "transition", "lexical": "string"}
+      ]
+    },
+    {
+      "id": 4,
+      "sort": "element",
+      "span": {"line": 7, "column": 39, "start": 283, "end": 295},
+      "parent": 0,
+      "step": {"keyword": "simpleContent", "entry": "xs:decimal"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 7, "column": 39, "start": 283, "end": 295}, "class": "a", "strategy": "transition", "target": 5}
+      ]
+    },
+    {
+      "id": 5,
+      "sort": "text",
+      "span": {"line": 7, "column": 39, "start": 283, "end": 295},
+      "parent": 0,
+      "step": {"keyword": "builtin", "entry": "decimal"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 7, "column": 39, "start": 283, "end": 295}, "class": "a", "strategy": "transition", "lexical": "decimal"}
+      ]
+    },
+    {
+      "id": 6,
+      "sort": "text",
+      "span": {"line": 9, "column": 36, "start": 354, "end": 374},
+      "parent": 0,
+      "step": {"keyword": "builtin", "entry": "positiveInteger"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 9, "column": 36, "start": 354, "end": 374}, "class": "a", "strategy": "transition", "lexical": "integer"},
+        {"rule": "minimum", "span": {"line": 9, "column": 36, "start": 354, "end": 374}, "class": "a", "strategy": "transition", "value": "1"}
+      ]
+    }
+  ]
+}

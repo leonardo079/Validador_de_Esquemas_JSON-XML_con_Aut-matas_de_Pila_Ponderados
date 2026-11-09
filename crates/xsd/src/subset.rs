@@ -210,17 +210,33 @@ impl Ctx {
     /// Lista blanca de atributos sin espacio de nombres (`00-alcance.md`
     /// §3.1; `id` en todas, D23). Las declaraciones `xmlns` no cuentan, y
     /// los atributos de otro espacio de nombres que el de XSD se aceptan y
-    /// se ignoran en todas las construcciones (D34).
+    /// se ignoran en todas las construcciones (D34). `attributeFormDefault`,
+    /// `form`, `nillable` y `abstract` solo se admiten con el valor que no
+    /// cambia la validación ([`default_only`], D39).
     pub(crate) fn allowed(self) -> &'static [&'static str] {
         match self {
-            Ctx::Schema => &["targetNamespace", "elementFormDefault", "id"],
-            Ctx::GlobalElement => &["name", "type", "id"],
-            Ctx::LocalElement => &["name", "type", "ref", "minOccurs", "maxOccurs", "id"],
-            Ctx::GlobalComplexType => &["name", "mixed", "id"],
+            Ctx::Schema => &[
+                "targetNamespace",
+                "elementFormDefault",
+                "attributeFormDefault",
+                "id",
+            ],
+            Ctx::GlobalElement => &["name", "type", "nillable", "abstract", "id"],
+            Ctx::LocalElement => &[
+                "name",
+                "type",
+                "ref",
+                "minOccurs",
+                "maxOccurs",
+                "form",
+                "nillable",
+                "id",
+            ],
+            Ctx::GlobalComplexType => &["name", "mixed", "abstract", "id"],
             Ctx::LocalComplexType => &["mixed", "id"],
             Ctx::Sequence | Ctx::Choice | Ctx::All => &["minOccurs", "maxOccurs", "id"],
             Ctx::GlobalAttribute => &["name", "type", "default", "fixed", "id"],
-            Ctx::LocalAttribute => &["name", "type", "use", "default", "fixed", "id"],
+            Ctx::LocalAttribute => &["name", "type", "use", "default", "fixed", "form", "id"],
             Ctx::SimpleContent | Ctx::Annotation => &["id"],
             Ctx::Extension | Ctx::Restriction => &["base", "id"],
             Ctx::GlobalSimpleType => &["name", "id"],
@@ -260,24 +276,32 @@ const DERIVATION_CONTROL_WHY: &str = "limita qué tipos o sustituciones se puede
 const SUBSTITUTION: &str = "grupos de sustitución y tipos abstractos";
 const SUBSTITUTION_WHY: &str = "permiten que otro elemento o tipo ocupe el lugar del \
                                 declarado, lo que abre el conjunto de nombres hijos";
+const NIL: &str = "valores nulos";
+const NIL_WHY: &str = "xsi:nil en un documento instancia permitiría un elemento vacío aunque \
+                       su tipo exija contenido, y el validador no interpreta los atributos \
+                       xsi de los documentos";
 const VALUE_CONSTRAINT: &str = "valor por defecto o fijo de un elemento";
 const VALUE_CONSTRAINT_WHY: &str = "solo se admiten default y fixed en xs:attribute";
+
+/// D39: atributos de la lista blanca que solo se admiten con el valor que no
+/// cambia la validación (el valor por defecto de XSD, o en `form` el que ya
+/// rige), y que se ignoran; cualquier otro valor válido es `unsupported`
+/// con esta categoría y este motivo.
+pub(crate) fn default_only(name: &str) -> Option<(&'static str, &'static str)> {
+    match name {
+        "attributeFormDefault" | "form" => Some((FORM, FORM_WHY)),
+        "nillable" => Some((NIL, NIL_WHY)),
+        "abstract" => Some((SUBSTITUTION, SUBSTITUTION_WHY)),
+        _ => None,
+    }
+}
 
 /// Atributos que XSD define en la construcción `ctx` pero el subconjunto no
 /// admite: categoría y motivo (D6). `None`: no es un atributo de XSD en ese
 /// contexto (error `syntax`).
 pub(crate) fn unsupported_attribute(ctx: Ctx, local: &str) -> Option<(&'static str, &'static str)> {
     let r = match (ctx, local) {
-        (Ctx::LocalElement | Ctx::LocalAttribute, "form") => (FORM, FORM_WHY),
-        (Ctx::Schema, "attributeFormDefault") => (FORM, FORM_WHY),
-        (Ctx::GlobalElement | Ctx::LocalElement, "nillable") => (
-            "valores nulos",
-            "xsi:nil en un documento instancia permitiría un elemento vacío aunque su tipo \
-             exija contenido, y el validador no interpreta los atributos xsi de los \
-             documentos",
-        ),
-        (Ctx::GlobalElement, "abstract" | "substitutionGroup")
-        | (Ctx::GlobalComplexType, "abstract") => (SUBSTITUTION, SUBSTITUTION_WHY),
+        (Ctx::GlobalElement, "substitutionGroup") => (SUBSTITUTION, SUBSTITUTION_WHY),
         (Ctx::GlobalElement | Ctx::LocalElement, "default" | "fixed") => {
             (VALUE_CONSTRAINT, VALUE_CONSTRAINT_WHY)
         }

@@ -1,0 +1,12 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <!-- Tres errores de la etapa 1: se informan todos, en orden del
+       documento, aunque el análisis los encuentre en otro orden. -->
+  <xs:complexType name="T">
+    <xs:sequence>
+      <xs:element name="b" type="Nadie"/>
+    </xs:sequence>
+    <xs:attribute name="x" type="Tampoco"/>
+  </xs:complexType>
+  <xs:element name="a"/>
+  <xs:element name="a" type="xs:string"/>
+</xs:schema>

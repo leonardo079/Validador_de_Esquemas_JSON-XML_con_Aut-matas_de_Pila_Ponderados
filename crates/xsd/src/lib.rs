@@ -12,22 +12,34 @@
 //!   categoría y su motivo (D6) y construye el [`ast`] propio de XSD (D3)
 //!   (`docs/fase2/gramatica-xsd.md`).
 //!
-//! Las tareas siguientes añaden el análisis (tabla de símbolos,
-//! restricciones) y la bajada a la IR. Todo el crate es de tiempo de
-//! compilación: puede reservar memoria, pero no usa recursión sin cota sobre
-//! la entrada (D7): el lector usa pilas explícitas y la recursión del parser
-//! está acotada por [`MAX_DEPTH_LIMIT`].
+//! - el **análisis** ([`analyze`], tarea 5.3): tabla de símbolos por
+//!   `(NsId, nombre local)`, resolución de `type`/`ref`/`base` y
+//!   restricciones de componente, con su posición, por etapas;
+//! - la **bajada** a la IR común ([`lower`], tarea 5.3), siempre verificada
+//!   (D15) (`docs/fase3/xsd.md`).
 //!
-//! Depende solo de `lexer` (y de `ir` cuando llegue la bajada); no de
-//! `semantic` ni de `schema-parser` (D13, D21).
+//! Faltan los tipos simples del usuario y las facetas (5.5, 5.6) y *Unique
+//! Particle Attribution* (5.7); `schemac` lo usa desde la tarea 5.4. Todo el
+//! crate es de tiempo de compilación: puede reservar memoria, pero no usa
+//! recursión sin cota sobre la entrada (D7): el lector, el análisis y la
+//! bajada usan pilas explícitas y la recursión del parser está acotada por
+//! [`MAX_DEPTH_LIMIT`].
+//!
+//! Depende solo de `lexer` e `ir`; no de `semantic` ni de `schema-parser`
+//! (D13, D21).
 
 pub mod ast;
+mod check;
 pub mod error;
+mod lower;
 mod parser;
 mod reader;
 mod subset;
+mod symbols;
 
+pub use check::{analyze, Analysis};
 pub use error::{ErrorKind, Found, XsdError};
 pub use lexer::{Pos, Span};
+pub use lower::lower;
 pub use parser::{parse, parse_chunks, parse_with_max_depth, DEFAULT_MAX_DEPTH, MAX_DEPTH_LIMIT};
 pub use reader::{Attr, Name, NsId, Reader, Tok, Token, XMLNS_NS, XML_NS, XS_NS};

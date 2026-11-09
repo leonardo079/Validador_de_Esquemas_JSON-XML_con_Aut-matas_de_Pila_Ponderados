@@ -1,9 +1,9 @@
 //! Errores del frontal XSD, con línea y columna.
 //!
-//! Los producen el lector XML ([`crate::Reader`], tarea 5.1) y el parser del
-//! subconjunto XSD ([`crate::parse`], tarea 5.2); las tareas siguientes
-//! (análisis) añaden sus clases a [`ErrorKind`] y sus códigos a
-//! [`XsdError::code`]. Todo error del crate se construye con
+//! Los producen el lector XML ([`crate::Reader`], tarea 5.1), el parser del
+//! subconjunto XSD ([`crate::parse`], tarea 5.2) y el análisis
+//! ([`crate::analyze`], tarea 5.3); las tareas siguientes añaden sus clases
+//! a [`ErrorKind`] y sus códigos a [`XsdError::code`]. Todo error del crate se construye con
 //! [`XsdError::new`], que recorta los textos del usuario.
 
 use core::fmt;
@@ -12,9 +12,10 @@ use lexer::{short, LexErrorKind, Pos, SHORT_MAX};
 
 use crate::XS_NS;
 
-/// Primer error encontrado en el documento de esquema. El lector se detiene
-/// en él y lo repite si se le piden más tokens; el parser también se detiene
-/// en el primero.
+/// Un error del documento de esquema. El lector se detiene en el primero y
+/// lo repite si se le piden más tokens; el parser también se detiene en el
+/// primero; el análisis ([`crate::analyze`]) devuelve todos los de la
+/// primera etapa que falla, en orden del documento.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct XsdError {
     pub kind: ErrorKind,
@@ -124,6 +125,55 @@ pub enum ErrorKind {
         category: &'static str,
         reason: &'static str,
     },
+
+    // --- Análisis del esquema (tarea 5.3, `docs/fase3/xsd.md`).
+    /// Dos declaraciones con el mismo nombre en un mismo espacio de símbolos
+    /// (elementos globales, tipos, atributos globales, atributos de un tipo).
+    /// `first`: la posición del nombre de la primera.
+    DuplicateName {
+        space: &'static str,
+        name: String,
+        first: Pos,
+    },
+    /// `type`, `base` o `ref` que no nombra ninguna declaración del esquema
+    /// ni ningún tipo predefinido. `ns`: el URI de su espacio de nombres.
+    Unresolved {
+        what: &'static str,
+        name: String,
+        ns: Option<String>,
+    },
+    /// `type` de un `xs:attribute` que nombra un tipo complejo: un atributo
+    /// solo puede tener un tipo simple.
+    NotSimpleType { name: String },
+    /// Construcción o nombre de tipo fuera del subconjunto que solo se sabe
+    /// tras resolver o combinar atributos (D14, D27, tipos predefinidos
+    /// fuera de `00-alcance.md` §3.2): categoría y motivo (D6).
+    Unsupported {
+        what: &'static str,
+        name: String,
+        category: &'static str,
+        reason: &'static str,
+    },
+    /// Construcción del subconjunto que todavía no se compila: la hará la
+    /// tarea indicada.
+    Pending {
+        construct: &'static str,
+        task: &'static str,
+    },
+    /// Combinación de atributos que XSD prohíbe en la construcción (`name`
+    /// con `ref`, `type` con un tipo anónimo, `default` con `fixed`…;
+    /// *XML Representation Constraints* de XSD 1.0).
+    Conflict {
+        construct: &'static str,
+        name: String,
+        problem: &'static str,
+    },
+    /// Modelo de contenido que XSD no admite: `minOccurs` > `maxOccurs`
+    /// (I11) o `xs:all` fuera de *all-group limited* (I12).
+    ContentModel { problem: &'static str },
+    /// *Element Declarations Consistent* (I12): dos partículas con el mismo
+    /// nombre y distinto tipo en un modelo. `first`: la primera.
+    InconsistentElement { name: String, first: Pos },
 }
 
 /// Token encontrado en una celda vacía de la tabla LL(1), para el mensaje.
@@ -180,7 +230,18 @@ impl ErrorKind {
             | ErrorKind::UnsupportedAttribute { name: s, .. }
             | ErrorKind::UnknownAttribute { name: s, .. }
             | ErrorKind::InvalidValue { found: s, .. }
-            | ErrorKind::UnsupportedValue { found: s, .. } => clip_in_place(s),
+            | ErrorKind::UnsupportedValue { found: s, .. }
+            | ErrorKind::DuplicateName { name: s, .. }
+            | ErrorKind::NotSimpleType { name: s }
+            | ErrorKind::Unsupported { name: s, .. }
+            | ErrorKind::Conflict { name: s, .. }
+            | ErrorKind::InconsistentElement { name: s, .. } => clip_in_place(s),
+            ErrorKind::Unresolved { name, ns, .. } => {
+                clip_in_place(name);
+                if let Some(ns) = ns {
+                    clip_in_place(ns);
+                }
+            }
             ErrorKind::Lex(_)
             | ErrorKind::NoRootElement
             | ErrorKind::MultipleRootElements
@@ -191,7 +252,9 @@ impl ErrorKind {
             | ErrorKind::TooDeep { .. }
             | ErrorKind::Unexpected { .. }
             | ErrorKind::TextNotAllowed { .. }
-            | ErrorKind::MissingAttribute { .. } => {}
+            | ErrorKind::MissingAttribute { .. }
+            | ErrorKind::Pending { .. }
+            | ErrorKind::ContentModel { .. } => {}
         }
         self
     }
@@ -245,8 +308,16 @@ impl XsdError {
             | ErrorKind::MissingAttribute { .. } => "syntax",
             ErrorKind::UnsupportedElement { .. }
             | ErrorKind::UnsupportedAttribute { .. }
-            | ErrorKind::UnsupportedValue { .. } => "unsupported",
+            | ErrorKind::UnsupportedValue { .. }
+            | ErrorKind::Unsupported { .. }
+            | ErrorKind::Pending { .. } => "unsupported",
             ErrorKind::InvalidValue { .. } => "value",
+            ErrorKind::DuplicateName { .. } => "duplicate-name",
+            ErrorKind::Unresolved { .. } | ErrorKind::NotSimpleType { .. } => "unresolved",
+            ErrorKind::Conflict { .. } => "syntax",
+            ErrorKind::ContentModel { .. } | ErrorKind::InconsistentElement { .. } => {
+                "content-model"
+            }
         }
     }
 }
@@ -300,7 +371,12 @@ impl fmt::Display for XsdError {
             ErrorKind::ReservedNamespace(m) => write!(f, "{m}"),
             ErrorKind::TooDeep { max } => write!(
                 f,
-                "el esquema supera la profundidad máxima de {max} elementos anidados"
+                "el esquema supera la profundidad máxima de {max} {}",
+                if *max == 1 {
+                    "elemento anidado"
+                } else {
+                    "elementos anidados"
+                }
             ),
             ErrorKind::Unexpected { expected, found } => {
                 write!(f, "se esperaba {expected}, se encontró ")?;
@@ -350,7 +426,8 @@ impl fmt::Display for XsdError {
                 allowed,
             } => write!(
                 f,
-                "atributo \"{}\" no admitido en {element}; admite: {}",
+                "atributo \"{}\" no admitido en {element}; admite: {} (y los de otro \
+                 espacio de nombres, que se ignoran)",
                 short(name),
                 allowed.join(", ")
             ),
@@ -375,6 +452,59 @@ impl fmt::Display for XsdError {
                 f,
                 "valor \"{}\" de \"{attr}\" no soportado ({category}): {reason}",
                 short(found)
+            ),
+            ErrorKind::DuplicateName { space, name, first } => write!(
+                f,
+                "{space} \"{}\" repetido: ya está declarado en la línea {}, columna {}",
+                short(name),
+                first.line,
+                first.column
+            ),
+            ErrorKind::Unresolved { what, name, ns } => {
+                write!(f, "no hay ningún {what} \"{}\"", short(name))?;
+                match ns {
+                    Some(ns) => write!(f, " en el espacio de nombres \"{}\"", short(ns)),
+                    None => write!(f, " sin espacio de nombres"),
+                }
+            }
+            ErrorKind::NotSimpleType { name } => write!(
+                f,
+                "\"{}\" es un tipo complejo: el tipo de un atributo debe ser simple",
+                short(name)
+            ),
+            ErrorKind::Unsupported {
+                what,
+                name,
+                category,
+                reason,
+            } => write!(
+                f,
+                "{what} \"{}\" no soportado ({category}): {reason}",
+                short(name)
+            ),
+            ErrorKind::Pending { construct, task } => write!(
+                f,
+                "{construct}: pendiente ({task}); el compilador aún no lo traduce"
+            ),
+            ErrorKind::Conflict {
+                construct,
+                name,
+                problem,
+            } => {
+                if name.is_empty() {
+                    write!(f, "{construct}: {problem}")
+                } else {
+                    write!(f, "{construct} \"{}\": {problem}", short(name))
+                }
+            }
+            ErrorKind::ContentModel { problem } => write!(f, "modelo de contenido: {problem}"),
+            ErrorKind::InconsistentElement { name, first } => write!(
+                f,
+                "el elemento \"{}\" ya aparece con otro tipo en este modelo de contenido \
+                 (línea {}, columna {}): Element Declarations Consistent",
+                short(name),
+                first.line,
+                first.column
             ),
         }
     }

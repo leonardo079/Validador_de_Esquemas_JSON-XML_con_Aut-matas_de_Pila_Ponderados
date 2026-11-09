@@ -11,22 +11,27 @@ const USO: &str = "\
 uso: schemac <comando>
 
 comandos:
-  check <esquema.json>       analiza el esquema (Fases 2 y 3: sintaxis, meta-esquema,
-                             resolución de $ref y ciclos no productivos) y lista sus
-                             errores con línea y columna
-  ir [--dot] <esquema.json>  analiza el esquema, lo baja a la IR verificada y la
-                             escribe en JSON (o en DOT con --dot), con la clase
-                             (a)/(b)/(c) y la estrategia de cada nodo y regla
-  dot <utf8|json|xml>        escribe el AFD indicado en formato DOT (Graphviz)
-  version                    muestra la versión
+  check <esquema>        analiza el esquema (Fases 2 y 3; en JSON Schema: sintaxis,
+                         meta-esquema, resolución de $ref y ciclos no productivos;
+                         en XSD: sintaxis, nombres, tipos y modelos de contenido)
+                         y lista sus errores con línea y columna
+  ir [--dot] <esquema>   analiza el esquema, lo baja a la IR verificada y la
+                         escribe en JSON (o en DOT con --dot), con la clase
+                         (a)/(b)/(c) y la estrategia de cada nodo y regla
+  dot <utf8|json|xml>    escribe el AFD indicado en formato DOT (Graphviz)
+  version                muestra la versión
 
-el esquema debe ser un archivo regular de como mucho 16 MiB.
+el formato del esquema sale de su contenido, no de su nombre: si su primer
+carácter significativo (tras un BOM y espacios) es «<», es XSD (subconjunto
+de XSD 1.0); si no, JSON Schema (subconjunto de 2020-12). Debe ser un
+archivo regular de como mucho 16 MiB.
 
 códigos de salida: 0 bien (también si el lector de la salida la cierra
 antes de tiempo); 1 el esquema tiene errores; 2 no se pudo leer el archivo,
 supera el tamaño máximo, los argumentos son inválidos, no se pudo escribir
-la salida, no se pudo crear el hilo de análisis o (solo en check) fallo
-interno; 3 error interno del compilador en ir";
+la salida o no se pudo crear el hilo de análisis;
+3 error interno del compilador (la IR no pasa su verificación o el análisis
+falló con un pánico)";
 
 /// Pila del hilo que analiza el esquema. El parser es recursivo y su tope de
 /// profundidad (256) está garantizado con ≥ 2 MiB de pila (D7,
@@ -34,9 +39,10 @@ interno; 3 error interno del compilador en ir";
 /// tiene 1 MiB, así que el análisis nunca corre en él.
 const STACK_SIZE: usize = 8 << 20;
 
-/// Código de salida de un error interno del compilador en `schemac ir`: la
-/// IR bajada no pasa `Ir::verify` (`docs/fase3/ir.md` §4) o el análisis hace
-/// pánico. No es culpa del esquema (1) ni de la entrada (2).
+/// Código de salida de un error interno del compilador: la IR bajada no
+/// pasa `Ir::verify` (`docs/fase3/ir.md` §4, solo en `schemac ir`) o el
+/// hilo de análisis hace pánico (en `ir` y, desde la tarea 5.4, también en
+/// `check`, D33). No es culpa del esquema (1) ni de la entrada (2).
 const SALIDA_INTERNA: u8 = 3;
 
 /// Errores internos que se muestran en el detalle; el resto solo se cuenta.
@@ -96,14 +102,41 @@ fn avisar(err: &mut dyn Write, linea: &str) {
     let _ = writeln!(err, "{linea}");
 }
 
+/// Formato del esquema, detectado por su contenido (D22).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Formato {
+    Json,
+    Xsd,
+}
+
+/// D22: si el primer byte significativo (tras un BOM UTF-8 y los espacios
+/// de XML y de JSON, que son los mismos cuatro) es `<`, el esquema es XSD;
+/// si no (también si no hay ninguno), JSON. El BOM no se quita de la
+/// entrada: los dos lexers lo saltan (y en JSON un prefijo incompleto de
+/// BOM es `UnexpectedByte` en el offset 0, D10). Mira solo el principio:
+/// O(espacios iniciales).
+fn formato(bytes: &[u8]) -> Formato {
+    let sin_bom = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
+    match sin_bom
+        .iter()
+        .find(|b| !matches!(b, b' ' | b'\t' | b'\n' | b'\r'))
+    {
+        Some(b'<') => Formato::Xsd,
+        _ => Formato::Json,
+    }
+}
+
 /// Lee el esquema y ejecuta `f` sobre sus bytes en un hilo con pila
 /// explícita (D7). `Err` es el código de salida: 2 si no se pudo leer o
-/// crear el hilo, `panico` si `f` hizo pánico (el pánico se imprime en
-/// stderr por el gancho por defecto). Los mensajes van a `err`.
+/// crear el hilo, [`SALIDA_INTERNA`] si `f` hizo pánico (el pánico se
+/// imprime en stderr por el gancho por defecto). Los mensajes van a `err`.
+///
+/// Todo lo que construye el AST lo hace y lo libera dentro de `f`: los
+/// `Drop`/`Clone`/`Debug` derivados del AST XSD son recursivos (D36), así
+/// que el AST nunca sale del hilo; `f` devuelve solo texto o la IR.
 fn en_hilo<T: Send + 'static>(
     path: &Path,
     nombre: &str,
-    panico: u8,
     err: &mut dyn Write,
     f: impl FnOnce(&[u8]) -> T + Send + 'static,
 ) -> Result<T, u8> {
@@ -126,7 +159,7 @@ fn en_hilo<T: Send + 'static>(
                 err,
                 &format!("schemac: {ruta}: fallo interno al analizar el esquema"),
             );
-            Err(panico)
+            Err(SALIDA_INTERNA)
         }
         Err(e) => {
             avisar(
@@ -142,26 +175,23 @@ fn en_hilo<T: Send + 'static>(
 /// `/dev/zero`) y como mucho [`MAX_SCHEMA_BYTES`]. Lee un byte más que el
 /// tope para saber si lo pasa, sin cargar el resto.
 ///
-/// El tipo se comprueba **antes de abrir** (`fs::metadata`), porque abrir
+/// El tipo se comprueba **antes de abrir** (`fs::metadata`), para no abrir
+/// siquiera un dispositivo o una FIFO en el caso normal, y otra vez sobre el
+/// descriptor abierto ([`abrir`]), que es la comprobación que decide. Abrir
 /// una FIFO sin escritor se bloquea esperándolo (4.2-L1,
-/// `docs/fase3/pendientes.md` §19), y otra vez sobre el descriptor abierto.
-/// Entre las dos queda una carrera (la ruta se cambia por una FIFO justo
-/// después de la primera): las rutas de la CLI son de **confianza**, las
-/// elige quien ejecuta `schemac`. El servidor de la Fase 7 no pasa rutas de
-/// los usuarios, sino bytes.
+/// `docs/fase3/pendientes.md` §19); en Unix [`abrir`] usa `O_NONBLOCK`, así
+/// que tampoco se bloquea si la ruta se cambia por una FIFO entre las dos
+/// comprobaciones (4.3-L1, §23). Las rutas de la CLI siguen siendo de
+/// **confianza**, las elige quien ejecuta `schemac`; el servidor de la
+/// Fase 7 no pasa rutas de los usuarios, sino bytes.
 fn leer(path: &Path) -> Result<Vec<u8>, String> {
-    let no_regular = || "no es un archivo regular".to_owned();
     if !std::fs::metadata(path)
         .map_err(|e| e.to_string())?
         .is_file()
     {
-        return Err(no_regular());
+        return Err(NO_REGULAR.to_owned());
     }
-    let f = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    let meta = f.metadata().map_err(|e| e.to_string())?;
-    if !meta.is_file() {
-        return Err(no_regular());
-    }
+    let f = abrir(path)?;
     let mut bytes = Vec::new();
     f.take(MAX_SCHEMA_BYTES + 1)
         .read_to_end(&mut bytes)
@@ -172,6 +202,29 @@ fn leer(path: &Path) -> Result<Vec<u8>, String> {
         ));
     }
     Ok(bytes)
+}
+
+const NO_REGULAR: &str = "no es un archivo regular";
+
+/// Abre `path` para leer y comprueba sobre el descriptor que es un archivo
+/// regular. En Unix lo abre con `O_NONBLOCK` (de `libc`, cuyo valor cambia
+/// entre sistemas): abrir una FIFO sin escritor vuelve enseguida en lugar de
+/// esperarlo, y la comprobación la rechaza. En un archivo regular
+/// `O_NONBLOCK` no cambia nada (POSIX). Fuera de Unix basta `File::open`:
+/// no hay FIFOs con nombre en el sistema de archivos.
+fn abrir(path: &Path) -> Result<std::fs::File, String> {
+    let mut opciones = std::fs::OpenOptions::new();
+    opciones.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opciones.custom_flags(libc::O_NONBLOCK);
+    }
+    let f = opciones.open(path).map_err(|e| e.to_string())?;
+    if !f.metadata().map_err(|e| e.to_string())?.is_file() {
+        return Err(NO_REGULAR.to_owned());
+    }
+    Ok(f)
 }
 
 /// Escribe `texto` en stdout: [`imprimir_en`] con stdout y stderr.
@@ -196,40 +249,80 @@ fn imprimir_en(out: &mut dyn Write, err: &mut dyn Write, texto: &str) -> u8 {
 }
 
 /// `schemac check`: 0 si el esquema es válido, 1 si tiene errores, 2 si no
-/// se pudo leer, escribir la salida o analizar (un pánico también da 2).
+/// se pudo leer o escribir la salida, 3 si el análisis hace pánico (D33).
 fn check(path: &Path) -> ExitCode {
-    let ruta = path.display();
-    let mut err = io::stderr();
-    let resultado = match en_hilo(path, "schemac-check", 2, &mut err, analizar) {
-        Ok(r) => r,
-        Err(code) => return ExitCode::from(code),
-    };
-    let errores = match resultado {
-        Ok(resumen) => {
-            return ExitCode::from(imprimir(&format!(
-                "{ruta}: esquema válido (subconjunto de JSON Schema 2020-12); {resumen}\n"
-            )));
-        }
-        Err(errores) => errores,
-    };
-    for e in &errores {
-        avisar(&mut err, &format!("{ruta}: {e}"));
-    }
-    ExitCode::from(1)
+    ExitCode::from(ejecutar_check(
+        path,
+        analizar,
+        &mut io::stdout().lock(),
+        &mut io::stderr(),
+    ))
 }
 
-/// Resumen de la tabla de símbolos si el esquema es válido; si no, el error
-/// de la Fase 2 (el primero: el parser se detiene en él) o todos los de la
-/// Fase 3 (meta-esquema, resolución de `$ref` y ciclos no productivos, por
-/// etapas: ver `semantic::analyze`), como mensajes de una línea.
+/// El cuerpo de `schemac check` con el análisis y los destinos como
+/// parámetros, como [`ejecutar_ir`] (las pruebas le pasan un análisis que
+/// hace pánico). Escribe el resumen en `out` o los errores en `err` y
+/// devuelve el código.
+fn ejecutar_check(
+    path: &Path,
+    analizar: fn(&[u8]) -> Result<String, Vec<String>>,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> u8 {
+    let ruta = path.display();
+    let resultado = match en_hilo(path, "schemac-check", err, analizar) {
+        Ok(r) => r,
+        Err(code) => return code,
+    };
+    match resultado {
+        Ok(resumen) => imprimir_en(out, err, &format!("{ruta}: {resumen}\n")),
+        Err(errores) => {
+            for e in &errores {
+                avisar(err, &format!("{ruta}: {e}"));
+            }
+            1
+        }
+    }
+}
+
+/// Fases 2 y 3 del formato que dice el contenido (D22): si el esquema es
+/// válido, «esquema válido (subconjunto de …)» con un resumen; si no, el
+/// error de la Fase 2 (el primero: los dos parsers se detienen en él) o
+/// todos los de la primera etapa de la Fase 3 que falla, como mensajes de
+/// una línea.
 fn analizar(bytes: &[u8]) -> Result<String, Vec<String>> {
+    match formato(bytes) {
+        Formato::Json => analizar_json(bytes),
+        Formato::Xsd => analizar_xsd(bytes),
+    }
+}
+
+/// JSON Schema: resumen de la tabla de símbolos; errores del meta-esquema,
+/// de la resolución de `$ref` y de los ciclos no productivos, por etapas
+/// (`semantic::analyze`).
+fn analizar_json(bytes: &[u8]) -> Result<String, Vec<String>> {
     let schema = schema_parser::parse(bytes).map_err(|e| vec![e.to_string()])?;
     match semantic::analyze(&schema) {
         Ok(t) => Ok(format!(
-            "{} subesquemas, {} entradas de $defs, {} referencias resueltas",
+            "esquema válido (subconjunto de JSON Schema 2020-12); \
+             {} subesquemas, {} entradas de $defs, {} referencias resueltas",
             t.len(),
             t.defs().len(),
             t.refs().len()
+        )),
+        Err(errores) => Err(errores.iter().map(ToString::to_string).collect()),
+    }
+}
+
+/// XSD: número de tipos complejos (con nombre y anónimos); errores de
+/// componentes y nombres o de modelos de contenido, por etapas
+/// (`xsd::analyze`, `docs/fase3/xsd.md` §3).
+fn analizar_xsd(bytes: &[u8]) -> Result<String, Vec<String>> {
+    let schema = xsd::parse(bytes).map_err(|e| vec![e.to_string()])?;
+    match xsd::analyze(&schema) {
+        Ok(a) => Ok(format!(
+            "esquema válido (subconjunto de XSD 1.0); {} tipos complejos",
+            a.type_count()
         )),
         Err(errores) => Err(errores.iter().map(ToString::to_string).collect()),
     }
@@ -278,7 +371,7 @@ fn ejecutar_ir(
     err: &mut dyn Write,
 ) -> u8 {
     let ruta = path.display().to_string();
-    let resultado = match en_hilo(path, "schemac-ir", SALIDA_INTERNA, err, move |b| {
+    let resultado = match en_hilo(path, "schemac-ir", err, move |b| {
         bajar(b).map(|ir| escribir(&ir, salida))
     }) {
         Ok(r) => r,
@@ -301,13 +394,24 @@ fn ejecutar_ir(
     }
 }
 
-/// Fases 2 y 3 y la bajada a la IR verificada. Los errores del esquema son
-/// los de [`analizar`].
+/// Fases 2 y 3 y la bajada a la IR verificada del formato que dice el
+/// contenido (D22). Los errores del esquema son los de [`analizar`].
 fn bajar(bytes: &[u8]) -> Result<VerifiedIr, Fallo> {
-    let schema = schema_parser::parse(bytes).map_err(|e| Fallo::Esquema(vec![e.to_string()]))?;
-    let table = semantic::analyze(&schema)
-        .map_err(|e| Fallo::Esquema(e.iter().map(ToString::to_string).collect()))?;
-    semantic::lower(&table).map_err(Fallo::Interno)
+    match formato(bytes) {
+        Formato::Json => {
+            let schema =
+                schema_parser::parse(bytes).map_err(|e| Fallo::Esquema(vec![e.to_string()]))?;
+            let table = semantic::analyze(&schema)
+                .map_err(|e| Fallo::Esquema(e.iter().map(ToString::to_string).collect()))?;
+            semantic::lower(&table).map_err(Fallo::Interno)
+        }
+        Formato::Xsd => {
+            let schema = xsd::parse(bytes).map_err(|e| Fallo::Esquema(vec![e.to_string()]))?;
+            let analysis = xsd::analyze(&schema)
+                .map_err(|e| Fallo::Esquema(e.iter().map(ToString::to_string).collect()))?;
+            xsd::lower(&analysis).map_err(Fallo::Interno)
+        }
+    }
 }
 
 fn escribir(ir: &VerifiedIr, salida: Salida) -> String {
@@ -416,21 +520,124 @@ mod tests {
         assert!(real.2.is_empty(), "{}", real.2);
     }
 
-    /// Un pánico en el hilo de análisis de `schemac ir` también es un error
-    /// interno: código 3 (en `check` sigue siendo 2).
+    /// Un pánico en el hilo de análisis es un error interno: código 3 en
+    /// `schemac ir` y también en `schemac check` (D33; antes de la tarea 5.4
+    /// `check` daba 2, `docs/fase3/pendientes.md` §8). Las dos recorren su
+    /// cuerpo hasta el código de salida, con el mensaje en stderr y nada en
+    /// stdout.
     #[test]
     fn panico_en_el_hilo_da_codigo_3() {
         fn bajar_con_panico(_: &[u8]) -> Result<VerifiedIr, Fallo> {
             panic!("pánico provocado por la prueba")
         }
+        fn analizar_con_panico(_: &[u8]) -> Result<String, Vec<String>> {
+            panic!("pánico provocado por la prueba")
+        }
         let p = esquema_temporal("panico");
         let (code, _, _) = ir_en_bufer(&p, Salida::Json, bajar_con_panico);
-        let check = en_hilo(&p, "prueba-check", 2, &mut Vec::new(), |_| -> () {
-            panic!("pánico de prueba")
-        });
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let check = ejecutar_check(&p, analizar_con_panico, &mut out, &mut err);
+        let real = ejecutar_check(&p, analizar, &mut Vec::new(), &mut Vec::new());
         let _ = std::fs::remove_file(&p);
-        assert_eq!(code, 3);
-        assert_eq!(check, Err(2));
+        assert_eq!((code, check, real), (3, 3, 0));
+        assert!(out.is_empty());
+        let err = String::from_utf8(err).unwrap();
+        assert!(
+            err.contains("fallo interno al analizar el esquema"),
+            "{err}"
+        );
+    }
+
+    /// Archivo temporal con un XSD válido de un elemento global.
+    fn xsd_temporal(nombre: &str) -> std::path::PathBuf {
+        let p = std::env::temp_dir().join(format!("schemac-{nombre}-{}.xsd", std::process::id()));
+        std::fs::write(
+            &p,
+            "<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'>\
+             <xs:element name='e' type='xs:int'/></xs:schema>",
+        )
+        .unwrap();
+        p
+    }
+
+    /// Criterio de la 5.4: el código 3 también con un XSD. La bajada que
+    /// falla da 3 con el error único; la real del mismo archivo (que pasa
+    /// por `xsd::lower`), 0 con la IR de `format: "xml"`.
+    #[test]
+    fn fallo_interno_xsd_da_codigo_3() {
+        fn bajar_rota(_: &[u8]) -> Result<VerifiedIr, Fallo> {
+            let (_, errores) = ir_rota().verify().unwrap_err();
+            Err(Fallo::Interno(InternalError::new(errores)))
+        }
+        let p = xsd_temporal("interno");
+        let rota = ir_en_bufer(&p, Salida::Dot, bajar_rota);
+        let real = ir_en_bufer(&p, Salida::Json, bajar);
+        let _ = std::fs::remove_file(&p);
+        assert_eq!((rota.0, real.0), (3, 0), "{}", real.2);
+        assert!(rota.1.is_empty());
+        assert!(
+            rota.2.contains("error interno del compilador"),
+            "{}",
+            rota.2
+        );
+        assert!(real.1.contains("\"format\": \"xml\""), "{}", real.1);
+        assert!(real.2.is_empty(), "{}", real.2);
+    }
+
+    /// 4.3-L1 (`docs/fase3/pendientes.md` §23): `abrir`, la comprobación que
+    /// decide, no se bloquea con una FIFO sin escritor aunque se salte la
+    /// comprobación previa de `leer` (lo que pasa si la ruta se cambia por
+    /// una FIFO entre las dos): con `O_NONBLOCK` el `open` vuelve enseguida y
+    /// el descriptor no es un archivo regular. Sin `O_NONBLOCK` el hilo se
+    /// queda en el `open`; la guarda de 60 s hace fallar la prueba en lugar
+    /// de colgarla (no mide tiempos, D1).
+    #[cfg(unix)]
+    #[test]
+    fn abrir_una_fifo_sin_escritor_no_bloquea() {
+        let d = std::env::temp_dir().join(format!("schemac-abrir-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let fifo = d.join("esquema.json");
+        let ok = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap();
+        assert!(ok.success(), "mkfifo falló");
+        let (tx, rx) = std::sync::mpsc::channel();
+        let f = fifo.clone();
+        std::thread::spawn(move || tx.send(abrir(&f).map(|_| ())));
+        let res = rx.recv_timeout(std::time::Duration::from_secs(60));
+        let _ = std::fs::remove_dir_all(&d);
+        assert_eq!(
+            res.expect("abrir se bloqueó en la FIFO"),
+            Err(NO_REGULAR.to_owned())
+        );
+    }
+
+    /// D22: el formato sale del primer byte significativo, tras un BOM y
+    /// espacios (los cuatro de XML y de JSON): `<` es XSD; cualquier otro,
+    /// también ninguno, JSON. Un BOM delante de JSON sigue siendo JSON, y un
+    /// prefijo incompleto de BOM no es un BOM.
+    #[test]
+    fn formato_por_el_primer_byte_significativo() {
+        for (bytes, esperado) in [
+            (&b"<xs:schema/>"[..], Formato::Xsd),
+            (b" \t\r\n<x/>", Formato::Xsd),
+            (b"\xEF\xBB\xBF<x/>", Formato::Xsd),
+            (b"\xEF\xBB\xBF \n<x/>", Formato::Xsd),
+            (b"{\"type\": \"object\"}", Formato::Json),
+            (b"\xEF\xBB\xBF{}", Formato::Json),
+            (b"  true", Formato::Json),
+            (b"", Formato::Json),
+            (b" \n ", Formato::Json),
+            // Solo se salta un BOM, y solo al principio.
+            (b"\xEF\xBB\xBF\xEF\xBB\xBF<x/>", Formato::Json),
+            (b" \xEF\xBB\xBF<x/>", Formato::Json),
+            // Otros espacios de Unicode no cuentan.
+            (b"\x0c<x/>", Formato::Json),
+            (b"\xEF\xBB<x/>", Formato::Json),
+        ] {
+            assert_eq!(formato(bytes), esperado, "{bytes:?}");
+        }
     }
 
     /// El error interno (`verify` falla tras la bajada) se presenta como un

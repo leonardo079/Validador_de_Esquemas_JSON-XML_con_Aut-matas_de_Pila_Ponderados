@@ -44,9 +44,7 @@ impl<T> Spanned<T> {
     /// Posición del primer carácter del valor (el que sigue a la comilla):
     /// la de los errores sobre el valor, como en `Attr::as_qname`.
     pub fn at(&self) -> Pos {
-        let mut at = self.span.start;
-        at.advance(b'"');
-        at
+        crate::reader::value_start(self.span)
     }
 }
 

@@ -1,0 +1,6 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:t="urn:t"
+           targetNamespace="urn:t">
+  <!-- Sin espacio de nombres por defecto, "T" no es {urn:t}T. -->
+  <xs:element name="a" type="T"/>
+  <xs:complexType name="T"/>
+</xs:schema>

@@ -1,0 +1,10 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <!-- Un error de la etapa 1 (sin resolver) y uno de la 2 (minOccurs >
+       maxOccurs): solo se informa la etapa 1. -->
+  <xs:complexType name="T">
+    <xs:sequence>
+      <xs:element name="a" type="xs:string" minOccurs="2" maxOccurs="1"/>
+      <xs:element name="b" type="Nadie"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>

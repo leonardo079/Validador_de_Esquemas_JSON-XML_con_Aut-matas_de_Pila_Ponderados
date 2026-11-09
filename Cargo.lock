@@ -115,9 +115,11 @@ dependencies = [
  "codegen",
  "ir",
  "lexer",
+ "libc",
  "schema-parser",
  "semantic",
  "serde_json",
+ "xsd",
 ]
 
 [[package]]
@@ -545,6 +547,7 @@ dependencies = [
 name = "xsd"
 version = "0.1.0"
 dependencies = [
+ "ir",
  "lexer",
  "proptest",
  "serde_json",

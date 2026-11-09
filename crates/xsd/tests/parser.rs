@@ -131,7 +131,8 @@ fn esquemas_erroneos_reportan_linea_y_columna() {
 }
 
 /// Criterio: los esquemas XSD de los casos de `tests/cases` dan un AST (y
-/// están copiados en `parse-ok`, que los fija aunque cambien los casos).
+/// están copiados en `parse-ok`, byte a byte, que los fija aunque cambien
+/// los casos).
 #[test]
 fn esquemas_xml_de_los_casos_parsean() {
     let mut n = 0;
@@ -157,7 +158,15 @@ fn esquemas_xml_de_los_casos_parsean() {
             let copia = Path::new(TESTS_DIR)
                 .join("schemas/xsd/parse-ok")
                 .join(format!("{}.xsd", case["_id"].as_str().unwrap()));
-            assert!(copia.exists(), "falta {} en parse-ok", copia.display());
+            // 5.2-CR2-S3: la copia es el texto del caso, byte a byte.
+            let guardada = std::fs::read(&copia)
+                .unwrap_or_else(|e| panic!("falta {} en parse-ok: {e}", copia.display()));
+            assert!(
+                guardada == text,
+                "{} no es el esquema de {}",
+                copia.display(),
+                path.display()
+            );
             n += 1;
         }
     }
@@ -551,6 +560,18 @@ fn corte_por_profundidad_sin_leer_el_resto() {
     assert!(format!("{r:?}").contains("depth: 256"), "{r:?}");
 }
 
+/// 5.2-CR-S7: con tope 1 el mensaje va en singular, y con tope 0 el propio
+/// `xs:schema` (primer nivel) es el error `limit`.
+#[test]
+fn profundidad_1_en_singular_y_0_rechaza_el_esquema() {
+    let doc = format!("<xs:schema {XS}><xs:element name='a' type='xs:int'/></xs:schema>");
+    let e = parse_with_max_depth(doc.as_bytes(), 1).unwrap_err();
+    assert!(e.to_string().ends_with("de 1 elemento anidado"), "{e}");
+    let e = parse_with_max_depth(doc.as_bytes(), 0).unwrap_err();
+    assert_eq!((e.code(), e.line(), e.column()), ("limit", 1, 1), "{e}");
+    assert!(e.to_string().ends_with("de 0 elementos anidados"), "{e}");
+}
+
 /// O(n) sin reloj (D1): un URI de 1 MiB como `targetNamespace` y como
 /// prefijo de 5·10⁴ referencias `type='t:T'`. Ningún paso del parser vuelve
 /// a leer el URI por referencia (con O(referencias · |URI|) serían 5·10¹⁰
@@ -652,9 +673,10 @@ fn primer_error_en_orden_del_documento() {
     let col = doc.find("zz").unwrap() as u32 + 1;
     assert_eq!(error(&doc), ("value", 1, col));
 
-    // Falta `name` (se sabe en el `/>`) y antes hay un `nillable`.
+    // Falta `name` (se sabe en el `/>`) y antes hay un `nillable` (D39:
+    // `true` se rechaza en el primer carácter del valor).
     let doc = format!("<xs:schema {XS}><xs:element nillable='true'/></xs:schema>");
-    let col = doc.find("nillable").unwrap() as u32 + 1;
+    let col = doc.find("true").unwrap() as u32 + 1;
     assert_eq!(error(&doc), ("unsupported", 1, col));
     let doc = format!("<xs:schema {XS}><xs:element id='e'/></xs:schema>");
     let col = doc.find("/>").unwrap() as u32 + 1;
@@ -719,6 +741,116 @@ fn atributos_de_otro_espacio_de_nombres_se_ignoran() {
         matches!(&e.kind, ErrorKind::UnknownAttribute { name, .. } if name == "xs:type"),
         "{e}"
     );
+}
+
+/// D39: los valores por defecto sin efecto (`attributeFormDefault=
+/// "unqualified"`, `form` igual al vigente, `nillable="false"`,
+/// `abstract="false"`) se aceptan y no llegan al AST; los que cambian la
+/// validación siguen siendo `unsupported` con su categoría, en el primer
+/// carácter del valor (como `mixed="true"`). Los valores van tras
+/// *collapse*, y uno que no es del tipo del atributo es `value`.
+#[test]
+fn d39_valores_por_defecto_sin_efecto() {
+    // (etiqueta de xs:schema, cuerpo con `{}` en el sitio del atributo).
+    let local_el = "<xs:complexType name='T'><xs:sequence>\
+                    <xs:element name='a' type='xs:string'{}/></xs:sequence></xs:complexType>";
+    let local_at = "<xs:complexType name='T'><xs:attribute name='a' type='xs:int'{}/>\
+                    </xs:complexType>";
+    let global_el = "<xs:element name='a' type='xs:string'{}/>";
+    let global_ct = "<xs:complexType name='T'{}/>";
+    // (contexto del esquema, plantilla, atributo, aceptado, rechazado, categoría).
+    let casos: [(&str, &str, &str, &str, &str, &str); 9] = [
+        (
+            "",
+            "{}",
+            "attributeFormDefault",
+            " unqualified ",
+            "qualified",
+            "calificación",
+        ),
+        (
+            "",
+            local_el,
+            "form",
+            " unqualified ",
+            "qualified",
+            "calificación",
+        ),
+        (
+            " elementFormDefault='qualified'",
+            local_el,
+            "form",
+            "qualified",
+            "unqualified",
+            "calificación",
+        ),
+        (
+            "",
+            local_at,
+            "form",
+            "unqualified",
+            "qualified",
+            "calificación",
+        ),
+        ("", local_el, "nillable", " false ", "true", "valores nulos"),
+        ("", global_el, "nillable", "0", "1", "valores nulos"),
+        (
+            "",
+            global_el,
+            "abstract",
+            "false",
+            "true",
+            "tipos abstractos",
+        ),
+        ("", global_ct, "abstract", "0", " true", "tipos abstractos"),
+        (
+            " elementFormDefault='unqualified'",
+            local_el,
+            "form",
+            "unqualified",
+            "qualified",
+            "calificación",
+        ),
+    ];
+    for (ctx, plantilla, attr, si, no, cat) in casos {
+        let doc = |extra: &str| {
+            if plantilla == "{}" {
+                format!("<xs:schema {XS}{ctx}{extra}/>")
+            } else {
+                format!(
+                    "<xs:schema {XS}{ctx}>{}</xs:schema>",
+                    plantilla.replace("{}", extra)
+                )
+            }
+        };
+        // Aceptado: el mismo AST que sin el atributo.
+        let sin = ok(&doc(""));
+        let con = ok(&doc(&format!(" {attr}='{si}'")));
+        assert_eq!(
+            sin_rangos(&con.items),
+            sin_rangos(&sin.items),
+            "{attr}={si}"
+        );
+        assert_eq!(
+            con.element_form_default.map(|f| f.value),
+            sin.element_form_default.map(|f| f.value)
+        );
+        // Rechazado: `unsupported` con su categoría, en el valor.
+        let d = doc(&format!(" {attr}='{no}'"));
+        let col = d.find(&format!("{attr}='")).unwrap() + attr.len() + 3;
+        let e = parse(d.as_bytes()).unwrap_err();
+        assert_eq!(
+            (e.code(), e.line(), e.column() as usize),
+            ("unsupported", 1, col),
+            "{e}"
+        );
+        assert!(e.to_string().contains(cat), "{e}");
+        assert!(e.to_string().contains(attr), "{e}");
+        // Un valor que no es del tipo del atributo.
+        let d = doc(&format!(" {attr}='quizá'"));
+        let e = parse(d.as_bytes()).unwrap_err();
+        assert_eq!((e.code(), e.column() as usize), ("value", col), "{e}");
+    }
 }
 
 /// CR-I3: lo que la lista blanca y la gramática aceptan sin archivo propio

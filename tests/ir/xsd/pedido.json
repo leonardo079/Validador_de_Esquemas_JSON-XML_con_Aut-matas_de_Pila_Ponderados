@@ -1,0 +1,110 @@
+{
+  "irVersion": 2,
+  "format": "xml",
+  "targetNamespace": null,
+  "nodeCount": 8,
+  "edgeCount": 12,
+  "classCount": {"a": 6, "b": 2, "c": 0},
+  "nodes": [
+    {
+      "id": 0,
+      "sort": "element",
+      "span": {"line": 6, "column": 1, "start": 327, "end": 1256},
+      "parent": null,
+      "step": null,
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "content", "span": {"line": 6, "column": 1, "start": 327, "end": 1256}, "class": "a", "strategy": "transition", "particles": [{"term": "choice", "children": [1], "min": 1, "max": 1, "span": {"line": 6, "column": 1, "start": 327, "end": 1256}}, {"term": "element", "name": "pedido", "type": 1, "min": 1, "max": 1, "span": {"line": 7, "column": 3, "start": 385, "end": 426}}]}
+      ]
+    },
+    {
+      "id": 1,
+      "sort": "element",
+      "span": {"line": 8, "column": 3, "start": 429, "end": 1243},
+      "parent": 0,
+      "step": {"keyword": "complexType", "entry": "Pedido"},
+      "class": "b",
+      "strategies": ["transition", "register"],
+      "rules": [
+        {"rule": "content", "span": {"line": 9, "column": 5, "start": 464, "end": 1164}, "class": "a", "strategy": "transition", "particles": [{"term": "sequence", "children": [1, 2, 5, 6], "min": 1, "max": 1, "span": {"line": 9, "column": 5, "start": 464, "end": 1164}}, {"term": "element", "name": "cliente", "type": 3, "min": 1, "max": 1, "span": {"line": 10, "column": 7, "start": 484, "end": 529}}, {"term": "choice", "children": [3, 4], "min": 1, "max": 1, "span": {"line": 11, "column": 7, "start": 536, "end": 676}}, {"term": "element", "name": "tarjeta", "type": 3, "min": 1, "max": 1, "span": {"line": 12, "column": 9, "start": 556, "end": 601}}, {"term": "element", "name": "efectivo", "type": 5, "min": 1, "max": 1, "span": {"line": 13, "column": 9, "start": 610, "end": 657}}, {"term": "element", "name": "item", "type": 2, "min": 1, "max": null, "span": {"line": 15, "column": 7, "start": 683, "end": 1080}}, {"term": "element", "name": "subpedido", "type": 1, "min": 0, "max": 1, "span": {"line": 25, "column": 7, "start": 1087, "end": 1145}}]},
+        {"rule": "attributes", "span": {"line": 27, "column": 5, "start": 1169, "end": 1223}, "class": "b", "strategy": "register", "attributes": [{"name": "id", "required": true, "type": 7, "default": null, "fixed": null, "span": {"line": 27, "column": 5, "start": 1169, "end": 1223}}]}
+      ]
+    },
+    {
+      "id": 2,
+      "sort": "element",
+      "span": {"line": 16, "column": 9, "start": 738, "end": 1060},
+      "parent": 1,
+      "step": {"keyword": "element", "entry": "item"},
+      "class": "b",
+      "strategies": ["transition", "register"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 17, "column": 11, "start": 765, "end": 1034}, "class": "a", "strategy": "transition", "target": 6},
+        {"rule": "attributes", "span": {"line": 19, "column": 15, "start": 843, "end": 976}, "class": "b", "strategy": "register", "attributes": [{"name": "sku", "required": true, "type": 4, "default": null, "fixed": null, "span": {"line": 19, "column": 15, "start": 843, "end": 901}}, {"name": "moneda", "required": false, "type": 4, "default": "COP", "fixed": null, "span": {"line": 20, "column": 15, "start": 916, "end": 976}}]}
+      ]
+    },
+    {
+      "id": 3,
+      "sort": "element",
+      "span": {"line": 10, "column": 39, "start": 516, "end": 527},
+      "parent": 0,
+      "step": {"keyword": "simpleContent", "entry": "xs:string"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 10, "column": 39, "start": 516, "end": 527}, "class": "a", "strategy": "transition", "target": 4}
+      ]
+    },
+    {
+      "id": 4,
+      "sort": "text",
+      "span": {"line": 10, "column": 39, "start": 516, "end": 527},
+      "parent": 0,
+      "step": {"keyword": "builtin", "entry": "string"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 10, "column": 39, "start": 516, "end": 527}, "class": "a", "strategy": "transition", "lexical": "string"}
+      ]
+    },
+    {
+      "id": 5,
+      "sort": "element",
+      "span": {"line": 13, "column": 42, "start": 643, "end": 655},
+      "parent": 0,
+      "step": {"keyword": "simpleContent", "entry": "xs:decimal"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 13, "column": 42, "start": 643, "end": 655}, "class": "a", "strategy": "transition", "target": 6}
+      ]
+    },
+    {
+      "id": 6,
+      "sort": "text",
+      "span": {"line": 13, "column": 42, "start": 643, "end": 655},
+      "parent": 0,
+      "step": {"keyword": "builtin", "entry": "decimal"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 13, "column": 42, "start": 643, "end": 655}, "class": "a", "strategy": "transition", "lexical": "decimal"}
+      ]
+    },
+    {
+      "id": 7,
+      "sort": "text",
+      "span": {"line": 27, "column": 34, "start": 1198, "end": 1206},
+      "parent": 0,
+      "step": {"keyword": "builtin", "entry": "int"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 27, "column": 34, "start": 1198, "end": 1206}, "class": "a", "strategy": "transition", "lexical": "integer"},
+        {"rule": "minimum", "span": {"line": 27, "column": 34, "start": 1198, "end": 1206}, "class": "a", "strategy": "transition", "value": "-2147483648"},
+        {"rule": "maximum", "span": {"line": 27, "column": 34, "start": 1198, "end": 1206}, "class": "a", "strategy": "transition", "value": "2147483647"}
+      ]
+    }
+  ]
+}

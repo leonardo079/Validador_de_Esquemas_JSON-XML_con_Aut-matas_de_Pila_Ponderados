@@ -25,7 +25,9 @@ fn schemac(args: &[&std::ffi::OsStr]) -> (i32, String, String) {
     )
 }
 
-/// Directorio temporal propio de la prueba (se borra al final).
+/// Directorio temporal propio de la prueba (se borra al final). El nombre
+/// es predecible (`schemac-es-…-{pid}`); se acepta porque las pruebas solo
+/// corren en local (4.3-I2, `docs/fase3/pendientes.md` §24).
 fn dir_temporal(nombre: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("schemac-es-{nombre}-{}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();

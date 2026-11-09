@@ -60,6 +60,12 @@ decisiones» del plan (D1–D31); aquí solo se remite a ellas.
   Lo vigila `profundidad_maxima_en_un_hilo_de_2_mib` (`crates/xsd/tests/parser.rs`). **Cuándo
   actuar:** si esa prueba falla o si la 5.3 añade recursión sobre el AST (la 5.3 debe
   recorrerlo con pila explícita, D7).
+- **Análisis y bajada XSD (tarea 5.3) — RESUELTO:** `xsd::analyze` y `xsd::lower` no recurren
+  sobre el AST: una pila de tipos pendientes da el preorden de las declaraciones y otra aplana cada
+  modelo de contenido en una arena ([../fase3/xsd.md](../fase3/xsd.md) §4 y §6). Lo vigila
+  `analisis_y_bajada_sin_recursion` (`crates/xsd/tests/lower.rs`: la cadena más profunda se analiza
+  y se baja en un hilo de 64 KiB). Las pruebas de la 5.3 que comparan IR (no AST) no necesitan el
+  hilo; las que construyen el AST profundo lo liberan en un hilo de 2 MiB.
 - **Recursión del AST (5.2-SEC-L2, 5.2-CR-S1):** los `Clone`, `Debug` y `PartialEq` derivados y el
   `Drop` del AST XSD son recursivos, acotados por la profundidad (256). Todo consumidor recursivo
   (5.3, 5.4) y cualquier `clone()`, `{:?}` o `==` de un `xsd::ast::Schema` debe correr en el hilo
@@ -135,7 +141,16 @@ decisiones» del plan (D1–D31); aquí solo se remite a ellas.
   `"a\r\nb"` y `"a\nb"` darán resultados distintos. La técnica no necesita memoria dinámica:
   un registro con el offset del último `\r`.
 
-### 11. Resolución de los QName de valores en el parser XSD (tarea 5.2) — RESUELTO (lector en la 5.1, parser en la 5.2); queda la obligación de la 5.3
+### 11. Resolución de los QName de valores en el parser XSD (tarea 5.2) — RESUELTO (lector en la 5.1, parser en la 5.2, tablas de la 5.3)
+
+- **Resuelto en la 5.3** ([../fase3/xsd.md](../fase3/xsd.md) §2 y §6): las tres tablas de símbolos
+  (`crates/xsd/src/symbols.rs`) se indexan por `(Option<&NsId>, &str)`, es decir
+  `(Name::ns_id(), Name::local())` en las referencias y `(Schema::target_namespace, name)` en las
+  declaraciones, con el `NsId` que guardó la 5.2; nunca por el texto del URI ni por `expanded()`;
+  `HashMap` con el *hasher* aleatorio de `std` (`RandomState`), sin *hasher* determinista. Prueba de
+  regresión sin reloj (D1): `uri_de_8_mib_y_medio_millon_de_referencias` (URI de 8 MiB como
+  `targetNamespace` y prefijo de 5·10⁵ referencias `type='p:T'`; comprueba que la IR tiene 3 nodos
+  y 1 + 5·10⁵ aristas). Lo que sigue queda como historial.
 
 - **Resuelto en la 5.2** ([gramatica-xsd.md](gramatica-xsd.md) §6): el parser llama a
   `as_qname()` una sola vez por atributo `type`/`base`/`ref` y guarda el `Name` resuelto con el
@@ -213,7 +228,11 @@ decisiones» del plan (D1–D31); aquí solo se remite a ellas.
     subida, o en su lugar `RLIMIT_AS` por compilación más el tope de subida, junto con lo de
     [../fase3/pendientes.md](../fase3/pendientes.md) §1-§2. El factor ρ (memoria / tamaño
     del esquema) de la compilación XSD completa lo medirá la tarea 5.4 y debe incluir estos
-    peores casos del lector.
+    peores casos del lector. **Medido en la tarea 5.4** ([../fase3/pendientes.md](../fase3/pendientes.md)
+    §1, «Camino de éxito», tabla XSD): con 16 MiB, `schemac check`/`ir` llega a ≈ 59× con
+    `<choice/>` repetido, ≈ 54× con `<element/>`, ≈ 45× con `xmlns:pK` y ≈ 32× con una
+    etiqueta de atributos; todo por debajo de los ≈ 158× de JSON Schema, que siguen
+    dimensionando `RLIMIT_AS`. Los límites propios del lector siguen pendientes (Fase 7, 5.7).
   - Si se añaden límites al lector, que pasarlos sea un error `limit` con posición
     (decisión B2), nunca un pánico.
 - **Lo que añade la 5.2 (auditoría, 5.2-SEC-M1 y 5.2-SEC-M2; decisión del orquestador:
@@ -250,7 +269,17 @@ decisiones» del plan (D1–D31); aquí solo se remite a ellas.
   identificadores de `reader.rs` quedan en inglés (los comentarios siguen en español, como en
   el resto del proyecto).
 
-### 16. Restricciones del esquema XSD que el parser deja a la 5.3 (tarea 5.2)
+### 16. Restricciones del esquema XSD que el parser deja a la 5.3 (tarea 5.2) — RESUELTO (tarea 5.3), salvo lo de `xs:restriction` (5.6)
+
+- **Resuelto en la 5.3** ([../fase3/xsd.md](../fase3/xsd.md) §3, corpus
+  `tests/schemas/xsd/semantic-error` con su manifiesto `errores-semanticos-xsd.json`): `name` o
+  `ref` en un `xs:element` local, `type` o tipo anónimo, D14, `name` como NCName, `minOccurs` y
+  `maxOccurs` como entero no negativo o `unbounded`, `minOccurs` ≤ `maxOccurs`, las ocurrencias de
+  `xs:all` y de sus elementos, `default` con `fixed`, `default` con `use="required"`, nombres
+  globales repetidos, referencias, los tipos de fecha y hora (al resolver) y los `xs:attribute`
+  globales (5.2-CR-S2: se comprueban y no se bajan, lo coherente con XSD). **Sigue abierto, tarea
+  5.6:** `base` o `xs:simpleType` (exactamente uno) en `xs:restriction`; mientras, la 5.3 rechaza
+  todo `xs:simpleType` con «pendiente (tarea 5.6)».
 
 - **Estado:** el parser de la 5.2 aplica la gramática, la lista blanca de atributos, los
   obligatorios simples y los valores que necesita ([gramatica-xsd.md](gramatica-xsd.md) §4),
@@ -280,6 +309,12 @@ decisiones» del plan (D1–D31); aquí solo se remite a ellas.
   de XSD (`xml:lang`, `xsi:*`, extensiones) se aceptan y se ignoran en cualquier construcción y no
   llegan al AST; uno calificado con el propio espacio de XSD (`xs:type="…"`) es `syntax`. Ya no
   hay excepción para `xml:lang` en `xs:documentation`.
+- **Asimetría — RESUELTO por D39 (tarea 5.3):** el parser acepta e ignora
+  `attributeFormDefault="unqualified"`, `form` igual al vigente, `nillable="false"` y
+  `abstract="false"`, y rechaza como `unsupported` (con categoría y motivo, en el valor) los que
+  cambian la validación ([gramatica-xsd.md](gramatica-xsd.md) §5, prueba
+  `d39_valores_por_defecto_sin_efecto`; los casos de `parse-error` usan el valor que cambia la
+  validación). **Sigue abierto:** `00-alcance.md` §3 no lo refleja (tarea 5.7, con D23 y D34).
 - **Asimetría para decidir (5.2-CR2-S4; decisión del usuario):** `mixed="false"` se acepta, pero
   `attributeFormDefault="unqualified"`, `form="unqualified"`, `nillable="false"` y
   `abstract="false"` se rechazan (`unsupported`), aunque tampoco tienen efecto: son los valores
@@ -289,7 +324,16 @@ decisiones» del plan (D1–D31); aquí solo se remite a ellas.
   `elementFormDefault` vigente), y rechazar solo los valores que cambian la validación
   (`attributeFormDefault="qualified"`, `form="qualified"`, `nillable="true"`,
   `abstract="true"`). Queda para que decida el usuario.
-- **Cuándo actuar:** tarea 5.7 (actualizar `00-alcance.md` §3 con D23, D34 y esta lista).
+- **EDC por nombre local (5.3-CR1-I1; D40):** el análisis de la 5.3 compara *Element Declarations
+  Consistent* por nombre **local**, no por {name, target namespace} como XSD 1.0
+  (*cos-element-consistent*): con `targetNamespace` y `elementFormDefault` por defecto, un local
+  `a` y un `ref` al global `a` de otro tipo en el mismo modelo son válidos en XSD y aquí
+  `content-model`. Es necesario porque la IR nombra por nombre local
+  ([../fase3/ir.md](../fase3/ir.md) §5.2; `00-alcance.md` §1.2) e I12 lo exige
+  ([../fase3/xsd.md](../fase3/xsd.md) §3). La 5.7 la documenta en `00-alcance.md` §3 como
+  desviación.
+- **Cuándo actuar:** tarea 5.7 (actualizar `00-alcance.md` §3 con D23, D34, D39, esta lista y la
+  desviación de EDC por nombre local).
 
 ### 18. Posición del error de texto en contenido de solo elementos (tarea 5.2)
 
@@ -306,6 +350,10 @@ decisiones» del plan (D1–D31); aquí solo se remite a ellas.
 Observaciones de la revisión final de la 5.2 (APROBADO CON OBSERVACIONES). El comportamiento es
 correcto en todas; lo que falta es cobertura o pulido.
 
+- **5.2-CR3-S1 — RESUELTO (tarea 5.3):** 11 casos nuevos en `parse-error` con su entrada en
+  `errores-xsd.json` (`block-en-element`, `final-en-element`, `final-en-tipo-complejo`, `version`,
+  `fixed-en-{min-inclusive,min-exclusive,max-exclusive,length,min-length,max-length}` y
+  `texto-con-comentario-malo`, con el error en el byte que sigue a `--`, columna 70).
 - **5.2-CR3-S1 + menor 1 del Tester 3 (mutaciones vivas en `crates/xsd/src/subset.rs`).** Sin
   prueba: `:284-285` (`block`/`final` en `xs:element`, `final` en `xs:complexType`); `:292-302`
   (`fixed` en `minInclusive`, `minExclusive`, `maxExclusive`, `length`, `minLength` y `maxLength`;
@@ -315,29 +363,45 @@ correcto en todas; lo que falta es cobertura o pulido.
   el segundo `-` del `--`), que fija el tramo de la excepción (2) de
   [gramatica-xsd.md](gramatica-xsd.md) §7 (5.2-CR3-I1). **Destino:** tarea 5.3 (toca el corpus
   XSD).
+- **5.2-CR2-S3 — RESUELTO (tarea 5.3):** `esquemas_xml_de_los_casos_parsean` compara cada copia
+  byte a byte con el esquema del caso (se quitó el salto de línea final que tenían las copias).
 - **5.2-CR2-S3** (`crates/xsd/tests/parser.rs:155-158`): de las copias en `parse-ok` de los
   esquemas de `tests/cases` solo se comprueba que existen. **Arreglo:** compararlas byte a byte con
   el texto del caso. **Destino:** 5.3 o 5.4 (corpus).
+- **5.2-N1 — RESUELTO (tarea 5.3):** `InvalidValue` muestra siempre `clip(a.value())`.
 - **5.2-N1** (`crates/xsd/src/parser.rs:431-437`): `InvalidValue` de `mixed`/`use`/
   `elementFormDefault` muestra el valor recortado (*collapse*) y el de `targetNamespace`, el valor
   crudo. **Arreglo:** unificar con `clip(a.value())`. Cosmético; **destino:** la próxima tarea que
   toque `parser.rs`.
+- **5.2-N2 — RESUELTO (tarea 5.3):** el mensaje de `UnknownAttribute` termina en «(y los de otro
+  espacio de nombres, que se ignoran)» en todas las construcciones.
 - **5.2-N2** (`crates/xsd/src/subset.rs:229` y el mensaje de `UnknownAttribute`): en
   `xs:documentation` dice «admite: source» sin mencionar que los atributos de otro espacio de
   nombres se aceptan (D34). **Arreglo:** añadir esa mención al mensaje (o a la lista mostrada).
   Cosmético; **destino:** la próxima tarea que toque `subset.rs`/`error.rs`.
+- **5.2-N3 — RESUELTO (tarea 5.3):** documentación de `Reader::intern` reescrita.
 - **5.2-N3** (`crates/xsd/src/reader.rs:1161-1168`): pulir la redacción de la documentación de
   `Reader::intern` («`uri` debe llegar ya normalizado (*collapse*)…»). Cosmético; **destino:** la
   próxima tarea que toque `reader.rs`.
+- **5.2-CR-S4 — RESUELTO (tarea 5.3):** una sola función, `reader::value_start`, que usan
+  `Attr::as_qname`, `Spanned::at` y el parser.
 - **5.2-CR-S4** (`crates/xsd/src/parser.rs:115-119`): `value_at` repite `Spanned::at`
   (`crates/xsd/src/ast.rs:45-49`) y el cálculo de `as_qname`. **Arreglo:** una sola función.
   **Destino:** la próxima tarea que toque `parser.rs`.
 - **5.2-CR-S5** (`crates/xsd/src/subset.rs:47-71`): las categorías de D6 son `&'static str`;
   `semantic` usa `enum Category` con `describe()`. **Arreglo:** un `enum` con un código estable que
   la web pueda leer. **Destino:** Fase 7.
+- **5.2-CR-S6 — REVISADO en la 5.3, se mantiene:** que `open` devolviera los obligatorios ya
+  extraídos no quita la rama: el tipo de cada valor (`Spanned<String>`, `Spanned<Name>`) lo decide
+  el llamador, así que la extracción sigue siendo un `Option`. La alternativa sin rama sería un
+  `unwrap`/`unreachable!`, que el proyecto evita en el camino de la entrada; las tres ramas
+  devuelven el mismo error que ya informó `open`. Sin cambio; se cierra.
 - **5.2-CR-S6** (`crates/xsd/src/parser.rs:708-717`, `818-827` y `909-918`): tres ramas
   defensivas iguales de `MissingAttribute`, inalcanzables. **Arreglo:** que `open` devuelva los
   obligatorios ya extraídos. Nit; **destino:** la próxima tarea que toque `parser.rs`.
+- **5.2-CR-S7 — RESUELTO (tarea 5.3):** singular con tope 1 («1 elemento anidado») y
+  documentado en `parse_with_max_depth` que con 0 el propio `xs:schema` es `limit` (prueba
+  `profundidad_1_en_singular_y_0_rechaza_el_esquema`).
 - **5.2-CR-S7:** con `max_depth = 1` el mensaje dice «1 elementos anidados», y
   `parse_with_max_depth(.., 0)` rechaza el propio `xs:schema` sin un aviso propio. **Arreglo:**
   singular en el mensaje y documentar (o recortar a 1) el valor 0. Cosmético; **destino:** la
@@ -345,5 +409,7 @@ correcto en todas; lo que falta es cobertura o pulido.
 - **5.2-SEC-L3** (`crates/xsd/src/error.rs:20-25`): `XsdError` tiene `kind` y `at` públicos, así que
   «único constructor» (`XsdError::new`, §13) solo se cumple por convención fuera del crate.
   **Arreglo:** campos `pub(crate)` con accesores. **Destino:** Fase 7 (API pública).
+- **5.2-CR-S2 — RESUELTO (tarea 5.3):** los `xs:attribute` globales se comprueban (nombre,
+  `default`/`fixed`, tipo, nombres únicos) y no se bajan (§16).
 - **5.2-CR-S2:** los `xs:attribute` globales se aceptan pero no se pueden usar sin `ref`; ya está en
   §16 («Declaraciones globales de `xs:attribute`»), destino 5.3.

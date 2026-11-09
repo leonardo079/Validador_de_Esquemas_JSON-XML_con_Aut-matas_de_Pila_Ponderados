@@ -97,7 +97,7 @@ I14 repite a propósito la comprobación de la Fase 3 ([ciclos.md](ciclos.md)) s
 **Obligaciones del frontal XSD.** Los invariantes I12, I13 e I14 coinciden en parte con reglas de XSD que el **usuario** puede romper, y esos errores tienen que salir con su posición en el esquema, no como el error interno de `verify`. El frontal XSD los detecta antes de bajar, y `verify` queda como **defensa en profundidad**:
 
 - la **derivación circular** de tipos simples (`base` que vuelve a sí mismo, directa o indirectamente): el frontal sigue la cadena de bases para fijar el `Lexical` de cada restricción (§5.2), así que debe detectar el ciclo **antes** de seguirla, de forma iterativa (marca de visitados y pila explícita, D7), o no terminaría;
-- I12: *all-group limited* y *Element Declarations Consistent*;
+- I12: *all-group limited* y *Element Declarations Consistent* (hecho en la 5.3, [xsd.md](xsd.md) §3, con I10, I11 y los `default`/`fixed` de I13);
 - la parte de I13 que viene del usuario: facetas que no se aplican al tipo de la base, valores de `xs:enumeration` que no son del tipo (con la forma léxica de XSD, pendiente 4 de §11), `xs:enumeration` en `xs:boolean`, atributos con `default` y `fixed` a la vez o requeridos con `default`;
 - y lo que `verify` no comprueba (abajo): *Unique Particle Attribution* y que `default`/`fixed` sean valores del tipo del atributo. Son restricciones sobre los componentes del esquema (XSD 1.0 Parte 1, *Schema Component Constraints*), es decir, errores del esquema del usuario, y el responsable de darlos con su posición es el frontal XSD.
 
@@ -138,6 +138,8 @@ En JSON la bajada es 1:1 con la tabla de símbolos: **cada subesquema es un nodo
 **Magnitud de los contadores** (el pendiente de [meta-esquema.md](meta-esquema.md) §8). `"maxLength": 1e400` es válido según el meta-esquema. La bajada convierte cada entero no negativo del esquema (los de longitud, ítems, propiedades y ocurrencias) a `u64` **saturando** en `u64::MAX`. Es exacto, no una aproximación: ninguna instancia tiene 2⁶⁴ − 1 puntos de código, elementos o miembros, por la misma razón que el `offset` de `Pos` no se satura (D9: 2⁶⁴ bytes no son alcanzables). Un máximo saturado se comporta como «sin límite» y un mínimo saturado como «insatisfacible», que es lo que significan.
 
 ### 5.2 XSD (`00-alcance.md` §3.1 y §3.2)
+
+La bajada que implementa esta tabla (tipos complejos, tarea 5.3), con el orden de los `NodeId`, los rangos de los nodos sintéticos y su argumento de corrección, está en [xsd.md](xsd.md) §4-§5; los tipos simples del usuario y las facetas, en la 5.6.
 
 | Construcción | En la IR |
 |---|---|
@@ -304,7 +306,7 @@ Decisiones de esta tarea (candidatas al registro del plan; las numera el usuario
 
 Pendientes:
 
-1. La bajada de JSON Schema (4.2) y el frontal XSD llaman a `Ir::verify` **siempre, en el camino normal**, antes de la Fase 4; un fallo es un error del frontal y se presenta al usuario como un único error interno (§4, «Contrato»). **Hecho para JSON en la 4.2** (`semantic::lower`, `ir::InternalError`, código 3 en `schemac ir`); el frontal XSD hará lo mismo.
+1. La bajada de JSON Schema (4.2) y el frontal XSD llaman a `Ir::verify` **siempre, en el camino normal**, antes de la Fase 4; un fallo es un error del frontal y se presenta al usuario como un único error interno (§4, «Contrato»). **Hecho para JSON en la 4.2** (`semantic::lower`, `ir::InternalError`, código 3 en `schemac ir`) **y para XSD en la 5.3** (`xsd::lower`, [xsd.md](xsd.md) §1; en `schemac`, con la 5.4).
 2. **Requisito de las Fases 4 y 5.** `Ir::location` construye la ruta entera y no tiene tope: con claves largas una sola ruta puede medir cientos de KB, y un reporte del payload que la repita en cada violación, o un codegen que precalcule la de cada nodo, amplificaría la entrada sin cota. Los mensajes del validador y el codegen usarán `location_clipped(id, max)`, análogo a `SymbolTable::fragment_clipped` (`crates/semantic/src/symbols.rs`; [ciclos.md](ciclos.md) §5): sube por los padres en O(profundidad + max) y nunca construye la ruta entera. `max` se fija en `00-alcance.md` §4 cuando se implemente; `Ir::location` sin recortar queda para pruebas y depuración. Cuando existan los errores del payload, su fila se añade a la tabla ρ de [pendientes.md](pendientes.md) §1. No se implementa en 4.1.
 3. `INF`, `-INF` y `NaN` de `xs:float`/`xs:double` en facetas y enumeraciones no tienen representación (no son lexemas de RFC 8259); si el frontal XSD los encuentra, debe rechazarlos con un error que lo diga, o hay que ampliar `Num`.
 4. La comprobación de *Unique Particle Attribution* y de que `default`/`fixed` sean valores del tipo del atributo es responsabilidad del **frontal XSD**, que las reporta con su posición (*Schema Component Constraints* de XSD 1.0), fuera de `verify` (§4); la Fase 4 puede repetir la de UPA al construir Glushkov solo como defensa en profundidad. También la **forma léxica de XSD** de facetas y enumeraciones: el frontal la valida contra el tipo **antes** de reescribirla a RFC 8259 (§5.2), porque I13 comprueba el valor y no la forma: `xs:integer` no admite `1.0` ni `1e2` y `xs:decimal` no admite exponente, así que sin esa comprobación `<xs:enumeration value="1.0"/>` en `xs:integer` pasaría.

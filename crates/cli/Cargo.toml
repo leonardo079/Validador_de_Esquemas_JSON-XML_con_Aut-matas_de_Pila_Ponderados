@@ -16,8 +16,14 @@ lexer.workspace = true
 schema-parser.workspace = true
 semantic.workspace = true
 ir.workspace = true
+xsd.workspace = true
 automaton.workspace = true
 codegen.workspace = true
+
+# `O_NONBLOCK` al abrir el esquema (`leer`, 4.3-L1): solo la constante, sin
+# `unsafe`; su valor cambia entre sistemas (Linux y macOS).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.191"
 
 [dev-dependencies]
 serde_json = "1.0.154"

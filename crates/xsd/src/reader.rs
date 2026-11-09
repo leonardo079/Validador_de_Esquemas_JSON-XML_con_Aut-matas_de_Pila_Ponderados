@@ -263,8 +263,7 @@ impl Attr {
     /// el error se recorta (ver [`ErrorKind`]): pedirlo muchas veces no
     /// copia un valor largo.
     pub fn as_qname(&self) -> Result<Name, XsdError> {
-        let mut at = self.value_span.start;
-        at.advance(b'"');
+        let at = value_start(self.value_span);
         match &self.qname {
             QValue::Resolved {
                 ns,
@@ -441,7 +440,7 @@ fn span_len(span: Span) -> u64 {
 
 /// ¿Es un NCName? Con la misma simplificación que el lexer
 /// (`lexer/src/xml.rs`): cualquier carácter no ASCII vale como letra.
-fn is_ncname(s: &str) -> bool {
+pub(crate) fn is_ncname(s: &str) -> bool {
     let mut cs = s.chars();
     let Some(c0) = cs.next() else { return false };
     (c0.is_ascii_alphabetic() || c0 == '_' || !c0.is_ascii())
@@ -454,6 +453,15 @@ fn split_qname(s: &str) -> Option<usize> {
         None => is_ncname(s).then_some(0),
         Some(i) => (is_ncname(&s[..i]) && is_ncname(&s[i + 1..])).then_some(i + 1),
     }
+}
+
+/// Posición del primer carácter de un valor de atributo, el que sigue a la
+/// comilla de apertura (`value_span` empieza en la comilla): la de todo
+/// error sobre el valor (`Attr::as_qname`, el parser y `Spanned::at`).
+pub(crate) fn value_start(span: Span) -> Pos {
+    let mut at = span.start;
+    at.advance(b'"');
+    at
 }
 
 pub(crate) fn is_xml_space(c: char) -> bool {
@@ -1159,13 +1167,15 @@ where
     }
 
     /// Interna un URI en la misma tabla que los del documento: su [`NsId`]
-    /// es igual al de todo nombre del documento con ese URI. Interna `uri`
-    /// **tal como se le pasa**: el valor de un atributo de tipo `xs:anyURI`
-    /// (el `targetNamespace` de `xs:schema`) hay que normalizarlo antes
-    /// (*collapse*: sin espacios en los extremos), porque los URI de las
-    /// declaraciones `xmlns:p` se internan sin recortar. Los URI internados
-    /// viven hasta el fin del lector, sin límite: el parser lo llama solo
-    /// para `targetNamespace`, nunca por cada valor de atributo. O(|uri|).
+    /// es igual al de todo nombre del documento con ese URI.
+    ///
+    /// `uri` debe llegar ya normalizado: se interna tal como se pasa, y los
+    /// URI de las declaraciones `xmlns:p` se internan sin recortar, así que
+    /// el valor de un atributo `xs:anyURI` (el `targetNamespace` de
+    /// `xs:schema`) se recorta antes (*collapse*) para que coincida con
+    /// ellos. Los URI internados viven hasta el fin del lector, sin límite:
+    /// el parser lo llama solo para `targetNamespace`, nunca por cada valor
+    /// de atributo. O(|uri|).
     pub fn intern(&mut self, uri: &str) -> NsId {
         self.sink.scope.intern(uri)
     }

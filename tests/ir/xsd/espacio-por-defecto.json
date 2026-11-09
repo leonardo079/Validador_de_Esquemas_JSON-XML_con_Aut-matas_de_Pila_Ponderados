@@ -1,0 +1,58 @@
+{
+  "irVersion": 2,
+  "format": "xml",
+  "targetNamespace": "urn:ejemplo:t",
+  "nodeCount": 4,
+  "edgeCount": 3,
+  "classCount": {"a": 4, "b": 0, "c": 0},
+  "nodes": [
+    {
+      "id": 0,
+      "sort": "element",
+      "span": {"line": 4, "column": 1, "start": 229, "end": 510},
+      "parent": null,
+      "step": null,
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "content", "span": {"line": 4, "column": 1, "start": 229, "end": 510}, "class": "a", "strategy": "transition", "particles": [{"term": "choice", "children": [1], "min": 1, "max": 1, "span": {"line": 4, "column": 1, "start": 229, "end": 510}}, {"term": "element", "name": "r", "type": 1, "min": 1, "max": 1, "span": {"line": 7, "column": 3, "start": 357, "end": 387}}]}
+      ]
+    },
+    {
+      "id": 1,
+      "sort": "element",
+      "span": {"line": 8, "column": 3, "start": 390, "end": 500},
+      "parent": 0,
+      "step": {"keyword": "complexType", "entry": "R"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "content", "span": {"line": 9, "column": 5, "start": 417, "end": 483}, "class": "a", "strategy": "transition", "particles": [{"term": "sequence", "children": [1], "min": 1, "max": 1, "span": {"line": 9, "column": 5, "start": 417, "end": 483}}, {"term": "element", "name": "s", "type": 2, "min": 1, "max": 1, "span": {"line": 10, "column": 7, "start": 434, "end": 467}}]}
+      ]
+    },
+    {
+      "id": 2,
+      "sort": "element",
+      "span": {"line": 10, "column": 30, "start": 457, "end": 465},
+      "parent": 0,
+      "step": {"keyword": "simpleContent", "entry": "xs:string"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 10, "column": 30, "start": 457, "end": 465}, "class": "a", "strategy": "transition", "target": 3}
+      ]
+    },
+    {
+      "id": 3,
+      "sort": "text",
+      "span": {"line": 10, "column": 30, "start": 457, "end": 465},
+      "parent": 0,
+      "step": {"keyword": "builtin", "entry": "string"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 10, "column": 30, "start": 457, "end": 465}, "class": "a", "strategy": "transition", "lexical": "string"}
+      ]
+    }
+  ]
+}

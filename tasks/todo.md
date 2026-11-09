@@ -31,11 +31,11 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
 - Mientras no esté la 5.6, `xs:simpleType` se rechaza con un error explícito «pendiente (tarea 5.6)». Los valores de `default`/`fixed` todavía no se comprueban contra su tipo (lo cierra la 5.6).
 
 **Criterios de aceptación:**
-- [ ] Los dos esquemas de `tests/cases` y `pedido_xsd` bajan a una IR que pasa `verify`. La IR del pedido de `forma.rs` sale idéntica a la hecha a mano, salvo el orden de nodos que fije B3, con las mismas ubicaciones (`#/complexType/Pedido/element/item`, `#/builtin/int`, `#/simpleContent/xs:string`).
-- [ ] Cada entrada de `tests/schemas/xsd/semantic-error` da su error con línea y columna (manifiesto). Ningún esquema del corpus produce un error de `verify` (prueba que recorre todo el corpus y exige `Ok` o un error del usuario, nunca `InternalError`).
-- [ ] Análisis y bajada iterativos y O(n) en el tamaño del AST, con una prueba de tamaño: un tipo usado k veces es una sola arista por uso, no una copia.
-- [ ] Las tablas de símbolos se indexan por `(ns_id(), local())` con el *hasher* por defecto de `std` (nunca por el texto del URI, `expanded()`, ni con un *hasher* determinista), y el `targetNamespace` es el `NsId` que guardó la 5.2; prueba de regresión sin reloj (D1) con un URI de ~8 MiB y ~5·10⁵ referencias `type="p:T"` (`docs/fase2/pendientes.md` §11, 5.1-SEC3-I1; añadido el 3 nov).
-- [ ] **D39 (valores por defecto sin efecto; `docs/fase2/pendientes.md` §17, añadido el 3 nov):** se aceptan y se ignoran (no llegan al AST ni a la IR) `attributeFormDefault="unqualified"` en `xs:schema`, `form` con el valor que ya rige (`unqualified` en `xs:attribute`; en un `xs:element` local, el mismo que el `elementFormDefault` del esquema), `nillable="false"` y `abstract="false"`; los valores que cambian la validación (`attributeFormDefault="qualified"`, `form` distinto del vigente, `nillable="true"`, `abstract="true"`) siguen siendo `unsupported` con su categoría y motivo. Valores tras *collapse*, como el resto de la lista blanca (D37). Prueba por cada atributo con el valor aceptado y el rechazado; los casos de `tests/schemas/xsd/parse-error` que hoy rechazan el valor por defecto (`abstract.xsd`, `attribute-form-default.xsd`…) pasan a usar el valor que cambia la validación o se mueven a `parse-ok`, con el manifiesto al día; `gramatica-xsd.md` §5 y `pendientes.md` §17 al día.
+- [x] Los dos esquemas de `tests/cases` y `pedido_xsd` bajan a una IR que pasa `verify`. La IR del pedido de `forma.rs` sale idéntica a la hecha a mano, salvo el orden de nodos que fije B3, con las mismas ubicaciones (`#/complexType/Pedido/element/item`, `#/builtin/int`, `#/simpleContent/xs:string`).
+- [x] Cada entrada de `tests/schemas/xsd/semantic-error` da su error con línea y columna (manifiesto). Ningún esquema del corpus produce un error de `verify` (prueba que recorre todo el corpus y exige `Ok` o un error del usuario, nunca `InternalError`).
+- [x] Análisis y bajada iterativos y O(n) en el tamaño del AST, con una prueba de tamaño: un tipo usado k veces es una sola arista por uso, no una copia.
+- [x] Las tablas de símbolos se indexan por `(ns_id(), local())` con el *hasher* por defecto de `std` (nunca por el texto del URI, `expanded()`, ni con un *hasher* determinista), y el `targetNamespace` es el `NsId` que guardó la 5.2; prueba de regresión sin reloj (D1) con un URI de ~8 MiB y ~5·10⁵ referencias `type="p:T"` (`docs/fase2/pendientes.md` §11, 5.1-SEC3-I1; añadido el 3 nov).
+- [x] **D39 (valores por defecto sin efecto; `docs/fase2/pendientes.md` §17, añadido el 3 nov):** se aceptan y se ignoran (no llegan al AST ni a la IR) `attributeFormDefault="unqualified"` en `xs:schema`, `form` con el valor que ya rige (`unqualified` en `xs:attribute`; en un `xs:element` local, el mismo que el `elementFormDefault` del esquema), `nillable="false"` y `abstract="false"`; los valores que cambian la validación (`attributeFormDefault="qualified"`, `form` distinto del vigente, `nillable="true"`, `abstract="true"`) siguen siendo `unsupported` con su categoría y motivo. Valores tras *collapse*, como el resto de la lista blanca (D37). Prueba por cada atributo con el valor aceptado y el rechazado; los casos de `tests/schemas/xsd/parse-error` que hoy rechazan el valor por defecto (`abstract.xsd`, `attribute-form-default.xsd`…) pasan a usar el valor que cambia la validación o se mueven a `parse-ok`, con el manifiesto al día; `gramatica-xsd.md` §5 y `pendientes.md` §17 al día.
 
 **Verificación:** `cargo test -p xsd`; `make lint`; `make test`.
 
@@ -52,12 +52,14 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
 - `docs/fase2/pendientes.md` §5: recorrer el AST con pila explícita; `clone`/`{:?}`/`==` del `Schema` solo en el hilo con `stack_size` (D7).
 - `pendientes.md` §32 (4.3-S7: cosméticos de `ir`, solo si la tarea toca `crates/ir`).
 
+**Estado (4 nov):** APROBADA CON OBSERVACIONES en la revisión 1 (code-reviewer solo, D35: 0 Critical, 2 Important —5.3-CR1-I1 documentación, corregida en el cierre; 5.3-CR1-I2 cobertura, pasa a la 5.7 por D38—, 6 Suggestion), sin rondas de corrección. Casillas verificadas por el Tester 1 (`crates/xsd/tests/lower.rs`: `pedido_baja_igual_que_la_ir_hecha_a_mano`, `esquemas_de_los_casos_bajan`, `errores_semanticos_con_linea_y_columna`, `corpus_entero_sin_error_interno`, `tipo_usado_k_veces_es_una_arista_por_uso`, `analisis_y_bajada_sin_recursion`, `uri_de_8_mib_y_medio_millon_de_referencias`, `d39_no_llega_a_la_ir`; `crates/xsd/tests/parser.rs`: `d39_valores_por_defecto_sin_efecto`). Decisiones del Builder: D40. Sin commit. Observaciones abiertas en `docs/fase3/pendientes.md` §3 y §33 y `docs/fase2/pendientes.md` §17; las de cobertura y de UPA son criterios de la 5.7.
+
 ## Tarea 5.4: `schemac check|ir` con XSD, corpus clasificado y doradas
 
 **Descripción:** Integrar el frontal en `schemac` según U2, en el mismo hilo de 8 MiB (D7), con los códigos de D17 (0, 1, 2, 3). Añadir el caso XSD a `corpus_clasificado` y versionar las IR doradas y un DOT de ejemplo.
 
 **Criterios de aceptación:**
-- [ ] `schemac check` y `schemac ir [--dot]` sobre un XSD:
+- [x] `schemac check` y `schemac ir [--dot]` sobre un XSD:
   - 0 con la IR JSON v2 (`format: "xml"`, `targetNamespace`), con clase y estrategia;
   - 1 con los mismos errores que `check`;
   - 2 si no puede leer el archivo;
@@ -65,13 +67,13 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
   - un pánico en el hilo de `schemac check` da también **3**, igual que en `ir` (hoy da 2; `docs/fase3/pendientes.md` §8, decidido por el usuario el 3 nov, D33), con prueba y `bajada.md` §4 al día.
 
   Los esquemas JSON siguen dando exactamente la misma salida: las doradas de `tests/ir/` no cambian.
-- [ ] `valid-xml-pedido-01` y el esquema de `malformed-xml-billion-laughs-01` pasan por el equivalente XSD de `corpus_clasificado` (`pendientes.md` §22) usando el texto original del campo `schema`. El pedido no tiene ningún nodo (c), y sí uno (b) por `Attributes`.
-- [ ] Al menos 2 doradas XSD en `tests/ir/` (`make doradas`) y `docs/fase3/ir-pedido.dot` sincronizado por `make docs-check`.
-- [ ] La tabla ρ de `pendientes.md` §1 tiene una fila por cada clase nueva de error de XSD, medida con `schemac check` en release, o se justifica que no supera el ρ vigente.
+- [x] `valid-xml-pedido-01` y el esquema de `malformed-xml-billion-laughs-01` pasan por el equivalente XSD de `corpus_clasificado` (`pendientes.md` §22) usando el texto original del campo `schema`. El pedido no tiene ningún nodo (c), y sí uno (b) por `Attributes`.
+- [x] Al menos 2 doradas XSD en `tests/ir/` (`make doradas`) y `docs/fase3/ir-pedido.dot` sincronizado por `make docs-check`.
+- [x] La tabla ρ de `pendientes.md` §1 tiene una fila por cada clase nueva de error de XSD, medida con `schemac check` en release, o se justifica que no supera el ρ vigente.
 
 **Verificación:**
 - `make lint`, `make test`, `make docs-check`.
-- Manual: `cargo run -p cli -- ir tests/schemas/xsd/parse-ok/pedido.xsd` (y `--dot`) muestra el documento con la `Choice` de los globales, el nodo (b) del atributo `id` y `#/builtin/positiveInteger` con `Minimum(1)`. Además, `cargo run -p cli -- check` sobre un XSD de `semantic-error` da el código 1 con línea y columna.
+- Manual: `cargo run -p cli -- ir tests/schemas/xsd/parse-ok/valid-xml-pedido-01.xsd` (y `--dot`) muestra el documento con la `Choice` de los globales, el nodo (b) del atributo `id` y `#/builtin/positiveInteger` con `Minimum(1)` (corregido el 4 nov: decía `pedido.xsd`, que usa `xs:int`; `schemac ir` sobre `pedido.xsd` da la IR de `pedido_xsd`). Además, `cargo run -p cli -- check` sobre un XSD de `semantic-error` da el código 1 con línea y columna.
 
 **Dependencias:** 5.3, U2.
 
@@ -84,6 +86,8 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
 - `pendientes.md` §28 (4.3-S3, no reserializar el esquema del caso);
 - `pendientes.md` §29 (4.3-S4, si toca el corpus de `semantic`);
 - `pendientes.md` §24 y §25, opcionales y cosméticos.
+
+**Estado (4 nov):** APROBADA CON OBSERVACIONES en la revisión 1 (code-reviewer solo, D35: 0 Critical, 1 Important de documentación —5.4-CR1-I1, argumento de la tabla ρ, corregido en el cierre—, 6 Suggestion, 3 nits), sin rondas de corrección. Casillas verificadas por el Tester 1: `crates/cli/src/main.rs` (`panico_en_el_hilo_da_codigo_3`, `fallo_interno_xsd_da_codigo_3`, `formato_por_el_primer_byte_significativo`, `abrir_una_fifo_sin_escritor_no_bloquea`), `crates/cli/tests/check.rs` (`xsd_valido`, `errores_xsd_con_linea_y_columna`, `formato_por_el_contenido`, `profundidad_maxima_xsd`), `crates/cli/tests/ir.rs` (`ir_de_un_xsd`, `ir_xsd_determinista_doradas_y_dot`, `errores_xsd_iguales_que_check`), `crates/xsd/tests/corpus.rs` (`corpus_clasificado`, `ir_doradas_xsd`), doradas JSON idénticas a `HEAD`, tabla ρ reproducida. Decisiones del Builder: D41. Sin commit (encadenada con la 5.3; foto de la 5.3 en `target/sondas-5.4/base-5.3/`). Observaciones abiertas en `docs/fase3/pendientes.md` §1 y «Cierre de la 5.4».
 
 ## Punto de control C: primer XSD de extremo a extremo (imprescindible para la semana 3)
 
@@ -156,7 +160,7 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
 
 **Tamaño:** M. Es la más densa; si pasa de M, separar «valid restriction» y `default`/`fixed` en una 5.6b.
 
-**Arrastra:** `pendientes.md` §3 (L-3, I-1).
+**Arrastra:** `pendientes.md` §3 (L-3, I-1, y la viñeta «Para la 5.6» de la 5.3); §22 (los tres `parse-ok` con `xs:simpleType` —`anotaciones`, `atributos-ajenos`, `tipos-simples`— entran en `corpus_clasificado` de `crates/xsd/tests/corpus.rs`, y la prueba comprueba que no se omite ninguno); §33 (5.3-CR1-S2 ocurrencias > 2⁶⁴, 5.3-CR1-S3 `Debug` derivado, si toca `check.rs`); §34 (ayudas de prueba duplicadas, opcional). Añadido el 4 nov.
 
 ## Tarea 5.7: *Unique Particle Attribution* y cierre del frontal
 
@@ -166,12 +170,17 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
   - documento de teoría de la fase;
   - correcciones de `ir.md` (§4, §5.2 con los orígenes de S-5, §7 fila Q, §11);
   - `00-alcance.md` §3 y §4 (4.3-S1 y las desviaciones aprobadas en U3 a U7, U9);
-  - cerrar `pendientes.md` §3, §22 (parte XSD) y §26, y anotar los pendientes nuevos (`pattern` en enumeraciones y `default`/`fixed`; Glushkov con contadores para la Fase 4).
+  - cerrar `pendientes.md` §3, el resto de §22 (la parte XSD de la 5.4 quedó resuelta el 4 nov; faltan los tres `parse-ok` con `xs:simpleType`, que entran con la 5.6) y §26, y anotar los pendientes nuevos (`pattern` en enumeraciones y `default`/`fixed`; Glushkov con contadores para la Fase 4).
 
 **Criterios de aceptación:**
 - [ ] Los casos `(a?, a)`, `(a | a)`, `(a*, a)` y un `choice` anidado ambiguo se rechazan con la posición de las dos partículas. Los modelos deterministas del corpus (pedido y `pedido_xsd` con `choice` y `subpedido` opcional) pasan. Pasar el límite de U6 es un error `limit`.
 - [ ] El costo de UPA está documentado y acotado por el límite, y lo comprueba una prueba sin reloj (D1): un modelo en el límite termina; uno por encima se rechaza antes de calcular conjuntos.
 - [ ] `docs/fase3/xsd.md` (o el nombre que elija el Builder) explica el análisis y la bajada con su costo. `make docs-check` en verde y casilla de la semana 2 lista para marcar.
+- [ ] **Heredado de la revisión de la 5.3 (4 nov, D38; detalle en `docs/fase2/pendientes.md` y `docs/fase3/pendientes.md`):**
+  - 5.3-CR1-I2 (cobertura): casos `semantic-error/edc-ref-y-local.xsd` (un `ref` frente a un local del mismo nombre con otro tipo) y `semantic-error/edc-anonimos.xsd` (dos tipos anónimos iguales, distintos por XSD) en el manifiesto, y un caso aceptado con el mismo `ref` repetido en `correspondencia_de_cada_construccion`;
+  - 5.3-CR1-S4: un nombre repetido en `xs:all` (`c/all-dup.xsd`: mismo nombre y tipo, pasa EDC y `verify`) lo rechaza la UPA, con prueba;
+  - 5.3-CR1-S1: `xs:element` local con `ref` y `form`/`nillable` del valor sin efecto (D39) se rechaza como `syntax` (XSD 1.0 src-element 2.2), igual que antes de D39, con prueba;
+  - 5.3-CR1-I1: la desviación «EDC por nombre local» (D40) en `00-alcance.md` §3, con D23, D34 y D39.
 
 **Verificación:**
 - `make lint`, `make test`, `make docs-check`.

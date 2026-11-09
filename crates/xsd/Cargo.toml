@@ -1,6 +1,6 @@
 [package]
 name = "xsd"
-description = "Frontal XSD: lector XML de esquemas con espacios de nombres y parser LL(1) del subconjunto XSD al AST (y, en las tareas siguientes, análisis y bajada a la IR)"
+description = "Frontal XSD: lector XML de esquemas con espacios de nombres, parser LL(1) del subconjunto XSD al AST, análisis (tabla de símbolos y restricciones) y bajada a la IR"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,10 +8,11 @@ authors.workspace = true
 repository.workspace = true
 
 # D21: el frontal XSD depende solo de `lexer` e `ir`; no de `semantic` ni de
-# `schema-parser` (ningún frontal depende del otro, D13). `ir` se añade con la
-# bajada (tareas 5.3-5.4): el lector de la 5.1 solo usa `lexer`.
+# `schema-parser` (ningún frontal depende del otro, D13). `ir` llega con la
+# bajada de la tarea 5.3.
 [dependencies]
 lexer.workspace = true
+ir.workspace = true
 
 [lints]
 workspace = true

@@ -187,10 +187,11 @@ const PALABRAS_C: [&str; 8] = [
 /// del parser del proyecto con una pila explícita y solo mira las palabras
 /// clave de los subesquemas: una propiedad que se llame `pattern` o un
 /// literal de `const` no cuentan, y los números conservan su lexema (con
-/// `serde_json`, `1e400` no se podría leer).
-fn menciona_palabra_c(texto: &[u8]) -> bool {
+/// `serde_json`, `1e400` no se podría leer). `nombre` solo sirve para el
+/// mensaje si el texto no parsea (4.3-S4, `docs/fase3/pendientes.md` §29).
+fn menciona_palabra_c(nombre: &str, texto: &[u8]) -> bool {
     use schema_parser::{Schema, Value};
-    let raiz = parse(texto).unwrap();
+    let raiz = parse(texto).unwrap_or_else(|e| panic!("{nombre}: {e}"));
     let mut pila: Vec<&Schema> = vec![&raiz];
     while let Some(s) = pila.pop() {
         for k in s.keywords() {
@@ -263,7 +264,7 @@ fn corpus_clasificado() {
         }
         let texto = std::fs::read(&path).unwrap();
         let clases = cumple_la_definicion(&file, &ir_de(&file, &texto));
-        if !menciona_palabra_c(&texto) {
+        if !menciona_palabra_c(&file, &texto) {
             sin_c += 1;
             let c = clases.iter().filter(|n| n.class == Class::C).count();
             assert_eq!(c, 0, "{file}: {c} nodos (c)");
@@ -290,7 +291,7 @@ fn corpus_clasificado() {
                     );
                 }
             }
-            "valid" if !menciona_palabra_c(&caso.schema) => {
+            "valid" if !menciona_palabra_c(&nombre, &caso.schema) => {
                 valid += 1;
                 assert!(c.is_empty(), "{nombre}: {} nodos (c)", c.len());
             }

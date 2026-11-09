@@ -117,6 +117,80 @@ y que se resuelven en otra fase. Las decisiones de diseño viven en el
     escenario H de [ciclos.md](ciclos.md) §5, 7,2 veces; `t16k.json`, ≈ 6 veces. El
     «≈ 9 veces» de la variante de 2,2 MB del escenario H es una **estimación**
     (1 015 ÷ 110), no una medida.
+- **Frontal XSD (tarea 5.4).** Desde la 5.4 `schemac check` e `ir` aceptan XSD (D22,
+  [bajada.md](bajada.md) §5), así que sus errores también salen por aquí. Igual que en JSON,
+  el lector y el parser XSD (Fase 2) se detienen en el primer error, y `xsd::analyze`
+  devuelve todos los de su primera etapa que falla (componentes y nombres; modelos de
+  contenido; [xsd.md](xsd.md) §3). Medido con `schemac check` en release
+  (`target/sondas-5.4/rho/medir.py`): cada construcción repetida m = 2 000 veces en su
+  contexto, en una sola línea, con la ruta `t.xsd: ` (r = 7; la columna «medido» es bytes de
+  stderr entre bytes de la entrada). b, e y M como arriba (M con las posiciones llevadas a
+  7 cifras). Cuando la construcción repetida es además un nombre repetido, e cuenta los dos
+  errores (por ejemplo «y repetido»). Los esquemas usan el espacio de XML Schema como
+  espacio por defecto (`<element/>` en lugar de `<xs:element/>`, lo más barato) salvo
+  cuando hace falta nombrar un tipo o un elemento del usuario sin espacio de nombres
+  (prefijo `x:`).
+
+  | Clase de error XSD | Construcción mínima | b | e | M | Cociente, r = 0 | Cociente, r = 8 | Medido, r = 7 |
+  |---|---|---|---|---|---|---|---|
+  | `value` (NCName) y `unsupported` (D14) a la vez | `<element name="␡"/>` (␡ = DEL, 0x7F, que `short` escribe `\u{7f}`) | 19 | 2 | 392 | **20,7** | **21,6** | 20,5 |
+  | ídem con un nombre ASCII | `<element name="1"/>` | 19 | 2 | 382 | 20,2 | 21,1 | 20,0 |
+  | `unsupported`: D14 (elemento sin tipo) | `<element name="a"/>` | 19 | 1 | 274 | 14,5 | 14,9 | 14,4 |
+  | `syntax`: `xs:element` local sin `name` ni `ref` | `<element/>` | 10 | 1 | 70 | 7,1 | 7,9 | 6,9 |
+  | `unresolved`: `ref` | `<element ref="a"/>` (y con un prefijo de URI largo, recortado: 6,7 / 7,0) | 18 | 1 | 127 | 7,1 | 7,6 | 7,0 |
+  | `unresolved`: tipo complejo en un atributo (y repetido) | `<x:attribute name="a" type="T"/>` | 32 | 2 | 215 | 6,8 | 7,3 | 6,4 |
+  | `unsupported`: `xs:anyType` | `<element name="a" type="anyType"/>` | 34 | 1 | 215 | 6,4 | 6,6 | 6,3 |
+  | `duplicate-name`: atributo global | `<attribute name="a"/>` | 21 | 1 | 119 | 5,7 | 6,1 | 5,1 |
+  | `content-model`: EDC (I12) | `<x:element name="a" type="T"/>` tras un `a` de otro tipo | 30 | 1 | 168 | 5,6 | 5,9 | 5,2 |
+  | `duplicate-name`: atributo de un tipo (I10) | `<attribute name="a"/>` | 21 | 1 | 112 | 5,4 | 5,8 | 4,8 |
+  | `syntax`: `default` y `fixed` (I13; y repetido) | `<attribute name="a" default="" fixed=""/>` | 41 | 2 | 209 | 5,1 | 5,5 | 4,8 |
+  | `syntax`: requerido con `default` (I13; y repetido) | `<attribute name="a" use="required" default=""/>` | 47 | 2 | 224 | 4,8 | 5,1 | 4,5 |
+  | `duplicate-name`: tipo global | `<complexType name="a"/>` | 23 | 1 | 108 | 4,7 | 5,1 | 4,2 |
+  | `unresolved`: `type` | `<element name="a" type="b"/>` | 28 | 1 | 116 | 4,2 | 4,5 | 4,1 |
+  | `unsupported`: predefinido fuera de §3.2 | `<element name="a" type="date"/>` | 31 | 1 | 125 | 4,1 | 4,3 | 4,0 |
+  | `duplicate-name`: elemento global | `<element name="a" type="int"/>` | 30 | 1 | 119 | 4,0 | 4,3 | 3,6 |
+  | `unsupported`: D27 (base compleja; y repetido) | `<x:complexType name="a"><x:simpleContent><x:extension base="T"/>…` | 98 | 2 | 360 | 3,7 | 3,9 | 3,6 |
+  | `syntax`: `ref` con `type` | `<x:element ref="a" type="x:int"/>` | 33 | 1 | 113 | 3,5 | 3,7 | 3,4 |
+  | `unsupported`: `xs:simpleType` pendiente (5.6; y repetido) | `<attribute name="a"><simpleType><restriction base="int"/></simpleType></attribute>` | 82 | 2 | 259 | 3,2 | 3,4 | 3,0 |
+  | `content-model`: *all-group limited* (I12) | `<x:element ref="a" maxOccurs="2"/>` en `xs:all` | 34 | 1 | 103 | 3,1 | 3,3 | 3,0 |
+  | `value`: `minOccurs` inválido | `<x:element ref="a" minOccurs="x"/>` | 34 | 1 | 104 | 3,1 | 3,3 | 3,0 |
+  | `syntax`: `name` y `ref` | `<x:element name="a" ref="a"/>` | 29 | 1 | 87 | 3,0 | 3,3 | 3,0 |
+  | `content-model`: `minOccurs` > `maxOccurs` (I11) | `<x:element ref="a" maxOccurs="0"/>` | 34 | 1 | 86 | 2,6 | 2,8 | 2,5 |
+  | `syntax`: `type` y tipo anónimo | `<element name="a" type="int"><complexType/></element>` | 53 | 1 | 102 | 1,9 | 2,1 | 1,9 |
+  | Fase 2 XSD (lector y parser) | cualquiera | — | 1 | ≲ 280 medidos (un valor de 40 DEL, recortado a 32) | constante | constante | — |
+
+  **No supera el ρ vigente.** El peor cociente XSD es ≈ 21,6 con r = 8, unas seis veces
+  menos que ρ(8) ≈ 131 de JSON Schema, así que **ρ(r) no cambia** y sigue acotando la
+  salida de `schemac check` con los dos formatos. Por qué no hay construcciones más baratas
+  (corregido en el cierre de la 5.4, 5.4-CR1-I1: una versión anterior decía, por error, que
+  una etiqueta da a lo sumo 2 errores):
+  - todo error del análisis sale de una etiqueta de XSD, que no baja de 10 bytes
+    (`<element/>` con el espacio de XML Schema por defecto; el lector ya rechaza un prefijo
+    sin declarar o una etiqueta sin nombre);
+  - una etiqueta da **a lo sumo un error por valor de atributo** (nombre que no es NCName,
+    `minOccurs`/`maxOccurs` inválidos, `type`/`ref` sin resolver o fuera de §3.2, `default`
+    con `fixed`…; un atributo repetido en una etiqueta es `duplicate-attribute`, de la
+    Fase 2, así que cada atributo pesa una vez), **más uno por la etiqueta** (D14, «sin
+    `name` ni `ref`» o el nombre repetido);
+  - cada error de atributo ocupa ≤ ≈ 120 bytes de mensaje con un valor de un carácter y su
+    atributo añade ≥ 13 bytes a la entrada (` minOccurs="␡"`; el más corto, ` name="␡"`,
+    9 bytes, ya cuenta en la fila de arriba): menos de 10 veces, por debajo del peor
+    cociente (con un valor de 32 caracteres escapados el mensaje llega a ≈ 300 bytes, pero
+    el atributo pasa de 44); el error de la etiqueta ocupa ≤ 274 bytes sobre ≥ 10 a 19 bytes (D14
+    necesita `name`, así que no baja de `<element name="a"/>`). Añadir atributos con error
+    **baja** el cociente; la peor combinación sigue siendo `name="␡"` sin tipo (NCName y
+    D14, 21,6 con r = 8);
+  - los textos del usuario van recortados a 32 caracteres (`XsdError::new`), así que
+    alargarlos sube b más que M, y los escapes de `short` dan como mucho 6 bytes por byte
+    (DEL), que en un nombre de un carácter es la fila de arriba.
+
+  Lo confirman las sondas del Reviewer de la 5.4 (`target/sondas-5.4/reviewer1/p2.py`, en
+  release, ruta `t.xsd`, r = 7): `<element name="␡" maxOccurs="␡"/>`, 3 errores por etiqueta
+  (NCName, `maxOccurs`, D14), cociente medido 15,5; `<element name="␡" minOccurs="␡"
+  maxOccurs="␡"/>`, 4 errores (NCName, `minOccurs`, `maxOccurs`, D14), 13,2; y la segunda a
+  16 MiB (`reviewer1/multi.xsd`), stderr 18,7 veces la entrada y memoria 46 veces (por
+  debajo de las cifras de JSON Schema, abajo). El camino de éxito XSD también queda por
+  debajo del de JSON (abajo).
 - **Camino de éxito de `schemac ir` (SA-L2 de la revisión de la 4.2).** La tabla de
   arriba solo acota los errores. Con un esquema válido, `schemac ir` escribe la IR entera,
   que es más grande que la entrada, y la construye en memoria antes de escribirla.
@@ -137,6 +211,26 @@ y que se resuelven en otra fase. Las decisiones de diseño viven en el
   debajo de ρ(r) ≈ 131, pero la **memoria** (≈ 158× la entrada, frente a ≈ 83× de
   `check`) **supera** ρ(r): la dominan la IR, el AST y el `String` con la salida entera
   (la clasificación solo añade un vector de un par de bytes por nodo y el CSR de E₌).
+  **XSD (tarea 5.4).** Medido igual, en release, con las entradas XSD más densas en nodos y
+  en aristas: 2·10⁵ tipos anónimos `<element name="aN"><complexType/></element>` (9,5 MB):
+  JSON 9,1×, DOT 2,0×, memoria ≈ 28× en `ir` y ≈ 23× en `check`; 2·10⁵ partículas
+  `<x:element name="a" type="T"/>` (6,0 MB): JSON 4,9×, DOT 0,9×, memoria ≈ 22× (≈ 19× en
+  `check`). Con entradas de **16 MiB** (el tope; `target/sondas-5.4/rho/memoria.py`, que
+  incluye los peores casos del lector y del AST de [../fase2/pendientes.md](../fase2/pendientes.md)
+  §12), memoria de pico de `check` / `ir` y salida de `ir`:
+
+  | Entrada de 16 MiB | Código | Memoria `check` | Memoria `ir` | Salida `ir` |
+  |---|---|---|---|---|
+  | `<choice/>` repetido en una `xs:sequence` | 0 | 829 MiB (51,8×) | **945 MiB (59,0×)** | **15,5×** |
+  | `<element/>` repetido (un error por cada uno) | 1 | 863 MiB (53,9×) | 864 MiB (54,0×) | 8,4× (stderr) |
+  | `xmlns:pK="u"` en `xs:schema` | 0 | 722 MiB (45,1×) | 724 MiB (45,2×) | ≈ 0 |
+  | una etiqueta con ≈ 1,9 M atributos desconocidos | 1 | 508 MiB (31,8×) | 508 MiB (31,8×) | ≈ 0 |
+  | tipos anónimos `<element name="aNNNNNNN"><complexType/></element>` | 0 | 363 MiB (22,7×) | 429 MiB (26,8×) | 8,9× |
+  | elementos globales `<element name="aNNNNNNN" type="int"/>` | 0 | 236 MiB (14,8×) | 281 MiB (17,6×) | 4,2× |
+
+  El peor XSD (≈ 59× de memoria y ≈ 15,5× de salida) queda por debajo de las cifras de JSON
+  Schema (≈ 158× y ≈ 93×), así que las de esta sección siguen siendo las que dimensionan el
+  servidor (requisito 4 de §2).
   Por eso el requisito 4 de §2 dimensiona `RLIMIT_AS` con la memoria medida (≈ 158×),
   **no con ρ**, que solo acota el texto de salida. Con el tope de 16 MiB de `schemac`
   (`00-alcance.md` §4) una compilación puede necesitar ≈ 2,7 GB y escribir ≈ 1,6 GB.
@@ -200,7 +294,26 @@ y que se resuelven en otra fase. Las decisiones de diseño viven en el
      medido es ≈ 1,5 GiB de salida JSON y ≈ 2,5 GiB de memoria por compilación (≈ 1,6 GB y
      ≈ 2,7 GB, §1), que ningún cliente web necesita recibir.
 
-### 3. Obligaciones del frontal XSD (tareas 5.3, 5.5, 5.6 y 5.7 de la semana 2)
+### 3. Obligaciones del frontal XSD (tareas 5.3, 5.5, 5.6 y 5.7 de la semana 2) — parte de la 5.3 RESUELTA
+
+- **Resuelto en la tarea 5.3** ([xsd.md](xsd.md) §3; corpus `tests/schemas/xsd/semantic-error`,
+  manifiesto `tests/schemas/errores-semanticos-xsd.json`, prueba `corpus_entero_sin_error_interno`):
+  I10 (atributos repetidos en un tipo o en su `xs:extension`), I11 (`minOccurs` > `maxOccurs`), I12
+  (*all-group limited* y *Element Declarations Consistent*), la parte de I13 que no depende de los
+  tipos simples (`default` con `fixed`, requerido con `default`), D14, D27 (U7) y S-5 primera mitad
+  (B3). Todo con su posición y antes de bajar; `xsd::lower` llama siempre a `verify` (D15) y
+  ningún esquema del corpus da el error interno. **Sigue abierto:** la parte de I13 de los tipos
+  simples y facetas, la derivación circular y que `default`/`fixed` sean del tipo (5.6), la forma
+  léxica de los valores (5.5), UPA y la ampliación de la lista de [ir.md](ir.md) §4 (5.7). Mientras
+  no esté la 5.6, todo `xs:simpleType` es el error «pendiente (tarea 5.6)». **UPA y `xs:all`
+  (5.3-CR1-S4):** un `xs:all` con dos hijos del mismo nombre y tipo pasa EDC y `verify`, pero viola
+  UPA; la máscara de `xs:all` de la Fase 4 (un bit por nombre, I12) depende de que la 5.7 lo
+  rechace (§33).
+- **Para la 5.6 (lo que deja la 5.3):** al bajar los `xs:simpleType` del usuario hay que meterlos en
+  el preorden de declaraciones de B3 (hoy `Analysis::types` solo tiene tipos complejos), crear el
+  envoltorio `#/simpleContent/T` del usuario y los orígenes de los anónimos de [ir.md](ir.md) §5.2,
+  y quitar el error «pendiente»: `TypeRef::UserSimple` y la arista colgante de
+  `crates/xsd/src/lower.rs` (`text_type`, `element_type`) son el punto de entrada.
 
 Observaciones de la revisión final de 4.1 (L-3, I-1, I-2, S-5). `verify` es defensa en
 profundidad ([ir.md](ir.md) §4): todo lo que un XSD del **usuario** pueda romper lo tiene
@@ -241,13 +354,13 @@ que rechazar antes el frontal, **con su posición**, no como el error interno de
   enumeraciones de `xs:float`/`xs:double` con un mensaje que lo diga; no se amplían `Num` ni
   I8.
 - **Orígenes sin fijar** (S-5):
-  - Primera mitad, el origen de un tipo anónimo dentro de un `xs:element` **global**:
-    **tarea 5.3**, con la decisión B3 del plan de la tarea (padre el documento y paso
-    `Entry("element", nombre)`).
+  - Primera mitad, el origen de un tipo anónimo dentro de un `xs:element` **global** —
+    **RESUELTO (tarea 5.3)**: padre el documento y paso `Entry("element", nombre)` (B3;
+    [xsd.md](xsd.md) §4, prueba `esquemas_de_los_casos_bajan`).
   - Segunda mitad, `xs:simpleContent` + `xs:extension` sobre un tipo complejo de contenido
     simple: **DECIDIDO (D27, 29 oct)**, se rechaza con un mensaje claro (derivar un tipo
-    complejo de otro queda fuera del alcance, como `xs:complexContent`). Lo implementa la
-    **tarea 5.3**.
+    complejo de otro queda fuera del alcance, como `xs:complexContent`). **RESUELTO (tarea
+    5.3)**: `unsupported` en el valor de `base` (`semantic-error/simple-content-base-compleja.xsd`).
 
 ### 4. Ubicación recortada para los mensajes del validador (Fases 4 y 5)
 
@@ -288,9 +401,15 @@ Observaciones de la revisión final de 4.1 sobre [ir.md](ir.md) §6–§7:
   `emit_head` y `emit_tail` (`crates/semantic/src/symbols.rs`, `fragment_clipped`)
   recorren un paso `Index`.
 
-### 8. Código de salida de un pánico en `schemac check` (tarea 4.2)
+### 8. Código de salida de un pánico en `schemac check` (tarea 4.2) — RESUELTO (tarea 5.4, D33)
 
-- **Estado:** `schemac ir` da **3** para un error interno, sea un fallo de `verify` o un
+- **Resuelto (tarea 5.4):** el usuario lo decidió el 3 nov (D33): un pánico en el hilo de
+  `schemac check` da **3**, igual que en `ir`. `en_hilo` (`crates/cli/src/main.rs`) ya no
+  recibe el código del pánico: siempre es `SALIDA_INTERNA`; `check` pasa por
+  `ejecutar_check`, que la prueba `panico_en_el_hilo_da_codigo_3` recorre con un análisis
+  que hace pánico (3, el mensaje en stderr, nada en stdout). [bajada.md](bajada.md) §4 y la
+  tabla de §5 y el texto de uso lo dicen.
+- **Estado (antes de la 5.4):** `schemac ir` da **3** para un error interno, sea un fallo de `verify` o un
   pánico en su hilo ([bajada.md](bajada.md) §4). `schemac check` conserva el **2** que ya
   daba a un pánico («no se pudo leer o analizar»). Unificarlo (pánico = 3 en los dos) cambia
   la interfaz de `check`; queda propuesto para cuando lo decida el usuario.
@@ -425,11 +544,20 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   producto; el tope de estados de §5 (L-1) ya lo cubre. Si la Fase 4 mide que se comporta
   como el producto de `allOf`, proponer al usuario cambiar la fila de `$ref` en el alcance
   ([clasificacion.md](clasificacion.md) §8, pendiente 1). Mientras, manda el alcance.
-- **Frontal XSD (tarea 5.4).** La tabla ya clasifica las reglas de XSD y
+- **Frontal XSD (tarea 5.4) — RESUELTO (tarea 5.4).** La tabla ya clasifica las reglas de XSD y
   `tabla_coincide_con_el_alcance` cubre sus filas de §3.1, pero ningún XSD real pasa todavía
   por `classify`. Lo hace la **tarea 5.4** (criterio de `tasks/todo.md`): el equivalente de
   `corpus_clasificado` en `crates/xsd/tests/corpus.rs`, con los esquemas XSD del corpus y el
   caso `valid-xml-pedido-01`.
+  - **Resuelto:** `corpus_clasificado` de `crates/xsd/tests/corpus.rs` clasifica todo XSD de
+    `tests/schemas/xsd/parse-ok` que pasa el análisis (7 hoy; los otros 3 usan
+    `xs:simpleType`, pendiente de la 5.6) y los dos casos XSD de `tests/cases` con el texto de
+    su campo `schema` (una cadena JSON cuyo contenido es el XSD, byte a byte igual a su copia
+    de `parse-ok`), comprueba la definición nodo a nodo y que no hay nodos (c);
+    `valid-xml-pedido-01` tiene un solo nodo (b), subido solo por `Attributes`, y
+    `malformed-xml-billion-laughs-01`, ninguno ([clasificacion.md](clasificacion.md) §7).
+    **Queda para la 5.6:** cuando bajen los `xs:simpleType`, los tres XSD de `parse-ok` que
+    hoy dan «pendiente» entrarán solos en el recorrido.
 - **Regenerar la tabla escrita (CR1-S7, en parte).** El bloque de [clasificacion.md](clasificacion.md) §3 no
   lo regenera `make docs`: lo comprueba la prueba `tabla_escrita_es_la_del_codigo`, que al
   fallar imprime la tabla que hay que copiar. Si se quiere en `make docs`/`make docs-check`,
@@ -447,7 +575,18 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
 
 ### Abiertas por la revisión final de la 4.3
 
-### 23. 4.3-L1: carrera entre `fs::metadata` y `File::open` en `leer` (próxima tarea que toque la CLI: tarea 5.4)
+### 23. 4.3-L1: carrera entre `fs::metadata` y `File::open` en `leer` — RESUELTO (tarea 5.4)
+
+- **Resuelto (tarea 5.4):** `leer` abre el esquema con `abrir`, que en Unix usa
+  `OpenOptionsExt::custom_flags(libc::O_NONBLOCK)` (`libc` como dependencia de `cli` solo en
+  Unix, por la constante; sin `unsafe`) y decide con `is_file()` sobre el descriptor. Se
+  **mantiene** la comprobación previa con `fs::metadata`, para no abrir siquiera un
+  dispositivo o una FIFO en el caso normal (abrir un dispositivo puede tener efectos); ya no
+  es la que decide. Fuera de Unix sigue `File::open`. Prueba
+  `abrir_una_fifo_sin_escritor_no_bloquea` (`crates/cli/src/main.rs`, solo Unix): `abrir`
+  sobre una FIFO sin escritor, saltándose la comprobación previa como en la carrera, devuelve
+  «no es un archivo regular»; sin `O_NONBLOCK` se queda en el `open` y la guarda de 60 s la
+  hace fallar (comprobado). [bajada.md](bajada.md) §5 lo dice.
 
 - **Dónde:** `crates/cli/src/main.rs:152-164` (`leer`).
 - **Estado:** el arreglo de §19 comprueba que la ruta es un archivo regular con
@@ -463,7 +602,14 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   distinto en Linux y macOS: tomarlo de `libc` o del sistema, sin `unsafe`.
 - **Cuándo:** la próxima tarea que toque la CLI (tarea 5.4).
 
-### 24. 4.3-I2: directorios temporales con nombre predecible en las pruebas de la CLI (opcional)
+### 24. 4.3-I2: directorios temporales con nombre predecible en las pruebas de la CLI (opcional) — CERRADO: aceptado (tarea 5.4)
+
+- **Cerrado (tarea 5.4), aceptado y escrito:** las pruebas de la CLI siguen con nombres
+  `schemac-…-{pid}` en `temp_dir()` (también las nuevas de la 5.4), sin `tempfile`: solo
+  corren en local, en la máquina de quien las lanza (D32, sin CI), y un enlace de otro
+  usuario en un `/tmp` compartido solo haría fallar o escribir una prueba, no `schemac`. Lo
+  dice el comentario de `dir_temporal` (`crates/cli/tests/es.rs`). Si algún día las pruebas
+  corren en una máquina compartida, el arreglo de abajo sigue valiendo.
 
 - **Dónde:** `crates/cli/tests/es.rs:30` (`dir_temporal`: `temp_dir()` +
   `schemac-es-{nombre}-{pid}` + `create_dir_all`), `crates/cli/tests/ir.rs:139`, `:155` y
@@ -475,7 +621,12 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   como dev-dependency, o aceptarlo y dejarlo escrito.
 - **Cuándo:** opcional; la próxima tarea que toque las pruebas de la CLI (tarea 5.4).
 
-### 25. 4.3-I3: `schemac ir /proc/self/mem` da un error de E/S, no «no es un archivo regular» (cosmético)
+### 25. 4.3-I3: `schemac ir /proc/self/mem` da un error de E/S, no «no es un archivo regular» (cosmético) — RESUELTO (tarea 5.4)
+
+- **Resuelto (tarea 5.4):** se nombra el caso en [bajada.md](bajada.md) §5 («Entrada»):
+  procfs declara sus archivos regulares, pasan las dos comprobaciones y la lectura falla
+  con `Input/output error`, código 2 (comprobado tras el cambio a `O_NONBLOCK`, que no lo
+  altera). El código no cambia.
 
 - **Dónde:** `crates/cli/src/main.rs:152-170` (`leer`).
 - **Estado:** procfs declara sus archivos como regulares, así que pasan las dos
@@ -512,7 +663,13 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   aporta los mismos registros y estrategias)».
 - **Cuándo:** la Fase 4, al elegir entre expansión y llamada ε.
 
-### 28. 4.3-S3: la prueba `ir_senala_el_nodo_c_y_su_estrategia` reserializa el esquema del caso (próxima tarea que toque la CLI: tarea 5.4)
+### 28. 4.3-S3: la prueba `ir_senala_el_nodo_c_y_su_estrategia` reserializa el esquema del caso — RESUELTO (tarea 5.4)
+
+- **Resuelto (tarea 5.4):** la prueba recorta el texto original del valor `schema` con
+  `texto_del_esquema` (`crates/cli/tests/ir.rs`), copia de la de
+  `crates/semantic/tests/common/mod.rs` que usa `schema_parser`, dependencia normal de `cli`
+  (las pruebas de integración la ven sin añadir nada); comprueba además que ese texto vuelve
+  a dar el mismo valor que lee `serde_json`.
 
 - **Dónde:** `crates/cli/tests/ir.rs:179` (`caso["schema"].to_string()`).
 - **Estado:** lee el caso con `serde_json` y lo reescribe, que es lo que §18 quiso evitar
@@ -523,7 +680,11 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   como dev-dependency de `cli` o moviendo esa ayuda a un sitio común.
 - **Cuándo:** la próxima tarea que toque la CLI (tarea 5.4).
 
-### 29. 4.3-S4: `menciona_palabra_c` hace `unwrap` sin nombre de archivo (próxima tarea que toque el corpus)
+### 29. 4.3-S4: `menciona_palabra_c` hace `unwrap` sin nombre de archivo — RESUELTO (tarea 5.4)
+
+- **Resuelto (tarea 5.4):** `menciona_palabra_c(nombre, texto)` usa
+  `unwrap_or_else(|e| panic!("{nombre}: {e}"))` (`crates/semantic/tests/corpus.rs`); la
+  tarea añade el `corpus_clasificado` de XSD junto a ese corpus.
 
 - **Dónde:** `crates/semantic/tests/corpus.rs:193` (`parse(texto).unwrap()`).
 - **Estado:** hoy no puede fallar (los esquemas ya pasaron la Fase 3 antes de llegar
@@ -564,3 +725,139 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   a su IR (por ejemplo, devolverla junto a la `VerifiedIr`); guardar las asignaciones por
   regla si algún día pesan.
 - **Cuándo:** la próxima tarea que toque `crates/ir`.
+
+### Cierre de la 5.3: observaciones de la revisión (4 nov)
+
+### 33. Observaciones abiertas de la revisión de la 5.3 (frontal XSD)
+
+Revisión de la tarea 5.3 (APROBADO CON OBSERVACIONES, D38: ninguna abre ronda). El
+comportamiento es correcto salvo donde se dice; lo que falta es cobertura, una restricción de XSD o
+pulido.
+
+- **5.3-CR1-I2 (Important, cobertura; incluye 5.3-T1-2 del Tester 1).**
+  - **Dónde:** `crates/xsd/src/check.rs:910-928` (EDC), corpus `tests/schemas/xsd/semantic-error`.
+  - **Estado:** el único caso de EDC es `semantic-error/declaraciones-inconsistentes.xsd` (dos
+    locales); no hay prueba de EDC a través de `ref` ni con tipos anónimos (dos anónimos son tipos
+    distintos aunque sean iguales).
+  - **Arreglo:** `semantic-error/edc-ref-y-local.xsd` y `semantic-error/edc-anonimos.xsd` en
+    `errores-semanticos-xsd.json`, y un caso aceptado con el mismo `ref` repetido en
+    `correspondencia_de_cada_construccion` (`crates/xsd/tests/lower.rs`).
+  - **Destino:** tarea 5.7 (criterio en `tasks/todo.md`).
+- **5.3-CR1-S1 (`ref` con `form`/`nillable` sin efecto).**
+  - **Dónde:** `crates/xsd/src/parser.rs:480-533` (D39 los quita en el parser) y
+    `crates/xsd/src/check.rs:783-812` (`particle_element`, rama de `ref`).
+  - **Estado:** `<xs:element ref="g" nillable="false"/>` o con el `form` vigente se acepta, aunque
+    XSD 1.0 src-element 2.2 prohíbe esos atributos con `ref`; antes de la 5.3 se rechazaban (como
+    `unsupported`).
+  - **Arreglo:** que el parser deje constancia de su presencia en un `xs:element` local y el
+    análisis los rechace con `ref` (`syntax`, «con ref no admite …»).
+  - **Destino:** tarea 5.7 (criterio en `tasks/todo.md`).
+- **5.3-CR1-S2 (ocurrencias saturadas).**
+  - **Dónde:** `crates/xsd/src/check.rs:555-574` (`occurs_value`) y `:845` (`check_model`).
+  - **Estado:** `minOccurs` > `maxOccurs` no se detecta si los dos pasan de 2⁶⁴ (ambos saturan a
+    `u64::MAX`; por ejemplo `minOccurs='18446744073709551617'`, `maxOccurs='18446744073709551616'`).
+    Inocuo: un mínimo saturado ya es insatisfacible ([ir.md](ir.md) §5.1); documentado en
+    [xsd.md](xsd.md) §3.
+  - **Arreglo:** cuando los dos saturan, comparar los lexemas tras quitar el signo y los ceros
+    iniciales (primero por longitud, después lexicográficamente).
+  - **Destino:** la próxima tarea que toque `check.rs` (p. ej. 5.6).
+- **5.3-CR1-S3 (`Debug` derivado de `Analysis`).**
+  - **Dónde:** `crates/xsd/src/check.rs:42` (`Analysis`), `:68` (`TypeInfo`), `:86` (`Part`).
+  - **Estado:** `#[derive(Debug)]` imprime el `&ComplexType` de cada tipo con sus anónimos: O(n·d)
+    y recursivo (D36: solo en un hilo con `stack_size`). Hoy solo se usa en el `expect_err` de
+    `crates/xsd/tests/lower.rs:69`, y solo si la prueba falla.
+  - **Arreglo:** `Debug` manual con recuentos (tipos, globales, partículas) o quitar el derive.
+  - **Destino:** la próxima tarea que toque `check.rs` (5.6) o la Fase 7 (API pública).
+- **5.3-CR1-S4 (UPA en `xs:all`).** Ver §3: dos hijos de `xs:all` con el mismo nombre y tipo pasan
+  EDC y `verify` y violan UPA; la máscara de `xs:all` de la Fase 4 depende de que se rechace.
+  **Destino:** tarea 5.7 (criterio en `tasks/todo.md`).
+- **5.3-CR1-S5 (legibilidad).**
+  - **Dónde:** `crates/xsd/src/symbols.rs:89` (`Builtin::ALL[..12]` depende de que `AnySimpleType`
+    sea el último) y `crates/xsd/src/check.rs:125-131` (`Errors::push`/`Errors::model` no dicen la
+    etapa).
+  - **Arreglo:** `const NAMED: [Builtin; 12]` (o un filtro); renombrar a `component`/`model` o
+    `stage1`/`stage2`.
+  - **Destino:** la próxima tarea que toque esos archivos.
+- **5.3-CR1-S6 — RESUELTO (cierre de la 5.3):** [xsd.md](xsd.md) §8 ya no remite al reporte de la
+  tarea, sino a D40 (y D39) del plan general, con su resumen.
+- **5.3-T1-3 (Tester 1; copia de `pedido_xsd`).**
+  - **Dónde:** `crates/xsd/tests/lower.rs` (`pedido_xsd`, copia de `crates/ir/tests/forma.rs`;
+    lo declara [xsd.md](xsd.md) §7).
+  - **Estado:** las dos copias pueden desincronizarse sin que falle ninguna prueba.
+  - **Arreglo:** un módulo de prueba compartido (por ejemplo `tests/common/pedido.rs` incluido con
+    `#[path]`) o una prueba que compare ambas.
+  - **Destino:** la próxima tarea que toque `crates/ir/tests/forma.rs`, o la 5.7.
+
+### Abiertas por la tarea 5.4 (`schemac` con XSD)
+
+### 34. Ayudas de prueba duplicadas (opcional; la próxima tarea que toque esas pruebas)
+
+- **Dónde:** `texto_del_esquema` está en `crates/cli/tests/ir.rs` (5.4, para §28) y en
+  `crates/semantic/tests/common/mod.rs`; `casos_xml` está en `crates/xsd/tests/corpus.rs`
+  (5.4) y en `crates/xsd/tests/lower.rs` (5.3), con la misma lectura del campo `schema`.
+- **Estado:** son copias pequeñas y deliberadas: la 5.4 no reorganiza las pruebas de la 5.3
+  ni crea un crate de ayudas de prueba solo para ellas. Pueden desincronizarse sin que falle
+  ninguna prueba (como la copia de `pedido_xsd`, §33, 5.3-T1-3).
+- **Arreglo propuesto:** un módulo `tests/common` en `crates/xsd` (incluido por `lower.rs` y
+  `corpus.rs`) y, para `texto_del_esquema`, un módulo compartido con `#[path]` o una función
+  de prueba en `schema-parser`.
+- **Destino:** opcional; la próxima tarea que toque esas pruebas (la 5.6 tocará el corpus XSD).
+
+### Cierre de la 5.4: observaciones de la revisión (4 nov)
+
+### 35. Observaciones abiertas de la revisión de la 5.4 (`schemac` con XSD)
+
+Revisión de la tarea 5.4 (APROBADO CON OBSERVACIONES, D38: ninguna abre ronda; decisiones de
+la tarea, D41). 5.4-CR1-I1 (argumento de ρ en §1) se corrigió en el cierre de documentación.
+
+- **5.4-CR1-S1 (cobertura; incluye 5.4-T1-3 del Tester).**
+  - **Dónde:** `crates/xsd/tests/corpus.rs:33` (`ir_de`) y `:132-146` (`corpus_clasificado`,
+    umbral `clasificados >= 7`).
+  - **Estado:** `ir_de` devuelve `None` ante cualquier error del usuario, así que
+    `corpus_clasificado` salta en silencio un XSD de `parse-ok` que deje de pasar el
+    análisis; el umbral `>= 7` dejará de vigilarlo en cuanto se añadan archivos.
+  - **Arreglo:** comprobar que los omitidos son exactamente `anotaciones`,
+    `atributos-ajenos` y `tipos-simples`, y que su error es «pendiente (tarea 5.6)».
+  - **Destino:** tarea 5.6 (ya en su «Arrastra» de `tasks/todo.md`).
+- **5.4-CR1-S2 (cobertura).**
+  - **Dónde:** `crates/cli/src/main.rs:567` (`fallo_interno_xsd_da_codigo_3`), con `ir_rota`
+    (`:451`, `Format::Json`) y la rama `xsd::lower(&analysis).map_err(Fallo::Interno)` (`:412`).
+  - **Estado:** `bajar_rota` ignora los bytes y devuelve la IR rota de `Format::Json`, así
+    que la prueba no ejercita la rama de XSD de `bajar`; solo comprueba que un
+    `Fallo::Interno` sobre un archivo XSD da 3.
+  - **Arreglo:** una IR rota con `Format::Xml`, o comprobar que el `Fallo::Interno` de la
+    rama XSD llega a `informe_interno` (`:431`).
+  - **Destino:** la próxima tarea que toque la CLI.
+- **5.4-CR1-S3 (seguridad menor).**
+  - **Dónde:** `crates/cli/src/main.rs:215-226` (`abrir`, `custom_flags(libc::O_NONBLOCK)`).
+  - **Estado:** en la carrera de §23 (la ruta se cambia por un dispositivo después de
+    `fs::metadata`), abrir una tty sin `O_NOCTTY` puede convertirla en la terminal de control
+    del proceso si no tiene una. Las rutas de la CLI son de confianza y `fs::metadata` filtra
+    el caso normal ([bajada.md](bajada.md) §5).
+  - **Arreglo:** `custom_flags(libc::O_NONBLOCK | libc::O_NOCTTY)` y decirlo en
+    [bajada.md](bajada.md) §5.
+  - **Destino:** la próxima tarea que toque la CLI, o la Fase 7 si el servidor reutiliza
+    `abrir`.
+- **5.4-CR1-S6 (`Makefile`).**
+  - **Dónde:** `Makefile:107` (objetivo `doradas`, bucle `for f in tests/ir/xsd/*.json`).
+  - **Estado:** si `tests/ir/xsd/` queda vacío, el glob se expande literal y `schemac` falla
+    con `tests/schemas/xsd/parse-ok/*.xsd`; el bucle JSON tiene el mismo patrón.
+  - **Arreglo:** `[ -e "$$f" ] || continue` al principio de los dos bucles.
+  - **Destino:** la próxima tarea que toque el `Makefile`.
+- **5.4-CR1-N1..N3 (nits de la CLI).**
+  - **Dónde:** `crates/cli/src/main.rs:324` (N1), `:266-268` (N2), `:14-16` (N3).
+  - **Estado:** N1, «1 tipos complejos» sin concordancia (igual que «1 subesquemas» y
+    «1 entradas de $defs» de JSON); N2, en `ejecutar_check` el parámetro `analizar` tapa la
+    función del mismo nombre; N3, tres líneas del texto de uso miden 81-83 columnas
+    (preexistente).
+  - **Arreglo:** singular/plural en los resúmenes de `check`; renombrar el parámetro (`f` o
+    `analisis`); partir las líneas del uso a 80 columnas.
+  - **Destino:** la próxima tarea que toque la CLI.
+- **5.4-T1-2 (Tester; cosmético).**
+  - **Dónde:** `crates/cli/src/main.rs` (`formato`) y [bajada.md](bajada.md) §5.
+  - **Estado:** un archivo vacío, de solo espacios o de solo un BOM llamado `.xsd` da el
+    error de JSON («se esperaba un esquema…»): es lo correcto por D22 (sin `<` no es XSD),
+    pero ninguna prueba de la CLI fija ese mensaje.
+  - **Arreglo:** una prueba de `check` con esos tres archivos que fije el código 1 y el
+    mensaje de JSON.
+  - **Destino:** la próxima tarea que toque la CLI (opcional).

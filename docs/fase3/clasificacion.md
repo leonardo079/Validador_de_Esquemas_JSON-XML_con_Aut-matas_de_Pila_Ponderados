@@ -194,7 +194,9 @@ La estrategia de cada regla es la pieza del DPDA que [ir.md](ir.md) §7 saca de 
 
 `crates/semantic/tests/corpus.rs`: `corpus_clasificado` — todo el corpus que pasa la Fase 3 (los de `tests/schemas/parse-ok` y los esquemas JSON de `tests/cases`, con su texto original) sale clasificado y cada nodo cumple la ecuación de §4.1 comprobada nodo a nodo; cada caso de `tests/cases/non-dpda` tiene al menos un nodo (c), con la estrategia de su campo `strategy` si lo declara; y los casos `valid` y los esquemas de `tests/schemas/parse-ok` cuyos subesquemas no usan ninguna palabra clave (c) (combinadores, `pattern`, `uniqueItems`, `dependentRequired`, `dependentSchemas`; se buscan en el AST del parser, solo en posición de palabra clave) no tienen ningún nodo (c).
 
-`crates/cli/tests/ir.rs`: `ir_senala_el_nodo_c_y_su_estrategia` (`schemac ir` y `--dot` sobre el esquema que la prueba lee del caso `non-dpda-anyof-ambiguous-01`).
+`crates/xsd/tests/corpus.rs` (tarea 5.4): `corpus_clasificado` para XSD — los XSD de `tests/schemas/xsd/parse-ok` que pasan el análisis y los dos casos XSD de `tests/cases` (con el texto de su campo `schema`) salen clasificados y cumplen la ecuación de §4.1 nodo a nodo; ninguno tiene nodos (c) (el subconjunto XSD no tiene reglas (c)); `valid-xml-pedido-01` tiene un solo nodo (b), el tipo anónimo de `pedido`, subido solo por su `Attributes`, y `malformed-xml-billion-laughs-01` ninguno.
+
+`crates/cli/tests/ir.rs`: `ir_senala_el_nodo_c_y_su_estrategia` (`schemac ir` y `--dot` sobre el texto original del campo `schema` del caso `non-dpda-anyof-ambiguous-01`, recortado con `schema_parser` desde la 5.4) e `ir_de_un_xsd` (la clase y las estrategias en la IR de un XSD).
 
 ## 8. Decisiones y pendientes
 
@@ -208,4 +210,4 @@ Decisiones de esta tarea (candidatas al registro del plan):
 Pendientes (también en [pendientes.md](pendientes.md) §22):
 
 1. **`$ref` con reglas hermanas (Fase 4).** Es (a) por el alcance, pero la Fase 4 lo compila como un producto con sus hermanas ([ir.md](ir.md) §7), igual que un `allOf` de dos ramas, que es (c). Una cadena de `$ref` con hermanas puede crecer como un producto: el tope de estados de [pendientes.md](pendientes.md) §5 (L-1) ya lo cubre. Si la Fase 4 mide que ese producto se comporta como el de `allOf`, se propone al usuario cambiar la fila de `$ref` en el alcance.
-2. **Frontal XSD.** La tabla ya clasifica las reglas de XSD y la prueba del alcance cubre sus filas, pero ningún XSD real del corpus pasa todavía por `classify`; el frontal XSD añade a `corpus_clasificado` sus esquemas (y el caso `valid-xml-pedido-01`).
+2. **Frontal XSD — RESUELTO (tarea 5.4).** La tabla ya clasificaba las reglas de XSD y la prueba del alcance cubría sus filas; desde la 5.4 los XSD reales del corpus pasan por `classify` en el `corpus_clasificado` de `crates/xsd/tests/corpus.rs` (§7), con el caso `valid-xml-pedido-01`.
