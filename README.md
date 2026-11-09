@@ -162,3 +162,4 @@ Cada caso guarda esquema, payload, resultado esperado y métricas, y se almacena
 ## Autores
 
 - Leonardo — [@leonardo079](https://github.com/leonardo079)
+- Bayron -[@Bayronfc05](https://github.com/Bayronfc05)
