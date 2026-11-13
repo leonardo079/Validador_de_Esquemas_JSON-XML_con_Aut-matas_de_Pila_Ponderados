@@ -79,7 +79,7 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 - [ ] **F6.4** · Mitigaciones (DTD/entidades, `pattern` como AFD, `$ref` cíclico) y fuzzing con cargo-fuzz — *Pista:* AB · *Depende:* F5.3 · *Resp.:* — · *Estado:* libre
 - [ ] **F6.5** · Arnés de métricas: MB/s, ciclos/byte, pico de memoria, asignaciones, profundidad, estados — *Pista:* B · *Depende:* F6.7 · *Resp.:* — · *Estado:* libre
 - [ ] **F6.6** · Benchmark criterion del parser de esquemas con N y 4N claves (sustituye la prueba ignorada, D1) — *Pista:* B · *Depende:* — · *Resp.:* — · *Estado:* libre
-- [ ] **F6.7** · Líneas base: `serde_json` + `jsonschema` y libxml2 (DOM + XSD) sobre el corpus — *Pista:* B · *Depende:* — · *Resp.:* — · *Estado:* libre
+- [ ] **F6.7** · Líneas base: `serde_json` + `jsonschema` y libxml2 (DOM + XSD) sobre el corpus — *Pista:* B · *Depende:* — · *Resp.:* Bayron · *Estado:* en curso (13 nov)
 
 ## Fase 7 — aplicación web (`server/`, `web/`, `sandbox/`, `infra/`)
 
