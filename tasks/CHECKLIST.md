@@ -24,8 +24,8 @@ Estados: `libre` · `en curso (fecha)` · `bloqueada — motivo` · `hecha (fech
 Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas, XSD independiente) · **AB** = ambos.
 
 > **Atraso (13 nov):** el hito de la semana 3 (prueba diferencial, 6 nov) no se cumplió; congelamiento previsto
-> el 19 nov y entrega el 22 nov. Aplican los recortes de «Riesgos y recortes de alcance» del plan. Falta
-> confirmar la fecha real de entrega y quién lleva cada pista.
+> el 19 nov y entrega el 22 nov. Aplican los recortes de «Riesgos y recortes de alcance» del plan.
+> **Acordado (S1, 13 nov):** entrega el domingo 22 nov (el cronograma no cambia); pista A Leonardo, pista B Bayron.
 
 ## Hecho hasta el 13 nov
 
@@ -44,7 +44,7 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 ## Cuentas y equipo
 
 - [ ] **S0** · Clúster MongoDB Atlas M0 y cuenta AWS con alerta de presupuesto (compartir accesos) — *Pista:* B · *Depende:* — · *Resp.:* — · *Estado:* libre
-- [ ] **S1** · Acordar fecha real de entrega y reparto de pistas; reprogramar el cronograma del plan si cambia — *Pista:* AB · *Depende:* — · *Resp.:* ambos · *Estado:* libre
+- [x] **S1** · Acordar fecha real de entrega y reparto de pistas; reprogramar el cronograma del plan si cambia — *Pista:* AB · *Depende:* — · *Resp.:* ambos · *Estado:* hecha (13 nov) · entrega dom 22 nov, cronograma sin cambios; pista A Leonardo, pista B Bayron
 
 ## Tarea 5 — frontal XSD (resto)
 
