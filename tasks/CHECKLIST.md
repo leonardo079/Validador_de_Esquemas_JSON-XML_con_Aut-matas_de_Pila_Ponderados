@@ -48,15 +48,15 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 
 ## Tarea 5 — frontal XSD (resto)
 
-- [ ] **PC-C** · Punto de control C: `make lint`/`test`/`docs-check` en verde, revisar `schemac ir` sobre el pedido, detección de formato (D22) y texto de uso — *Pista:* A · *Depende:* T5.4 · *Resp.:* — · *Estado:* libre
-- [ ] **T5.5** · Números XSD: forma léxica, reescritura a RFC 8259, comparación exacta, redondeo IEEE (D24) — *Pista:* B · *Depende:* — (independiente) · *Resp.:* — · *Estado:* libre · criterios en `tasks/todo.md`
-- [ ] **T5.6** · Tipos simples: `xs:simpleType`/`xs:restriction`, facetas, enumeraciones, `default`/`fixed` — *Pista:* B · *Depende:* PC-C, T5.5 · *Resp.:* — · *Estado:* libre · criterios en `tasks/todo.md`
-- [ ] **T5.7** · UPA (D25-D26) y cierre del frontal (docs, alcance, pendientes) — *Pista:* B · *Depende:* PC-C · *Resp.:* — · *Estado:* libre · criterios en `tasks/todo.md`
-- [ ] **PC-D** · Punto de control D: todo el corpus XSD sale como IR clasificada — *Pista:* B · *Depende:* T5.6, T5.7 · *Resp.:* — · *Estado:* libre
+- [x] **PC-C** · Punto de control C: `make lint`/`test`/`docs-check` en verde, revisar `schemac ir` sobre el pedido, detección de formato (D22) y texto de uso — *Pista:* A · *Depende:* T5.4 · *Resp.:* Leonardo · *Estado:* hecha (14 nov) · lint/test (393 pruebas)/docs-check en verde; 5.5-5.7 pasan a la pista A y van antes de la Fase 4 (decisión de Leonardo, 14 nov)
+- [ ] **T5.5** · Números XSD: forma léxica, reescritura a RFC 8259, comparación exacta, redondeo IEEE (D24) — *Pista:* A · *Depende:* — (independiente) · *Resp.:* Leonardo · *Estado:* en curso (14 nov) · criterios en `tasks/todo.md`
+- [ ] **T5.6** · Tipos simples: `xs:simpleType`/`xs:restriction`, facetas, enumeraciones, `default`/`fixed` — *Pista:* A · *Depende:* PC-C, T5.5 · *Resp.:* — · *Estado:* libre · criterios en `tasks/todo.md`
+- [ ] **T5.7** · UPA (D25-D26) y cierre del frontal (docs, alcance, pendientes) — *Pista:* A · *Depende:* PC-C · *Resp.:* — · *Estado:* libre · criterios en `tasks/todo.md`
+- [ ] **PC-D** · Punto de control D: todo el corpus XSD sale como IR clasificada — *Pista:* A · *Depende:* T5.6, T5.7 · *Resp.:* — · *Estado:* libre
 
 ## Fase 4 — autómata de pila ponderado (`crates/automaton`, `crates/runtime-rs`)
 
-- [ ] **F4.1** · Definición formal M = (Q, Σ, Γ, δ, q0, Z0, F, w) y construcción composicional por nodo de `VerifiedIr` (`docs/fase4/`) — *Pista:* A · *Depende:* PC-C · *Resp.:* — · *Estado:* libre
+- [ ] **F4.1** · Definición formal M = (Q, Σ, Γ, δ, q0, Z0, F, w) y construcción composicional por nodo de `VerifiedIr` (`docs/fase4/`) — *Pista:* A · *Depende:* PC-C, PC-D · *Resp.:* — · *Estado:* libre
 - [ ] **F4.2** · Pesos en el semianillo tropical (D4): costo por transición y conteo de violaciones — *Pista:* A · *Depende:* F4.1 · *Resp.:* — · *Estado:* libre
 - [ ] **F4.3** · Verificación de determinismo de δ y Hopcroft en las partes finitas — *Pista:* A · *Depende:* F4.1 · *Resp.:* — · *Estado:* libre
 - [ ] **F4.4** · `pattern` → AFD sin retrocesos; rechazar lookaround y retrorreferencias en la Fase 3 (ReDoS) — *Pista:* A · *Depende:* F4.1 · *Resp.:* — · *Estado:* libre

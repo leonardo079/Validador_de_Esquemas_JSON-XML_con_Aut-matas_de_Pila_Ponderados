@@ -14,7 +14,8 @@ Una sola tarea por invocación. No editas código tú mismo: lanzas subagentes, 
 El plan general vive en el repo (D42, 13 nov): `tasks/plan-general.md`; el enunciado, en
 `docs/enunciado/Propuesta_Proyecto_Final_PDA_JSON.pdf`; las reglas del trabajo en pareja, en `COLABORAR.md`.
 Antes de nada, mira `tasks/CHECKLIST.md`: la tarea tiene que estar `en curso` a nombre de la persona de esta
-sesión y todas sus dependencias en `[x]`; si no, detente y pregúntame. Lee el plan tú primero, al menos:
+sesión (su nombre sale de `git config user.name`; si no coincide claramente con el `Resp.` de la línea, pregúntame)
+y todas sus dependencias en `[x]`; si no, detente y pregúntame. Lee el plan tú primero, al menos:
 - **«Contexto común para toda sesión de trabajo»** — invariantes y convenciones que valen para todas las tareas.
 - **«Registro de decisiones»** (D1, D2, …) — lo ya decidido; nadie lo contradice sin preguntarme.
 - El bloque **«Retomar aquí»** — en qué punto está el proyecto, qué sigue en cada pista y qué observaciones pendientes van con la siguiente tarea.
@@ -25,7 +26,7 @@ Si la tarea pedida no coincide con lo que dice «Retomar aquí» (o sus dependen
 **Observaciones heredadas en `docs/`:** comprueba (con `grep` en `docs/fase*/pendientes.md`) que cada observación abierta que el plan general atribuye a tareas o fases anteriores está escrita en el `docs/faseN/pendientes.md` de su fase, en la sección «Vigilar más adelante» (si una fase no tiene ese archivo, falta). Las que no estén se añaden a la tarea como un punto más del Builder, de solo documentación, sin pedírmelo. La fuente de verdad de lo abierto es `docs/`; el plan general solo lo resume y remite.
 
 Arma con eso un bloque **«Contexto del plan»** (desde el 3 nov, para que los agentes lean menos):
-- la ruta absoluta del plan general;
+- la ruta del plan general (`tasks/plan-general.md`);
 - la sección «Contexto común para toda sesión de trabajo», copiada **literalmente**;
 - del «Registro de decisiones», **literalmente solo las decisiones que aplican a la tarea** (las que cita su plan en `tasks/todo.md`/`tasks/plan.md`, las de su crate, fase o interfaz, y las de proceso vigentes), y **una línea por cada una del resto** (número, tema y estado, p. ej. «D24 — `INF`/`NaN` en `xs:float`/`xs:double` se rechazan; tarea 5.5»), para que nadie las contradiga sin saberlo; ante la duda, una decisión se copia entera;
 - el «Terminado cuando» de la fase y las observaciones pendientes que apliquen (las abiertas de `docs/faseN/pendientes.md`; lo ya resuelto está archivado en `docs/faseN/historial.md` y `tasks/hechas.md`, que no hace falta pasar).
