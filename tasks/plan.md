@@ -111,3 +111,65 @@ Fecha: 15 nov 2026. Planner del 15 nov; aprobado por Leonardo el 15 nov con las 
 7. El C generado lleva también el lexer (F5.2): sus tablas ya son densas.
 8. XML: espacios de nombres en el payload: solo nombre local; si no basta para `00-alcance.md` §1.2, desviación a proponer al cerrar F4.1c (ante la duda, rechazar).
 9. F4.6 depende de F6.7 (Bayron); si no llega, el oráculo se compara con los `expected` del corpus.
+
+---
+
+# F6.7: líneas base (pista B, Bayron; Planner del 13 nov, aprobado por Bayron el 13 nov)
+
+Criterios en `tasks/todo.md` («Tarea F6.7»). F6.7a (JSON, crate `crates/baseline`) primero; F6.7b (XML con libxml2, feature `libxml2`, en Docker) después.
+
+## Entorno de la máquina de Bayron (13 nov)
+
+Rust 1.100.0 `x86_64-pc-windows-msvc` (fijado por `rust-toolchain.toml`), MSVC Build Tools 2022. **No hay** `make`, `xmllint`/libxml2, `pkg-config`, vcpkg, MSYS2, `clang`/libclang, `gcc`, `clang-format` ni `dot`; el `python3` del PATH es el stub de WindowsApps (Python 3.14.7 real en `AppData\Local\Python\bin`). Docker instalado con el daemon parado. **Smart App Control activo:** bloquea de forma intermitente ejecutables recién compilados (`os error 4551`); si una prueba falla así, se repite. Sin `make`: `scripts/lint.ps1` y `cargo test --workspace`.
+
+## Decisiones del usuario (aprobadas el 13 nov con la opción recomendada)
+
+- **U1.** Crate nuevo `crates/baseline`, no módulos en `bench` (F6.5 hará que `bench` dependa de `runtime-rs`/`codegen`, y F4.6 en `runtime-rs` necesita la línea base como dev-dependencia: en `bench` saldría el ciclo `runtime-rs` → `bench` → `runtime-rs`; `bench` ya depende de `automaton`; los ~65 crates de `jsonschema` solo entran donde hacen falta). Toca el `Cargo.toml` del workspace y el árbol de «Arquitectura y repositorio». Avisar a Leonardo.
+- **U2.** API pública de `baseline` (la consume F4.6; **confirmar con Leonardo**):
+  `pub enum Kind { Malformed, Schema, Limit, Unsupported }`;
+  `pub struct Violation { pub pointer: String, pub keyword: String, pub message: String }`;
+  `pub struct Malformed { pub line: u32, pub column: u32, pub offset: Option<u64>, pub message: String }`;
+  `pub struct Outcome { pub valid: bool, pub kind: Option<Kind>, pub violations: Vec<Violation>, pub malformed: Option<Malformed> }` con `violation_count()`;
+  `pub struct Limits { pub max_depth: u32 /* 256 */ }`;
+  `JsonBaseline::compile(&serde_json::Value)` / `compile_text(&[u8]) -> Result<Self, CompileError>`, `parse(&self, &Stack, &[u8]) -> Result<JsonDom, Outcome>`, `validate_dom(&self, &Stack, &JsonDom) -> Outcome`, `validate(&self, &Stack, &[u8]) -> Outcome`; lo mismo para `XmlBaseline` con la feature `libxml2` (`!Send`: se crea dentro del hilo);
+  `pub fn with_stack<R: Send>(f: impl FnOnce(&Stack) -> R + Send) -> R` lanza un hilo con `STACK_SIZE` y es el único modo de obtener el testigo `Stack` (el tipo hace cumplir D7 sin un hilo por llamada);
+  `corpus::{casos(), Case { id, category, format, schema_text, schema_value, payload: Payload::{Bytes, Generator}, expected: Expected, strategy }}` y `run_case(&Case, &Stack) -> Result<Outcome, Unavailable>`.
+- **U3.** Features de `serde_json` (D20, se unifican en el workspace): se acepta `float_roundtrip` (la impone `jsonschema`), se añade `unbounded_depth` (solo añade `disable_recursion_limit()`) y la profundidad la controla el contador propio del visitante (256). **No** se activa `arbitrary_precision`. Se registra como decisión nueva al cerrar; afecta a las pruebas de los dos (avisar a Leonardo).
+- **U4.** XML con el crate `libxml` (0.3.23) tras la feature opcional `libxml2`, ejecutado en Docker/Linux. Alternativas descartadas: `xmllint` como subproceso; libxml2 nativo en Windows con vcpkg + LLVM.
+- **U5.** Claves duplicadas (D2): visitante de deserialización propio que construye el `Value` y falla con `Error::custom` en el duplicado (línea y columna de `serde_json`).
+- **U6.** D8 en XML: capa de política que rechaza cualquier nodo DTD como `Malformed` (si no, libxml2 da `billion-laughs` por válido).
+- **U7.** `violations` = número de errores de `iter_errors`; se compara con el corpus con la tabla explícita `DIVERGENCIAS`; `valid` y `kind` se comparan siempre.
+- **U8.** El corpus como oráculo certificado: F6.7 garantiza línea base = `expected`; F4.6 compara contra la línea base en JSON y contra `expected` en XML cuando falta libxml2. Cambia cómo se verifica el «Terminado cuando» de la Fase 4: **aprobación de Leonardo**.
+- **U9.** Números que no caben en `f64` (`1e400`): `Kind::Unsupported` (carencia de la línea base; F4.6 los excluye), no `Malformed` (contradiría `00-alcance.md` §1.1).
+- **U10.** F6.7 se parte en F6.7a y F6.7b; el `Depende` de F4.6 pasa a «F6.7a (JSON), F6.7b (XML)». La línea de F4.6 es de Leonardo: avisarle.
+
+## Decisiones que puede tomar el Builder (se registran en el plan general al tomarlas)
+
+- **B1.** Nombres de módulos y archivos internos (`json.rs`, `xml.rs`, `corpus.rs`, `limits.rs`) y de documentos en `docs/fase6/`.
+- **B2.** Valor de `STACK_SIZE`: ≥ 8 MiB como `schemac`; comprobarlo con un `$ref` recursivo a profundidad 256.
+- **B3.** Offset a partir de línea y columna de `serde_json` (bytes, base 1) con tabla de inicios de línea; columna 0 en EOF → offset = longitud.
+- **B4.** El BOM se quita antes de parsear y se suman 3 a los offsets.
+- **B5.** Recuperador explícito que siempre falla aunque las features de red estén apagadas (defensa doble); `PatternOptions::regex()` con `size_limit` por defecto.
+- **B6.** Los casos `generator` se informan con `eprintln!` y se omiten, como en `lexer`; soporte de `schemaFile`/`payloadFile` con las mismas reglas de ruta.
+- **B7.** `baseline::corpus` lee el corpus con tipos pero **no** duplica `validar_formato` (sigue en `crates/lexer/tests/common`); el texto original del esquema se saca con `schema_parser` como en `crates/semantic/tests/common`.
+- **B8.** Pruebas XML serializadas con un `Mutex` estático (estado global de libxml2); `no_error`/`no_warning` a `true` para recoger `StructuredError` sin escribir en stderr.
+- **B9.** Imagen Docker fijada (p. ej. `rust:1.100-<distro>`), volumen de `target` aparte, caché de cargo opcional.
+- **B10.** Errores de `iter_errors` en el orden de `jsonschema`; comparación por `pointer ∈ conjunto`.
+- **B11.** Texto de los mensajes de fallo de la prueba: archivo, campo, esperado y obtenido.
+
+## Hallazgos del Planner que el Builder debe tener en cuenta
+
+- `jsonschema` 0.61.2 (MSRV 1.85): features por defecto `resolve-http`, `resolve-file`, `tls-aws-lc-rs`, `idna`; con `default-features = false` quedan ~65 crates todo Rust, sin `cc`, reqwest, rustls ni tokio. Un `$ref` remoto falla al compilar («`resolve-http` feature or a custom resolver is required»). Hacia `serde_json` solo activa `float_roundtrip`. `PatternOptions::regex()` es el motor lineal; por defecto usa `fancy-regex`, que retrocede.
+- Prototipo del Planner sobre los 8 casos JSON: `valid` coincide en los 8; `invalid-missing-required-01` da 1 error con puntero `/users/1`; los dos léxicos dan columnas 8 y 11 en la línea 1 (columnas en bytes, base 1) → offsets 7 y 10. Código de referencia (fuera del repo): `C:\Users\bayro\AppData\Local\Temp\claude\bcc3d1797eb97101\10873621-16eb-4921-aa19-8a45143ad21d\scratchpad\proto\src\main.rs`.
+- Divergencias medidas: claves duplicadas (gana la última); `1e400` «number out of range»; enteros > 2⁶⁴ vía `f64`; BOM rechazado por `serde_json`; profundidad 128 de `serde_json`; recuento (`required` 1 por clave, `additionalProperties` 1 por palabra clave, `type`+`enum` 2, `allOf` aplana, `anyOf`/`oneOf`/`not` 1); orden de errores según el esquema; `jsonschema` acepta *lookahead* (con `fancy-regex`) e `if`/`then`.
+- `libxml` 0.3.23 (MSRV 1.88): `build.rs` hace `panic!("Could not find libxml2.")` sin pkg-config/vcpkg (por eso la feature); usa bindgen (libclang). `ParserOptions::default()` trae `recover: true` (poner `false`) y `no_net: false`. API de esquemas segura (`SchemaParserContext::from_buffer`, `SchemaValidationContext::validate_document`). Sin HUGE, libxml2 limita la profundidad a 256. `malformed-xml-billion-laughs-01` es XML bien formado (DTD interna pequeña): hace falta U6. `unsafe_code = "deny"` es por crate: no afecta al `unsafe` interno de `libxml`.
+- Corpus: 10 casos (8 JSON: 1 `valid`, 1 `invalid`, 2 `malformed` léxicos, 4 `non-dpda` válidos; 2 XML: `valid-xml-pedido-01` y `billion-laughs`); ningún `generator`, `schemaFile` ni `payloadFile`; un `payloadBase64`.
+
+## Pendientes iniciales para `docs/fase6/pendientes.md` («Vigilar más adelante»)
+
+- Comparar con F4.6 las divergencias de escapes `\ud800` sueltos, de `\d` (Unicode en `regex`, ASCII en ECMA-262) y de `encoding` distinto de UTF-8 en XML.
+- F6.5: la memoria de libxml2 (`malloc` de C) no la ve un `GlobalAlloc` de Rust: medir el pico del proceso (`VmHWM` en Linux); un contador de asignaciones propio exige `unsafe`, así que conviene un crate como `stats_alloc` o `dhat`.
+- E1 y casos extremos: la línea base necesita el payload entero en memoria; fijarle un tope de tamaño.
+- Unificar los lectores de corpus de `lexer` y `semantic` sobre `baseline::corpus` (opcional).
+- Revisar el recuento de violaciones cuando F4.2 fije el peso de `additionalProperties`, `required` y `type` + `enum`.
+- XML en Windows solo a través de Docker.

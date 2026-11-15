@@ -10,6 +10,7 @@ members = [
     "crates/codegen",
     "crates/runtime-rs",
     "crates/bench",
+    "crates/baseline",
     "crates/cli",
     "server",
 ]
@@ -30,6 +31,7 @@ xsd = { path = "crates/xsd" }
 automaton = { path = "crates/automaton" }
 codegen = { path = "crates/codegen" }
 runtime-rs = { path = "crates/runtime-rs" }
+baseline = { path = "crates/baseline" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

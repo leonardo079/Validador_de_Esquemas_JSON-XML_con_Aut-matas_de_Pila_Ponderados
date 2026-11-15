@@ -312,3 +312,87 @@ Detalle y decisiones en `tasks/plan.md` («Plan de F4.1»). Una subtarea por vez
 **Tamaño:** M, en el borde alto. Si se pasa: F4.1c1 (elementos, Glushkov y atributos) y F4.1c2 (textos y `fixed`). Si no hay tiempo, D28 (2): facetas de rango de `xs:float`/`xs:double` como `Pending`.
 
 **Arrastra:** `docs/fase3/pendientes.md` §36 (5.5-P3, CR-S1); §37 (5.6-P3, y 5.6-CR-S6: las enumeraciones repetidas por valor las absorbe el comparador, con una prueba); §38 (5.7-P1 y su presupuesto).
+
+# Tarea F6.7: líneas base (pista B, Bayron; plan del Planner del 13 nov, aprobado el 13 nov con U1-U10)
+
+Detalle, decisiones U1-U10 y B1-B11 en `tasks/plan.md` («F6.7: líneas base»). Una subtarea por vez: F6.7a primero.
+
+## F6.7a: Línea base JSON (`serde_json` + `jsonschema`) sobre el corpus
+
+**Descripción:** crate nuevo `crates/baseline` (U1). Funciones:
+- lee el corpus (`baseline::corpus`);
+- compila el esquema con `jsonschema` (Draft 2020-12 fijo, sin red, `format` como anotación, motor de `pattern` lineal);
+- parsea el payload a un DOM `serde_json::Value` con un visitante propio que rechaza claves duplicadas (D2) y cuenta la profundidad (tope 256, `00-alcance.md` §4);
+- valida y devuelve un `Outcome` comparable con `expected`.
+
+La compilación del esquema, el parseo y la validación se pueden llamar por separado, para que F6.5 mida cada etapa. Todo lo recursivo corre en un hilo con `stack_size` explícito (D7). Desbloquea la mitad JSON de F4.6.
+
+**Criterios de aceptación:**
+- [x] El crate `crates/baseline` está en el workspace, sin `unsafe` y con la documentación pública escrita. Dependencias: `serde`, `serde_json = "1.0.154"`, `jsonschema = { version = "0.61.2", default-features = false }`, `base64 = "0.23.1"` y `schema-parser` (path).
+  - `cargo tree -p baseline -e features -i serde_json` muestra solo `default`, `std`, `float_roundtrip` y `unbounded_depth` (U3).
+  - `cargo tree -p baseline` no contiene `reqwest`, `rustls`, `aws-lc`, `ring`, `tokio` ni `cc`.
+- [x] La API es la de U2. `JsonBaseline::compile` fija `draft202012`, `should_validate_formats(false)`, `PatternOptions::regex()` y un recuperador que siempre falla.
+- [x] Prueba `crates/baseline/tests/corpus_json.rs`. Para cada caso JSON con bytes:
+  - `valid` es igual;
+  - `errorKind` se corresponde así: `lexical`/`syntax` → `Malformed`, `schema` → `Schema`, `limit` → `Limit`;
+  - `violations` es igual, salvo los casos de una tabla explícita `DIVERGENCIAS` (id, campo, motivo); la prueba falla si una entrada de la tabla ya no diverge (U7);
+  - el `pointer` esperado está entre los punteros de la línea base;
+  - el offset de los errores léxicos y sintácticos es igual (hoy coinciden los 2);
+  - exige que hayan corrido ≥ 8 casos, e informa y omite los de `generator`.
+- [x] Tabla de casos unitarios. Todos los que recorren entrada corren dentro de `with_stack` (D7), y ninguna prueba mide tiempo (D1):
+  - clave duplicada en la raíz, anidada y dentro de un arreglo → `Malformed` con offset; la misma clave en objetos distintos → válido (U5);
+  - profundidad 256 → válido; 257 → `Limit`; 10⁵ `[` → `Limit` sin desbordar la pila;
+  - BOM inicial → se ignora;
+  - `1e400` → `Unsupported` (U9);
+  - basura después del valor → `Malformed`;
+  - `$ref` `http://` y `file://` → error de compilación sin red;
+  - `pattern` con *lookahead* → error de compilación (prueba que el motor es el lineal);
+  - `^(a+)+$` sobre `"aaaa…a!"` termina;
+  - `format: "email"` no se valida.
+- [x] Documentación:
+  - `docs/fase6/linea-base.md`, parte JSON: DOM frente a streaming, costo O(n) en memoria y dos pasadas, configuración segura y tabla de divergencias (claves duplicadas, `1e400`, enteros > 2⁶⁴ vía `f64`, BOM, profundidad, recuento de violaciones, orden de errores, palabras clave que el proyecto rechaza y `jsonschema` acepta; U7 y U9);
+  - `docs/fase6/pendientes.md` con el formato de `docs/fase2/pendientes.md`, con los pendientes iniciales de `tasks/plan.md`;
+  - una línea en `tests/README.md` («la línea base recorre el corpus»).
+- [x] `make lint` y `make test` en verde. En esta máquina, sin `make`: `scripts/lint.ps1` y `cargo test --workspace`.
+
+**Verificación:** `cargo test -p baseline`; `cargo clippy -p baseline --all-targets -- -D warnings`; `make lint`; `make test`. Manual: `cargo tree` como en el primer criterio.
+
+**Dependencias:** ninguna de código; U1, U2, U3, U5, U7 y U9 resueltas (13 nov).
+
+**Archivos probables:** `Cargo.toml` (miembro y `workspace.dependencies`), `Cargo.lock`, `crates/baseline/{Cargo.toml,src/lib.rs,src/corpus.rs,src/json.rs}`, `crates/baseline/tests/corpus_json.rs`, `docs/fase6/{linea-base.md,pendientes.md}`, `tests/README.md`.
+
+**Tamaño:** M. **Va primero.**
+
+**Estado (15 nov):** APROBADA CON OBSERVACIONES tras **1 ronda de corrección** (devuelta por los Reviewers de la ronda 0: CR-I1 offsets de `corregir`, CR-I2 `JsonDom` recursivo fuera de `with_stack`, SEC-M1/M2 lista de violaciones y mensajes sin tope). Revisión de la ronda 1: code-reviewer APROBADO (1 Important de documentación, CR1-I1, cerrado en el cierre), security-auditor sin Critical/High/Medium. Casillas verificadas por el Tester de la ronda 1. Pruebas: `crates/baseline/tests/json.rs` (48), `tests/corpus_json.rs` (8) y 2 doc-tests; con las dos pistas mezcladas, 486 pruebas del workspace en verde. Decisiones D48-D50. Observaciones abiertas en `docs/fase6/pendientes.md` §1-§20 (§14 bloqueante para F7; §5 con el recuento de F4-U3; §19 `Drop` de `JsonBaseline`; §20 prueba multibyte del recorte, F6.5).
+
+## F6.7b: Línea base XML (libxml2: DOM + XSD), tras la feature `libxml2`
+
+**Descripción:**
+- `libxml = { version = "0.3.23", optional = true }` detrás de la feature `libxml2` de `baseline`, apagada por defecto (U4), para que `make test` siga en verde en máquinas sin libxml2.
+- `XmlBaseline::compile(xsd)`, `parse(payload)` (DOM) y `validate_dom`.
+- Opciones del parser: `recover = false`, `no_net = true`, sin NOENT, DTDLOAD ni HUGE.
+- Capa de política D8: cualquier nodo DTD → `Malformed` (U6).
+- Se ejecuta en Linux o Docker con un objetivo del `Makefile`.
+
+**Criterios de aceptación:**
+- [ ] Sin la feature, `cargo build --workspace --all-targets` y `cargo test --workspace` no piden libxml2 (verificado en la máquina Windows sin libxml2); sin la feature, `run_case` sobre un caso XML devuelve `Err(Unavailable)`, nunca un pánico.
+- [ ] Con la feature, `cargo test -p baseline --features libxml2` y `cargo clippy -p baseline --all-targets --features libxml2 -- -D warnings` pasan en Docker:
+  - `valid-xml-pedido-01` → válido; `malformed-xml-billion-laughs-01` → `Malformed`;
+  - casos unitarios: etiqueta sin cerrar → `Malformed` con línea, columna y offset; falta `id` requerido → `Schema` con 1 violación; `<total>abc</total>` → `Schema`; entidad externa `SYSTEM "file:///etc/passwd"` → `Malformed`, sin que el contenido del archivo aparezca en la salida ni en los errores; anidamiento de 300 niveles → error controlado sin caída; XSD con `xs:import` → error de compilación sin red.
+- [ ] Objetivo `make test-baseline-xml`: `docker run` con una imagen `rust` fijada, `apt-get install libxml2-dev libclang-dev pkg-config`, `CARGO_TARGET_DIR` aparte, prueba + clippy con la feature. Bayron lo ejecuta en verde; el comando y su salida quedan en la documentación.
+- [ ] `docs/fase6/linea-base.md`, parte XML: configuración segura, D8, cómo ejecutarlo y divergencias (`encoding` distinto de UTF-8 aceptado por libxml2, offsets y XPath frente a `pointer`, recuento de errores de libxml2); pendientes nuevos en `pendientes.md`.
+- [ ] `make lint` y `make test` siguen en verde sin la feature.
+
+**Verificación:** `make test-baseline-xml` (Docker); `cargo test --workspace` en Windows sin libxml2; `make lint`.
+
+**Dependencias:** F6.7a (crate, `Outcome`, `corpus`), U4 y U6. Docker Desktop arrancado.
+
+**Archivos probables:** `crates/baseline/{Cargo.toml,src/xml.rs,src/lib.rs}`, `crates/baseline/tests/corpus_xml.rs`, `Makefile`, `docs/fase6/{linea-base.md,pendientes.md}`.
+
+**Tamaño:** M. Después de F6.7a.
+
+## Punto de control tras F6.7a y F6.7b
+
+- [ ] `make lint` y `make test` en verde en las dos máquinas; `make test-baseline-xml` en verde.
+- [ ] Leonardo confirma que la API sirve para F4.6 (U2, U8).
+- [ ] En el checklist, F4.6 pasa a depender de «F6.7a (JSON), F6.7b (XML)» (U10; la línea de F4.6 la edita Leonardo).

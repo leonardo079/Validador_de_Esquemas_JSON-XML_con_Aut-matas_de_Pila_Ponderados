@@ -74,6 +74,8 @@ Un caso = un archivo `cases/<categoría>/<_id>.json`. El nombre del archivo debe
 
 Las pruebas del lexer recorren todo el corpus: tokenizan cada payload entero y en bloques de 1, 7 y 4096 bytes, exigen el mismo resultado, y si `errorKind` es `lexical` comprueban que el error ocurra exactamente en `offset`.
 
+La línea base DOM (`crates/baseline`, F6.7a; [docs/fase6/linea-base.md](../docs/fase6/linea-base.md)) recorre el corpus: en cada caso JSON con bytes (`crates/baseline/tests/corpus_json.rs`) exige el mismo `valid`, la clase de `errorKind` (`lexical` y `syntax` son *malformado*), el mismo `violations` salvo las divergencias declaradas en la prueba, que `pointer` esté entre los punteros de sus errores y, en errores léxicos y sintácticos, el mismo `offset`. Los casos con `generator` se informan y se omiten; los XML esperan a la línea base de libxml2 (F6.7b). Es el oráculo con que el intérprete de referencia (F4.6) compara el corpus.
+
 ### Métricas
 
 Las métricas (`metrics`: MB/s, ciclos/byte, memoria, asignaciones, profundidad) **no se guardan en el repositorio**: el ejecutor (T8.9) las añade al documento en la base NoSQL en cada corrida.

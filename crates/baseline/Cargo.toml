@@ -1,0 +1,25 @@
+[package]
+name = "baseline"
+description = "Fase 6: líneas base DOM (serde_json + jsonschema) para comparar con el DPDA y servir de oráculo"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+schema-parser.workspace = true
+serde = "1.0.229"
+# `float_roundtrip` la impone `jsonschema`; `unbounded_depth` solo añade
+# `disable_recursion_limit()`: la profundidad la acota el visitante propio
+# (`json.rs`, 256). Sin `arbitrary_precision` (U3; las features de
+# `serde_json` se unifican en todo el workspace, D20).
+serde_json = { version = "1.0.154", features = ["float_roundtrip", "unbounded_depth"] }
+# Sin las features por defecto: ni `resolve-http` (reqwest, rustls, aws-lc)
+# ni `resolve-file`. Además, `json.rs` instala un recuperador que siempre
+# falla (B5).
+jsonschema = { version = "0.61.2", default-features = false }
+base64 = "0.23.1"
+
+[lints]
+workspace = true
