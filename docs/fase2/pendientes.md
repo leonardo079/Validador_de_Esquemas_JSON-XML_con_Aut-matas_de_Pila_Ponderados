@@ -267,7 +267,11 @@ decisiones» del plan (D1–D31); aquí solo se remite a ellas.
     - tope de atributos por etiqueta en el lector (≈ 1 024), con error `limit` en el atributo
       N + 1, y tope de declaraciones `xmlns` vivas: **Fase 7**, o la próxima tarea que toque el
       lector;
-    - tope de nodos del AST, o de hijos por grupo, coherente con D26: **tarea 5.7**;
+    - tope de nodos del AST, o de hijos por grupo, coherente con D26: ~~**tarea 5.7**~~ **la 5.7
+      aplicó D26 (4 096 partículas por modelo, `limit` en la partícula 4 097)**, pero sobre el AST ya
+      construido: es un tope de **tiempo** (el de la UPA), no de memoria. Un tope de nodos del AST
+      exigiría contarlos en el parser (cambio del alcance no aprobado, D42): queda para la **Fase 7**,
+      junto con `RLIMIT_AS`;
     - `RLIMIT_AS` por compilación y tope de concurrencia de compilaciones: **Fase 7**.
 
 ### 13. Recorte de los textos de error garantizado por el tipo (tarea 5.2; 5.1-CR3-S1 y 5.1-CR3-S2) — RESUELTO → [historial.md](historial.md) §13
@@ -311,7 +315,13 @@ decisiones» del plan (D1–D31); aquí solo se remite a ellas.
   `ref` en `xs:attribute` (fuera del subconjunto) no se pueden usar. La 5.3 decide si las ignora
   o las rechaza; ignorarlas es lo coherente con XSD.
 
-### 17. `00-alcance.md` §3 no refleja aún las decisiones de la lista blanca (tareas 5.2 y 5.7)
+### 17. `00-alcance.md` §3 no refleja aún las decisiones de la lista blanca (tareas 5.2 y 5.7) — RESUELTO (tarea 5.7, propuesta al alcance)
+
+- **Resuelto en la 5.7:** `docs/00-alcance.md` §3.1 (filas de `xs:schema`, `xs:element`,
+  `xs:attribute`, `xs:simpleContent`, `xs:simpleType`), §3.3 (rechazos de la lista blanca y D27) y
+  §3.4 nueva (D23, D34, D39, `ref` con `nillable`/`form`, y las desviaciones: UPA de D25, EDC y UPA
+  por nombre local de D40, tope de D26 y las de los tipos simples de D44). Como todo cambio del
+  alcance desde D42, propuesta a las dos personas hasta el commit. Texto original:
 
 - **Estado:** la lista blanca de la 5.2 ([gramatica-xsd.md](gramatica-xsd.md) §5) concreta cosas
   que el alcance no dice: `id`, `xs:annotation`, `xs:documentation`, `xs:appinfo` y `source`

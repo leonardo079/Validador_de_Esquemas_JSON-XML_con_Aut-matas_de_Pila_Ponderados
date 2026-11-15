@@ -492,7 +492,8 @@ fn esquemas_de_los_casos_bajan() {
 
 /// `ir.md` §5.2: ocurrencias saturadas, contenido vacío (cláusulas 2.1.1 a
 /// 2.1.3), `Choice([])` con `minOccurs` ≥ 1, `ref` con el tipo de su
-/// declaración (arista compartida), atributo sin tipo como
+/// declaración (arista compartida, también el mismo `ref` repetido en un
+/// modelo, 5.3-CR1-I2), atributo sin tipo como
 /// `xs:anySimpleType` compartido, `default`/`fixed` intactos,
 /// `targetNamespace` en el formato y los atributos globales sin bajar.
 #[test]
@@ -514,6 +515,9 @@ fn correspondencia_de_cada_construccion() {
          <xs:complexType name='V3'><xs:all/></xs:complexType>\
          <xs:complexType name='V4'><xs:choice minOccurs='0'/></xs:complexType>\
          <xs:complexType name='N'><xs:choice/></xs:complexType>\
+         <xs:complexType name='W'><xs:sequence>\
+           <xs:element ref='t:g'/><xs:element ref='t:g' minOccurs='0'/>\
+         </xs:sequence></xs:complexType>\
          </xs:schema>"
     );
     let v = ir_de(&doc);
@@ -579,6 +583,17 @@ fn correspondencia_de_cada_construccion() {
     assert_eq!(m.particles.len(), 1);
     // Atributo global: no se baja (no hay `ref` de atributo).
     assert!(!(0..v.nodes().len()).any(|i| loc(i).contains("global")));
+    // 5.3-CR1-I2: el mismo `ref` dos veces en un modelo pasa EDC (mismo
+    // tipo) y la UPA (`(g, g?)` es determinista), y las dos partículas
+    // comparten la arista de la declaración global.
+    let Rule::Content(m) = &n("#/complexType/W").rules[0].rule else {
+        panic!("W");
+    };
+    let g = Term::Element {
+        name: "g".into(),
+        ty: wrapper_int,
+    };
+    assert_eq!((&m.particles[1].term, &m.particles[2].term), (&g, &g));
 }
 
 /// B3: documento, declaraciones en preorden (con los tipos anónimos de cada
@@ -704,7 +719,8 @@ fn errores_con_nombres_largos_se_recortan() {
 
 /// Criterio (O(n)): un tipo complejo usado k veces es **una arista por
 /// uso**, no una copia: el número de nodos no depende de k y el de aristas
-/// crece en uno por uso.
+/// crece en uno por uso. Con k = 4 000 el modelo de `R` (k + 1 partículas)
+/// cabe en el tope de D26 (4 096, tarea 5.7).
 #[test]
 fn tipo_usado_k_veces_es_una_arista_por_uso() {
     let ir_con = |k: usize| {
@@ -720,38 +736,47 @@ fn tipo_usado_k_veces_es_una_arista_por_uso() {
              <xs:attribute name='a' type='xs:int'/></xs:complexType></xs:schema>"
         ))
     };
-    let (a, b) = (ir_con(10), ir_con(10_000));
+    let (a, b) = (ir_con(10), ir_con(4_000));
     assert_eq!(a.nodes().len(), b.nodes().len());
-    assert_eq!(b.edge_count() - a.edge_count(), 10_000 - 10);
+    assert_eq!(b.edge_count() - a.edge_count(), 4_000 - 10);
 }
 
 /// Criterio (`docs/fase2/pendientes.md` §11, 5.1-SEC3-I1): las tablas se
 /// indexan por `(NsId, nombre local)`, no por el texto del URI. Un URI de
 /// ~8 MiB como `targetNamespace` y como prefijo de 5·10⁵ referencias
 /// `type='p:T'`: con O(referencias · |URI|) serían ~4·10¹² bytes hasheados y
-/// la prueba no terminaría. Sin reloj (D1): comprueba el resultado.
+/// la prueba no terminaría. Sin reloj (D1): comprueba el resultado. Las
+/// referencias van en K = 125 tipos de 4 000 partículas cada uno, para caber
+/// en el tope de D26 (4 096 por modelo, tarea 5.7), cada uno con su global.
 #[test]
 fn uri_de_8_mib_y_medio_millon_de_referencias() {
-    const N: usize = 500_000;
+    const K: usize = 125;
+    const POR_TIPO: usize = 4_000;
+    const N: usize = K * POR_TIPO;
     let uri = format!("urn:{}", "u".repeat(8 << 20));
     let mut doc = format!(
-        "<xs:schema {XS} xmlns:p='{uri}' targetNamespace='{uri}'>\
-         <xs:element name='r' type='p:R'/><xs:complexType name='T'/>\
-         <xs:complexType name='R'><xs:sequence>"
+        "<xs:schema {XS} xmlns:p='{uri}' targetNamespace='{uri}'><xs:complexType name='T'/>"
     );
     doc.reserve(N * 40);
-    for _ in 0..N {
-        doc.push_str("<xs:element name='e' type='p:T'/>");
+    for k in 0..K {
+        doc.push_str(&format!(
+            "<xs:element name='r{k}' type='p:R{k}'/><xs:complexType name='R{k}'><xs:sequence>"
+        ));
+        for _ in 0..POR_TIPO {
+            doc.push_str("<xs:element name='e' type='p:T'/>");
+        }
+        doc.push_str("</xs:sequence></xs:complexType>");
     }
-    doc.push_str("</xs:sequence></xs:complexType></xs:schema>");
+    doc.push_str("</xs:schema>");
     let v = std::thread::Builder::new()
         .stack_size(8 << 20)
         .spawn(move || compilar(doc.as_bytes()).map(|v| (v.nodes().len(), v.edge_count())))
         .unwrap()
         .join()
         .unwrap();
-    // Documento, R, T, y nada más: todas las referencias son aristas a T.
-    assert_eq!(v.unwrap(), (3, 1 + N));
+    // Documento, T y los K tipos R, y nada más: todas las referencias son
+    // aristas a T (más una del documento a cada R).
+    assert_eq!(v.unwrap(), (2 + K, K + N));
 }
 
 /// D7: el análisis y la bajada no recurren sobre el AST. La cadena de

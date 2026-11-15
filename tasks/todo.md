@@ -182,10 +182,10 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
   - cerrar `pendientes.md` §3, el resto de §22 (la parte XSD de la 5.4 quedó resuelta el 4 nov; faltan los tres `parse-ok` con `xs:simpleType`, que entran con la 5.6) y §26, y anotar los pendientes nuevos (`pattern` en enumeraciones y `default`/`fixed`; Glushkov con contadores para la Fase 4).
 
 **Criterios de aceptación:**
-- [ ] Los casos `(a?, a)`, `(a | a)`, `(a*, a)` y un `choice` anidado ambiguo se rechazan con la posición de las dos partículas. Los modelos deterministas del corpus (pedido y `pedido_xsd` con `choice` y `subpedido` opcional) pasan. Pasar el límite de U6 es un error `limit`.
-- [ ] El costo de UPA está documentado y acotado por el límite, y lo comprueba una prueba sin reloj (D1): un modelo en el límite termina; uno por encima se rechaza antes de calcular conjuntos.
-- [ ] `docs/fase3/xsd.md` (o el nombre que elija el Builder) explica el análisis y la bajada con su costo. `make docs-check` en verde y casilla de la semana 2 lista para marcar.
-- [ ] **Heredado de la revisión de la 5.3 (4 nov, D38; detalle en `docs/fase2/pendientes.md` y `docs/fase3/pendientes.md`):**
+- [x] Los casos `(a?, a)`, `(a | a)`, `(a*, a)` y un `choice` anidado ambiguo se rechazan con la posición de las dos partículas. Los modelos deterministas del corpus (pedido y `pedido_xsd` con `choice` y `subpedido` opcional) pasan. Pasar el límite de U6 es un error `limit`.
+- [x] El costo de UPA está documentado y acotado por el límite, y lo comprueba una prueba sin reloj (D1): un modelo en el límite termina; uno por encima se rechaza antes de calcular conjuntos.
+- [x] `docs/fase3/xsd.md` (o el nombre que elija el Builder) explica el análisis y la bajada con su costo. `make docs-check` en verde y casilla de la semana 2 lista para marcar.
+- [x] **Heredado de la revisión de la 5.3 (4 nov, D38; detalle en `docs/fase2/pendientes.md` y `docs/fase3/pendientes.md`):**
   - 5.3-CR1-I2 (cobertura): casos `semantic-error/edc-ref-y-local.xsd` (un `ref` frente a un local del mismo nombre con otro tipo) y `semantic-error/edc-anonimos.xsd` (dos tipos anónimos iguales, distintos por XSD) en el manifiesto, y un caso aceptado con el mismo `ref` repetido en `correspondencia_de_cada_construccion`;
   - 5.3-CR1-S4: un nombre repetido en `xs:all` (`c/all-dup.xsd`: mismo nombre y tipo, pasa EDC y `verify`) lo rechaza la UPA, con prueba;
   - 5.3-CR1-S1: `xs:element` local con `ref` y `form`/`nillable` del valor sin efecto (D39) se rechaza como `syntax` (XSD 1.0 src-element 2.2), igual que antes de D39, con prueba;
@@ -202,9 +202,11 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
 **Tamaño:** M.
 
 **Heredado de la 5.6 (14 nov, D38; detalle en `docs/fase3/pendientes.md` §37):**
-- [ ] 5.6-P4 (con CR-S3, CR-S4 y CR2-S2): pasar a `00-alcance.md` §3 la lista exacta de desviaciones de los tipos simples (`minExclusive` nuevo frente al `maxInclusive` de la base con `<`; `minExclusive` frente a `maxExclusive` en el mismo paso con `<`; cotas no comparadas con la enumeración de la base; enumeración frente a su propio paso; `minLength`/`maxLength` sobre `length` por las cláusulas 1.2 y 2.2). Es interfaz compartida (D42): se propone a las dos personas.
-- [ ] 5.6-T1-1: si se admiten `default`/`fixed` en `xs:element`, añadir esa forma a `cota_larga_se_analiza_una_sola_vez`.
-- [ ] 5.6-CR-S5 (si se decide aquí y no en la Fase 7): tope de errores por etapa, igual para las tres.
+- [x] 5.6-P4 (con CR-S3, CR-S4 y CR2-S2): pasar a `00-alcance.md` §3 la lista exacta de desviaciones de los tipos simples (`minExclusive` nuevo frente al `maxInclusive` de la base con `<`; `minExclusive` frente a `maxExclusive` en el mismo paso con `<`; cotas no comparadas con la enumeración de la base; enumeración frente a su propio paso; `minLength`/`maxLength` sobre `length` por las cláusulas 1.2 y 2.2). Es interfaz compartida (D42): se propone a las dos personas.
+- [x] 5.6-T1-1 (no aplica mientras `default`/`fixed` de `xs:element` sigan rechazados): si se admiten `default`/`fixed` en `xs:element`, añadir esa forma a `cota_larga_se_analiza_una_sola_vez`.
+- [x] 5.6-CR-S5 (decidido: va a la Fase 7): tope de errores por etapa, igual para las tres.
+
+**Estado (15 nov):** APROBADA CON OBSERVACIONES en la revisión 2 tras **1 ronda de corrección** (devuelta por el code-reviewer de la revisión 1: 5.7-CR-I1, la UPA solo garantizaba determinismo débil y la Fase 4 necesita el fuerte con contadores —`(a{1,2}){2,2}`—, corregido con el rechazo conservador de las vueltas ambiguas con contador, `ErrorKind::AmbiguousCounter`, O(1) por paso; I-2 precisión de D26; I-3 e I-4 alcance veraz y recortado según la indicación del usuario). Revisión 2: 0 Critical, 1 Important de documentación (guardas de contador con cuerpo anulable en 5.7-P1, corregido en el cierre), 3 Suggestion. Casillas verificadas por los Testers de las rondas 0 y 1 (`crates/xsd/tests/upa.rs`: `modelos_ambiguos_con_las_dos_posiciones`, `ambiguos_a_traves_de_grupos_y_ref`, `modelos_deterministas_pasan`, `tope_de_particulas_por_modelo`, `abstraccion_conservadora_de_d25`, `nombre_repetido_en_all`, `vueltas_ambiguas_con_contador`, `contadores_sin_vuelta_ambigua_pasan`; unitarias de `src/upa.rs`: `tope_antes_de_calcular_conjuntos`, `vueltas_con_contador_sin_costo_extra`; `parser.rs::ref_con_valores_sin_efecto_de_d39`; 12 casos nuevos en el corpus; fuzzing diferencial de los Testers y del Reviewer contra oráculos propios de UPA débil y determinismo fuerte, 0 discrepancias en ~15 000 modelos). Decisiones: D45 (enmienda D25 y precisa D26; pendiente de aprobar por las dos personas). `docs/00-alcance.md` §3-§4 actualizado como **propuesta** (16 cambios; aprobar con Bayron antes del commit, D42). Sin commit. Observaciones abiertas en `docs/fase3/pendientes.md` §38.
 
 ## Punto de control D: cierre de la casilla XSD
 

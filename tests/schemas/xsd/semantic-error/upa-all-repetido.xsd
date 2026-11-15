@@ -1,0 +1,10 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="r" type="T"/>
+  <xs:complexType name="T">
+    <xs:all>
+      <xs:element name="a" type="xs:int"/>
+      <xs:element name="b" type="xs:int"/>
+      <xs:element name="a" type="xs:int" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+</xs:schema>

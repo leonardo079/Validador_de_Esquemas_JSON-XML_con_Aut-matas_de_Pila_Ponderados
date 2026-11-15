@@ -22,9 +22,11 @@
 //!   circular, facetas, enumeraciones y `default`/`fixed`, con los números de
 //!   `ir::num` (tarea 5.5).
 //!
-//! Falta *Unique Particle Attribution* (5.7); `schemac` lo usa desde la
-//! tarea 5.4. Todo el
-//! crate es de tiempo de compilación: puede reservar memoria, pero no usa
+//! - *Unique Particle Attribution* y el tope de partículas por modelo
+//!   (tarea 5.7, `upa`; D25, D26), en la etapa de modelos de contenido.
+//!
+//! `schemac` lo usa desde la tarea 5.4. Todo el crate es de tiempo de
+//! compilación: puede reservar memoria, pero no usa
 //! recursión sin cota sobre la entrada (D7): el lector, el análisis y la
 //! bajada usan pilas explícitas y la recursión del parser está acotada por
 //! [`MAX_DEPTH_LIMIT`].
@@ -41,6 +43,7 @@ mod reader;
 mod simple;
 mod subset;
 mod symbols;
+mod upa;
 
 pub use check::{analyze, Analysis};
 pub use error::{ErrorKind, Found, ValueWhy, XsdError};

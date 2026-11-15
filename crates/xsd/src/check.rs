@@ -17,8 +17,10 @@
 //!    `default`/`fixed` como valores del tipo. Necesitan las bases
 //!    resueltas de la etapa 1;
 //! 3. *modelos de contenido*: `minOccurs` ≤ `maxOccurs` (I11), *all-group
-//!    limited* y *Element Declarations Consistent* (I12). Necesitan los
-//!    tipos resueltos de la etapa 1.
+//!    limited*, *Element Declarations Consistent* (I12) y, si las etapas 1 y
+//!    2 pasaron, el tope de partículas de D26 y *Unique Particle
+//!    Attribution* (tarea 5.7, [`crate::upa`]). Necesitan los tipos
+//!    resueltos de la etapa 1.
 //!
 //! **Sin recursión (D7).** El AST es un árbol de profundidad ≤ 256, pero se
 //! recorre con pilas explícitas: una de declaraciones pendientes (tipos
@@ -42,6 +44,7 @@ use crate::error::{clip, ErrorKind, XsdError};
 use crate::reader::is_ncname;
 use crate::simple::{self, Own};
 use crate::symbols::{key, Builtin, Key, Lookup, Symbols, TypeRef};
+use crate::upa;
 use crate::Name;
 
 /// Un esquema que pasó el análisis: lo único que acepta [`crate::lower`].
@@ -343,6 +346,13 @@ pub fn analyze(schema: &Schema) -> Result<Analysis<'_>, Vec<XsdError>> {
     }
     for t in &types {
         check_model(t, &mut errors);
+    }
+    // UPA y tope de D26 (tarea 5.7): solo si las etapas 1 y 2 pasaron, porque
+    // sus errores no se informarían y necesitan los nombres de los `ref`.
+    if errors.components.is_empty() && errors.simples.is_empty() {
+        for t in &types {
+            upa::check(&t.particles, &mut |kind, at| errors.model(kind, at));
+        }
     }
 
     for v in [

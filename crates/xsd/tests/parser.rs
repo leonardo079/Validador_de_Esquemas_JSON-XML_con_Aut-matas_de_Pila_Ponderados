@@ -953,3 +953,55 @@ proptest! {
         let _ = parse(&bytes);
     }
 }
+
+/// 5.3-CR1-S1 (tarea 5.7): `ref` con `nillable` o `form` es `syntax`
+/// (XSD 1.0 *src-element* 2.2) aunque lleven el valor sin efecto de D39, en
+/// los dos órdenes, con el error en el valor del segundo de la pareja; sin
+/// `ref`, D39 sigue aceptándolos, y con `ref` el valor que cambia la
+/// validación sigue siendo `unsupported` (el primero que llega).
+#[test]
+fn ref_con_valores_sin_efecto_de_d39() {
+    let doc = |schema: &str, attrs: &str| {
+        format!(
+            "<xs:schema {XS}{schema}><xs:element name='g' type='xs:int'/>\
+             <xs:complexType name='T'><xs:sequence><xs:element {attrs}/></xs:sequence>\
+             </xs:complexType></xs:schema>"
+        )
+    };
+    for (schema, attrs, segundo) in [
+        ("", "ref='g' nillable='false'", "false'"),
+        ("", "nillable=' 0 ' ref='g'", "g'/>"),
+        ("", "ref='g' form='unqualified'", "unqualified'"),
+        ("", "form='unqualified' ref='g'", "g'/>"),
+        (
+            " elementFormDefault='qualified'",
+            "ref='g' minOccurs='0' form='qualified'",
+            "qualified'/>",
+        ),
+    ] {
+        let d = doc(schema, attrs);
+        let e = parse(d.as_bytes()).unwrap_err();
+        let col = d.rfind(segundo).unwrap() as u32 + 1;
+        assert_eq!(
+            (e.code(), e.line(), e.column()),
+            ("syntax", 1, col),
+            "{attrs}: {e}"
+        );
+        let campo = if attrs.contains("nillable") {
+            "nillable"
+        } else {
+            "form"
+        };
+        assert!(
+            e.to_string().contains(&format!("no puede tener {campo}")),
+            "{e}"
+        );
+        assert!(e.to_string().contains("src-element 2.2"), "{e}");
+    }
+    ok(&doc(
+        "",
+        "name='a' type='xs:int' nillable='false' form='unqualified'",
+    ));
+    let d = doc("", "ref='g' nillable='true'");
+    assert_eq!(parse(d.as_bytes()).unwrap_err().code(), "unsupported");
+}

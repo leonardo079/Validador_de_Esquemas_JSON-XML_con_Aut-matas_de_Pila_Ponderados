@@ -1,0 +1,9 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="r" type="T"/>
+  <xs:complexType name="T">
+    <xs:choice>
+      <xs:element name="a" type="xs:int"/>
+      <xs:element name="a" type="xs:int"/>
+    </xs:choice>
+  </xs:complexType>
+</xs:schema>

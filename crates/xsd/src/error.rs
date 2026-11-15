@@ -2,7 +2,7 @@
 //!
 //! Los producen el lector XML ([`crate::Reader`], tarea 5.1), el parser del
 //! subconjunto XSD ([`crate::parse`], tarea 5.2) y el análisis
-//! ([`crate::analyze`], tarea 5.3); las tareas siguientes añaden sus clases
+//! ([`crate::analyze`], tareas 5.3, 5.6 y 5.7); las tareas siguientes añaden sus clases
 //! a [`ErrorKind`] y sus códigos a [`XsdError::code`]. Todo error del crate se construye con
 //! [`XsdError::new`], que recorta los textos del usuario.
 
@@ -170,6 +170,26 @@ pub enum ErrorKind {
     /// *Element Declarations Consistent* (I12): dos partículas con el mismo
     /// nombre y distinto tipo en un modelo. `first`: la primera.
     InconsistentElement { name: String, first: Pos },
+    /// *Unique Particle Attribution* (tarea 5.7, D25): un elemento `name`
+    /// puede corresponder a dos partículas del modelo, esta y la de
+    /// `first`, en el mismo punto: el modelo no es determinista.
+    Ambiguous { name: String, first: Pos },
+    /// Determinismo con contadores (tarea 5.7, enmienda de D25): la
+    /// partícula (`name` si es un elemento; si no, el grupo `group`) puede
+    /// volver a empezar tras una misma posición por dos caminos, uno de
+    /// ellos una vuelta nueva de la partícula de `repeat`, que actualizan
+    /// distinto el contador de la partícula de `counter` (`minOccurs` ≥ 2 o
+    /// `maxOccurs` acotado > 1; puede ser la misma).
+    AmbiguousCounter {
+        name: String,
+        group: Option<&'static str>,
+        repeat: Pos,
+        counter: Pos,
+    },
+    /// El modelo de contenido pasa de `max` partículas (elementos y grupos,
+    /// D26); se informa en la partícula `max` + 1, antes de calcular ningún
+    /// conjunto de la UPA.
+    TooManyParticles { max: usize },
 
     // --- Tipos simples del usuario (tarea 5.6, `docs/fase3/xsd.md` §10).
     /// Derivación circular de tipos simples: la cadena de `base` que empieza
@@ -294,7 +314,9 @@ impl ErrorKind {
             | ErrorKind::CircularBase { name: s, .. }
             | ErrorKind::Unsupported { name: s, .. }
             | ErrorKind::Conflict { name: s, .. }
-            | ErrorKind::InconsistentElement { name: s, .. } => clip_in_place(s),
+            | ErrorKind::InconsistentElement { name: s, .. }
+            | ErrorKind::Ambiguous { name: s, .. }
+            | ErrorKind::AmbiguousCounter { name: s, .. } => clip_in_place(s),
             ErrorKind::InvalidRestriction {
                 value, other_value, ..
             } => {
@@ -322,6 +344,7 @@ impl ErrorKind {
             | ErrorKind::BadXmlDecl(_)
             | ErrorKind::ReservedNamespace(_)
             | ErrorKind::TooDeep { .. }
+            | ErrorKind::TooManyParticles { .. }
             | ErrorKind::Unexpected { .. }
             | ErrorKind::TextNotAllowed { .. }
             | ErrorKind::MissingAttribute { .. }
@@ -373,7 +396,7 @@ impl XsdError {
             ErrorKind::InvalidQName(_)
             | ErrorKind::UndeclaredPrefix(_)
             | ErrorKind::ReservedNamespace(_) => "namespace",
-            ErrorKind::TooDeep { .. } => "limit",
+            ErrorKind::TooDeep { .. } | ErrorKind::TooManyParticles { .. } => "limit",
             ErrorKind::Unexpected { .. }
             | ErrorKind::TextNotAllowed { .. }
             | ErrorKind::ForeignElement(_)
@@ -388,9 +411,10 @@ impl XsdError {
             ErrorKind::DuplicateName { .. } => "duplicate-name",
             ErrorKind::Unresolved { .. } | ErrorKind::NotSimpleType { .. } => "unresolved",
             ErrorKind::Conflict { .. } => "syntax",
-            ErrorKind::ContentModel { .. } | ErrorKind::InconsistentElement { .. } => {
-                "content-model"
-            }
+            ErrorKind::ContentModel { .. }
+            | ErrorKind::InconsistentElement { .. }
+            | ErrorKind::Ambiguous { .. }
+            | ErrorKind::AmbiguousCounter { .. } => "content-model",
             ErrorKind::CircularBase { .. } => "cycle",
             ErrorKind::FacetNotApplicable { .. }
             | ErrorKind::RepeatedFacet { .. }
@@ -580,6 +604,40 @@ impl fmt::Display for XsdError {
                 short(name),
                 first.line,
                 first.column
+            ),
+            ErrorKind::Ambiguous { name, first } => write!(
+                f,
+                "el elemento \"{}\" puede corresponder a esta partícula o a la de la línea {}, \
+                 columna {}: el modelo de contenido no es determinista (Unique Particle \
+                 Attribution)",
+                short(name),
+                first.line,
+                first.column
+            ),
+            ErrorKind::AmbiguousCounter {
+                name,
+                group,
+                repeat,
+                counter,
+            } => {
+                match group {
+                    Some(g) => write!(f, "el grupo {g}")?,
+                    None => write!(f, "el elemento \"{}\"", short(name))?,
+                }
+                write!(
+                    f,
+                    " puede volver a empezar en la misma vuelta o en una vuelta nueva de la \
+                     partícula de la línea {}, columna {}, y los dos caminos cambian de forma \
+                     distinta el contador de la partícula de la línea {}, columna {} \
+                     (minOccurs ≥ 2 o maxOccurs acotado > 1): el modelo de contenido no es \
+                     determinista con contadores",
+                    repeat.line, repeat.column, counter.line, counter.column
+                )
+            }
+            ErrorKind::TooManyParticles { max } => write!(
+                f,
+                "el modelo de contenido supera el máximo de {max} partículas (elementos y \
+                 grupos, 00-alcance.md §4)"
             ),
             ErrorKind::CircularBase { name, length } => write!(
                 f,

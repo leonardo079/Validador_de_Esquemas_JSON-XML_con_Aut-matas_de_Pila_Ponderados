@@ -1,0 +1,9 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:t="urn:t" targetNamespace="urn:t">
+  <xs:element name="a" type="xs:int"/>
+  <xs:complexType name="T">
+    <xs:sequence>
+      <xs:element ref="t:a" minOccurs="0"/>
+      <xs:element name="a" type="xs:int"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>

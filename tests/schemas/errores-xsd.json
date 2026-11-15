@@ -277,5 +277,11 @@
     "description": "`fixed` en `xs:maxLength` (5.2-CR3-S1)." },
   { "file": "texto-con-comentario-malo.xsd", "code": "lexical", "line": 1, "column": 70,
     "contains": "error léxico",
-    "description": "Un comentario con `--` dentro de un texto: el error léxico (el byte que sigue a `--`, que no es `>`) sale antes que el de texto en contenido de solo elementos (gramatica-xsd.md §7, excepción 2; 5.2-CR3-I1)." }
+    "description": "Un comentario con `--` dentro de un texto: el error léxico (el byte que sigue a `--`, que no es `>`) sale antes que el de texto en contenido de solo elementos (gramatica-xsd.md §7, excepción 2; 5.2-CR3-I1)." },
+  { "file": "ref-con-nillable.xsd", "code": "syntax", "line": 5, "column": 37,
+    "contains": "no puede tener nillable",
+    "description": "5.3-CR1-S1: `ref` con `nillable` aunque sea el valor sin efecto de D39 (src-element 2.2); error en el valor del segundo de los dos." },
+  { "file": "ref-con-form.xsd", "code": "syntax", "line": 5, "column": 43,
+    "contains": "no puede tener form",
+    "description": "5.3-CR1-S1: `form` con el valor vigente (D39) y después `ref`: error en el valor de `ref`, el segundo." }
 ]

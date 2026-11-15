@@ -184,6 +184,47 @@ impl Attrs {
     }
 }
 
+/// 5.3-CR1-S1: XSD 1.0 (*src-element* 2.2) prohíbe `nillable` y `form` en
+/// un `xs:element` con `ref`, también con el valor sin efecto que D39 acepta
+/// y no deja en el AST. Se comprueba al llegar el segundo de la pareja (el
+/// último de `attrs`), con el error en su valor (`value_at`): así el error
+/// sigue siendo el primero del documento (D37).
+fn ref_with_no_effect(attrs: &Attrs, value_at: Pos) -> Res<()> {
+    let Some(&(last, _)) = attrs.0.last() else {
+        return Ok(());
+    };
+    let reference = attrs.0.iter().find_map(|(n, v)| match (*n, v) {
+        ("ref", Val::QName(q)) => Some(q),
+        _ => None,
+    });
+    let forbidden = match last {
+        "nillable" | "form" => Some(last),
+        "ref" => attrs
+            .0
+            .iter()
+            .find_map(|(n, _)| ["nillable", "form"].into_iter().find(|f| f == n)),
+        _ => None,
+    };
+    let (Some(reference), Some(forbidden)) = (reference, forbidden) else {
+        return Ok(());
+    };
+    let problem = if forbidden == "nillable" {
+        "no puede tener nillable, ni siquiera con su valor por defecto (src-element 2.2): \
+         con ref, las propiedades son las de la declaración global"
+    } else {
+        "no puede tener form, ni siquiera con el valor vigente (src-element 2.2): con ref, \
+         el nombre es el de la declaración global"
+    };
+    fail(
+        ErrorKind::Conflict {
+            construct: "xs:element ref",
+            name: clip(reference.value.as_str()),
+            problem,
+        },
+        value_at,
+    )
+}
+
 #[derive(Debug)]
 struct Parser<I: Iterator>
 where
@@ -343,8 +384,12 @@ where
             // D23: `id` y `source` se aceptan y se ignoran.
             Some(&"id" | &"source") => Ok(()),
             Some(n) => {
+                let value_at = value_start(a.value_span);
                 let v = self.convert(ctx, n, a)?;
                 attrs.0.push((n, v));
+                if ctx == Ctx::LocalElement {
+                    ref_with_no_effect(attrs, value_at)?;
+                }
                 Ok(())
             }
             None => match unsupported_attribute(ctx, local) {

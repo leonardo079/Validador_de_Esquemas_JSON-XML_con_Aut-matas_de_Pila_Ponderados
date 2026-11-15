@@ -294,7 +294,18 @@ y que se resuelven en otra fase. Las decisiones de diseño viven en el
      medido es ≈ 1,5 GiB de salida JSON y ≈ 2,5 GiB de memoria por compilación (≈ 1,6 GB y
      ≈ 2,7 GB, §1), que ningún cliente web necesita recibir.
 
-### 3. Obligaciones del frontal XSD (tareas 5.3, 5.5, 5.6 y 5.7 de la semana 2) — partes de la 5.3, la 5.5 y la 5.6 RESUELTAS
+### 3. Obligaciones del frontal XSD (tareas 5.3, 5.5, 5.6 y 5.7 de la semana 2) — RESUELTO (tareas 5.3, 5.5, 5.6 y 5.7)
+
+- **Resuelto en la tarea 5.7** ([xsd.md](xsd.md) §11; `crates/xsd/src/upa.rs`, `crates/xsd/tests/upa.rs`;
+  corpus `semantic-error/upa-*.xsd`): la regla de las vueltas con contador (enmienda de D25, ronda 1,
+  I-1) y *Unique Particle Attribution* conservadora sobre la
+  abstracción de D25 (con `maxOccurs="0"` como `?` y el `xs:choice` vacío como ε), por nombre local,
+  iterativa, con el error en la segunda partícula y la primera en el mensaje; el tope de 4 096
+  partículas por modelo de D26, comprobado antes de calcular ningún conjunto (`limit`; prueba con
+  contador `tope_antes_de_calcular_conjuntos`); el nombre repetido en `xs:all` (5.3-CR1-S4,
+  `upa-all-repetido.xsd`). La lista de [ir.md](ir.md) §4 ya la había ampliado la 5.6 (verificado) y
+  ahora dice que la UPA está hecha. Lo que queda para la Fase 4 (Glushkov con contadores, la UPA como
+  defensa en profundidad) está en §38.
 
 - **Resuelto en la tarea 5.6** ([xsd.md](xsd.md) §10; corpus `semantic-error`, 29 casos nuevos;
   `crates/xsd/tests/simple.rs`): derivación circular de `base` iterativa y antes de seguir la cadena
@@ -558,7 +569,7 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
 
 ### Abiertas por la tarea 4.3 (clasificación)
 
-### 22. Clasificación: `$ref` con hermanas y XSD (Fase 4 y frontal XSD)
+### 22. Clasificación: `$ref` con hermanas y XSD (Fase 4 y frontal XSD) — parte XSD RESUELTA (tareas 5.4, 5.6 y 5.7); sigue abierta la de JSON
 
 - **`$ref` con reglas hermanas (Fase 4; CR1-S6).** Es (a) por el alcance (`00-alcance.md` §2.1),
   pero la Fase 4 lo compila como un producto con sus hermanas ([ir.md](ir.md) §7), igual
@@ -566,6 +577,9 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   producto; el tope de estados de §5 (L-1) ya lo cubre. Si la Fase 4 mide que se comporta
   como el producto de `allOf`, proponer al usuario cambiar la fila de `$ref` en el alcance
   ([clasificacion.md](clasificacion.md) §8, pendiente 1). Mientras, manda el alcance.
+- **Cierre (tarea 5.7):** la parte XSD está entera (abajo; los tres `parse-ok` con `xs:simpleType`
+  entraron con la 5.6, y la UPA de la 5.7 no cambia ninguna clasificación ni dorada: solo rechaza).
+  Sigue abierto solo lo de JSON (`$ref` con hermanas, Fase 4) y los dos puntos de abajo.
 - **Frontal XSD (tarea 5.4) — RESUELTO (tarea 5.4).** La tabla ya clasifica las reglas de XSD y
   `tabla_coincide_con_el_alcance` cubre sus filas de §3.1, pero ningún XSD real pasa todavía
   por `classify`. Lo hace la **tarea 5.4** (criterio de `tasks/todo.md`): el equivalente de
@@ -663,7 +677,13 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   [bajada.md](bajada.md) §5.
 - **Cuándo:** cosmético; cuando se toque `leer` (tarea 5.4).
 
-### 26. 4.3-S1: la fila `minOccurs`/`maxOccurs` del alcance, columna «Soporte» (frontal XSD o punto de control B)
+### 26. 4.3-S1: la fila `minOccurs`/`maxOccurs` del alcance, columna «Soporte» (frontal XSD o punto de control B) — RESUELTO (tarea 5.7, propuesta al alcance)
+
+- **Resuelto en la 5.7:** `docs/00-alcance.md` §3.1, fila `minOccurs`/`maxOccurs`: «Soporte» dice
+  «Contador acotado en el marco de pila cuando hace falta (no se expande el modelo); el resto, estados
+  del autómata de Glushkov» y «Cat.» nombra «una vez, `?`, `*`, `+` y `maxOccurs="0"`» como (a).
+  Como todo cambio del alcance desde D42, queda como propuesta a las dos personas hasta el commit.
+  `tabla_coincide_con_el_alcance` sigue en verde. Texto original:
 
 - **Dónde:** `docs/00-alcance.md:129` (§3.1).
 - **Estado:** la celda «Cat.» ya dice cuándo la ocurrencia es (b), pero la columna
@@ -757,12 +777,18 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
 
 ### Cierre de la 5.3: observaciones de la revisión (4 nov)
 
-### 33. Observaciones abiertas de la revisión de la 5.3 (frontal XSD)
+### 33. Observaciones abiertas de la revisión de la 5.3 (frontal XSD) — RESUELTAS en parte (5.6 y 5.7); sigue abierta 5.3-T1-3
 
 Revisión de la tarea 5.3 (APROBADO CON OBSERVACIONES, D38: ninguna abre ronda). El
 comportamiento es correcto salvo donde se dice; lo que falta es cobertura, una restricción de XSD o
 pulido.
 
+- **Cierre en la tarea 5.7:** I1, I2, S1 y S4 **RESUELTOS** (abajo); T1-3 sigue abierta.
+- **5.3-CR1-I1 (EDC por nombre local en el alcance) — RESUELTO (tarea 5.7):** desviación 2 de
+  `docs/00-alcance.md` §3.4 (propuesta, D42), junto con la UPA por nombre local.
+- **5.3-CR1-I2 — RESUELTO (tarea 5.7):** `semantic-error/edc-ref-y-local.xsd` y
+  `semantic-error/edc-anonimos.xsd` en el manifiesto, y el mismo `ref` dos veces (tipo `W`) en
+  `correspondencia_de_cada_construccion`, con la arista compartida. Texto original:
 - **5.3-CR1-I2 (Important, cobertura; incluye 5.3-T1-2 del Tester 1).**
   - **Dónde:** `crates/xsd/src/check.rs:910-928` (EDC), corpus `tests/schemas/xsd/semantic-error`.
   - **Estado:** el único caso de EDC es `semantic-error/declaraciones-inconsistentes.xsd` (dos
@@ -772,6 +798,12 @@ pulido.
     `errores-semanticos-xsd.json`, y un caso aceptado con el mismo `ref` repetido en
     `correspondencia_de_cada_construccion` (`crates/xsd/tests/lower.rs`).
   - **Destino:** tarea 5.7 (criterio en `tasks/todo.md`).
+- **5.3-CR1-S1 — RESUELTO (tarea 5.7), en el parser:** D39 no deja rastro en el AST (y su prueba
+  `d39_valores_por_defecto_sin_efecto` lo exige), así que en lugar de anotarlo para el análisis el
+  parser rechaza la pareja `ref` + `nillable`/`form` (con el valor sin efecto) al llegar el segundo
+  de los dos, `syntax` en su valor (*src-element* 2.2); el error sigue siendo el primero del documento
+  (D37). `parse-error/ref-con-nillable.xsd`, `ref-con-form.xsd` y la prueba
+  `ref_con_valores_sin_efecto_de_d39` (`crates/xsd/tests/parser.rs`). Texto original:
 - **5.3-CR1-S1 (`ref` con `form`/`nillable` sin efecto).**
   - **Dónde:** `crates/xsd/src/parser.rs:480-533` (D39 los quita en el parser) y
     `crates/xsd/src/check.rs:783-812` (`particle_element`, rama de `ref`).
@@ -802,6 +834,8 @@ pulido.
     `crates/xsd/tests/lower.rs:69`, y solo si la prueba falla.
   - **Arreglo:** `Debug` manual con recuentos (tipos, globales, partículas) o quitar el derive.
   - **Destino:** la próxima tarea que toque `check.rs` (5.6) o la Fase 7 (API pública).
+- **5.3-CR1-S4 — RESUELTO (tarea 5.7):** `semantic-error/upa-all-repetido.xsd` y la prueba
+  `nombre_repetido_en_all`. Texto original:
 - **5.3-CR1-S4 (UPA en `xs:all`).** Ver §3: dos hijos de `xs:all` con el mismo nombre y tipo pasan
   EDC y `verify` y violan UPA; la máscara de `xs:all` de la Fase 4 depende de que se rechace.
   **Destino:** tarea 5.7 (criterio en `tasks/todo.md`).
@@ -822,7 +856,8 @@ pulido.
   - **Estado:** las dos copias pueden desincronizarse sin que falle ninguna prueba.
   - **Arreglo:** un módulo de prueba compartido (por ejemplo `tests/common/pedido.rs` incluido con
     `#[path]`) o una prueba que compare ambas.
-  - **Destino:** la próxima tarea que toque `crates/ir/tests/forma.rs`, o la 5.7.
+  - **Destino:** la próxima tarea que toque `crates/ir/tests/forma.rs` (la 5.7 no lo toca: sigue
+    abierta).
 
 ### Abiertas por la tarea 5.4 (`schemac` con XSD)
 
@@ -1060,6 +1095,13 @@ constantes 768/113 del corte en 800 cifras en `crates/ir/src/num.rs:583-590` y
     (*collapse* y `ir::num` en los numéricos, cadena exacta en `xs:string`, NaN igual a sí mismo en
     `fixed`), o que el frontal lo normalice al bajar (cambia las doradas: decisión de la Fase 4).
   - **Destino:** F4.1.
+- **5.6-P4 — RESUELTO (tarea 5.7, propuesta al alcance):** `docs/00-alcance.md` §3.4, desviación 4
+  (las dos lecturas conservadoras de las cotas, la enumeración de la base no comparada con las cotas,
+  `INF`/`NaN` en facetas según D24, la omisión de D29), con las que rechazan de más separadas de las
+  que aceptan de más (I-3 de la revisión de la 5.7). Lo que es XSD al pie de la letra (enumeración
+  frente a la base y no a su paso, `minLength`/`maxLength` sobre `length`, `INF`/`NaN` en
+  `default`/`fixed`, el anónimo de un atributo global) se queda en [xsd.md](xsd.md) §10 y el alcance
+  solo remite allí (I-4). Texto original:
 - **5.6-P4 (alcance para la 5.7) → tarea 5.7 (`docs/00-alcance.md` §3, interfaz compartida, D42).**
   - **Dónde:** `docs/00-alcance.md` §3.1 (fila `xs:simpleType` + `xs:restriction`) y §3.3.
   - **Estado:** la 5.6 no toca el alcance. Hay que reflejar: las **dos** lecturas conservadoras de
@@ -1110,6 +1152,10 @@ S-1, de documentación, corregidos en la ronda).
   - **Arreglo:** lo más simple es que el analizador viva en `ir` (como `ir::num`), y que el
     frontal compruebe cada `xs:pattern` por separado antes de unirlas.
   - **Destino:** tarea `pattern` → AFD (Fase 4).
+- **5.6-CR-S3 — RESUELTO (tarea 5.7): se documenta, no se comprueba.** Es lo que decidió D44 («las
+  cotas no se comparan con la enumeración de la base»), no cambia la validación (los `Ref` hacen
+  conjunción) y comprobarlo solo para las inclusivas añadiría un caso más sin efecto: va como
+  desviación en `docs/00-alcance.md` §3.4 (también para las inclusivas). Texto original:
 - **5.6-CR-S3 (cota inclusiva frente a la enumeración de la base) → 5.7 (en 5.6-P4).**
   - **Dónde:** `crates/xsd/src/simple.rs` (`restriction`, rama de las facetas de rango: solo
     `xsd_number`, sin `in_space`); [xsd.md](xsd.md) §10.6, decisión 6.
@@ -1120,6 +1166,8 @@ S-1, de documentación, corregidos en la ronda).
   - **Arreglo:** decidir en la 5.7 si se documenta en `00-alcance.md` §3 o se comprueba también
     para las inclusivas (`in_space` contra la base).
   - **Destino:** tarea 5.7.
+- **5.6-CR-S4 — RESUELTO (tarea 5.7):** es comportamiento de XSD, documentado en [xsd.md](xsd.md)
+  §10.2 (la enumeración se compara con la base); el alcance §3.4 remite allí. Texto original:
 - **5.6-CR-S4 (T-3: `length` y enumeración del mismo paso) → 5.7 (en 5.6-P4).**
   - **Dónde:** `crates/xsd/src/simple.rs` (`restriction`, `in_space` con las facetas de la base).
   - **Estado:** `length=2` con la enumeración `"abc"` en el mismo paso se acepta: es lo que pide
@@ -1127,6 +1175,9 @@ S-1, de documentación, corregidos en la ronda).
     ningún valor `"abc"`.
   - **Arreglo:** ninguno en el código; anotarlo en el alcance como comportamiento de XSD.
   - **Destino:** tarea 5.7.
+- **5.6-CR-S5 → Fase 7 (decisión del orquestador de la 5.7):** no se pone tope en la 5.7. La 5.7
+  añade errores de UPA, a lo sumo uno por partícula (lineal, como los demás). Si la Fase 7 pone un
+  tope, el mismo para las tres etapas. Texto original:
 - **5.6-CR-S5 (T-2: sin tope de errores por etapa) → Fase 7 o 5.7.**
   - **Dónde:** `crates/xsd/src/check.rs` (`analyze`: devuelve todos los errores de la etapa).
   - **Estado:** el número de errores es lineal en la entrada y cada mensaje está acotado por
@@ -1174,9 +1225,90 @@ Critical y 0 Important; tres Suggestions).
   - **Arreglo:** doc comment añadido y una línea en el de la prueba (hoy `Ctx::bound` devuelve
     `&Decimal`, sin copia).
   - **Destino:** cerrado.
+- **5.6-T1-1 — NO APLICA mientras `default`/`fixed` en `xs:element` sigan rechazados (decisión del
+  orquestador de la 5.7):** la 5.7 no amplía el alcance. Si una tarea futura los admite, añade esa
+  forma a `cota_larga_se_analiza_una_sola_vez`. Texto original:
 - **5.6-T1-1 (Tester, ronda 1) → tarea 5.7.**
   - **Dónde:** `crates/xsd/tests/simple.rs` (`cota_larga_se_analiza_una_sola_vez`).
   - **Estado:** cubre enumeraciones, `default` de atributos y cadenas de pasos; `default`/`fixed`
     en `xs:element` hoy son `unsupported` en el parser, así que no hay esa forma.
   - **Arreglo:** si la 5.7 admite `default`/`fixed` en `xs:element`, añadir esa forma a la prueba.
   - **Destino:** tarea 5.7.
+
+### Abiertas por la tarea 5.7 (UPA y cierre del frontal XSD)
+
+### 38. Lo que deja la 5.7
+
+- **5.7-P1 (Glushkov con contadores) → Fase 4 (construcción del autómata de cada modelo).**
+  - **Dónde:** [ir.md](ir.md) §7 (fila Q, `Content`; fila Γ, contadores por partícula) y
+    [xsd.md](xsd.md) §11.2.
+  - **Estado:** el frontal garantiza dos cosas (corregido en la ronda 1 de la 5.7, I-1): la UPA, que
+    el **autómata de posiciones** del modelo es determinista (lo que pide XSD 1.0; proposición de
+    [xsd.md](xsd.md) §11.2), y la regla de las vueltas con contador (enmienda de D25), que ninguna
+    posición se alcanza desde otra por dos vueltas que actualicen distinto un contador. Con las dos,
+    cada transición del Glushkov tiene **una sola** actualización de contadores (determinismo
+    fuerte). Falta construirlo: las posiciones con contador (`minOccurs` ≥ 2 o `maxOccurs` acotado
+    > 1) llevan un contador saturado en el marco, y las transiciones que la cruzan son guardas sobre
+    él. Hay dos clases de transición x → y (§11.3), según cómo entra y en el nivel *k* de la subida:
+    - **de vuelta** (y entra por la repetición de la partícula *p* del nivel *k*): sale de las
+      partículas de la subida por debajo de *k* y **repite** *p*: guarda «el contador de *p* no llegó
+      a su máximo» y lo incrementa;
+    - **de hermana** (y entra por una hermana siguiente de *p* en una secuencia o un `xs:all`): sale
+      de las partículas de la subida hasta *p* incluida, y **no repite** ninguna.
+    Al salir de una partícula con contador (en las dos clases) la guarda es «llegó a su mínimo»,
+    **salvo que su cuerpo sea anulable**: entonces las vueltas que faltan pueden ser vacías y la
+    salida no exige el mínimo (I-A del cierre de la 5.7). Ejemplo: `(a?){2,3}` (lenguaje a{0,3},
+    que `schemac check` acepta) admite `<r><a/></r>`, una vuelta con `a` y otra vacía; exigir el
+    mínimo al salir lo rechazaría. El determinismo no cambia: el autómata nunca toma vueltas vacías,
+    solo deja de exigirlas.
+  - **Criterio para la Fase 4:** probar `(a?){2,3}` con `<r/>`, `<r><a/></r>`, `<r><a/><a/><a/></r>`
+    (válidos) y cuatro `a` (inválido), y `(a{1,2}, b){2,2}` con los mínimos exigidos (cuerpo no
+    anulable).
+  - **Arreglo:** en la Fase 4, construir el Glushkov de cada `Content` sin determinizar, con las
+    guardas de contador, y volver a comprobar el determinismo al construirlo (defensa en
+    profundidad, [ir.md](ir.md) §4: un no determinismo ahí es un error interno, no del usuario).
+    Leer `maxOccurs="0"` como «ausente» o como `?` y el `xs:choice` vacío como lenguaje vacío o como
+    ε da igual para el determinismo (la abstracción de la UPA cubre las dos lecturas).
+  - **Tamaño del autómata (S-4 de la revisión de la 5.7).** El cuello de botella de un esquema hostil
+    será el autómata, no la UPA: el Glushkov de `(e₁ | … | e₄₀₉₅)*` tiene Θ(*n*·*m*) ≈ 1,7·10⁷
+    transiciones en un solo modelo, y Σ *n*ᵢ·*m*ᵢ sobre el esquema puede llegar a ≈ 1,7·10⁹ con el
+    tope de 16 MiB. La Fase 4 necesita un **presupuesto de transiciones** (o de Σ *n*ᵢ·*m*ᵢ) por
+    esquema, con error `limit` al pasarlo, o una representación compacta de las transiciones de
+    vuelta (las de un mismo *first* compartidas, como hace la enumeración de la UPA); es parte del
+    «tamaño del autómata y riesgo de explosión» que pide el informe del PDF. En el servidor (Fase 7),
+    además, un tiempo máximo de compilación en el sandbox (5.7-P3).
+  - **Destino:** Fase 4.
+- **5.7-P2 (`pattern` en enumeraciones y `default`/`fixed`, D29) → tarea `pattern` → AFD (Fase 4).**
+  Es 5.6-P2 (§37), ahora en `docs/00-alcance.md` §3.4 como omisión conocida: con el AFD de cada
+  `pattern`, comprobar cada `xs:enumeration`, `default` y `fixed` contra las `pattern` de toda la
+  cadena de bases, con la posición del valor.
+- **5.7-P3 (costo de la UPA en el servidor) → Fases 6 y 7.**
+  - **Dónde:** `crates/xsd/src/upa.rs`; [xsd.md](xsd.md) §11.4.
+  - **Estado:** la UPA es O(*n*·*m*) por modelo, acotada por D26: ≤ 3·4 096·*N* pasos con *N* las
+    partículas del esquema. Con el tope de 16 MiB de `schemac`, el peor esquema (100 modelos de
+    4 096 partículas, cada uno un `xs:choice maxOccurs="unbounded"` de 4 095 nombres distintos;
+    16,3 MB) son ≈ 1,7·10⁹ pasos: **medido a mano en release (fuera de `cargo test`, D1), `schemac
+    check` tarda ≈ 7-28 s según la máquina y la carga** (7,5 s, 23 s y 28 s en tres medidas; 5,1 s
+    la variante con todo `unbounded`) y lo acepta, sin memoria extra (O(*n*) por modelo). La regla de
+    las vueltas con contador cuesta O(1) por paso. Es aceptable con el tope de D26 y lo cubre este
+    pendiente. Un esquema normal no se
+    nota (los *follow* son pequeños).
+  - **Arreglo:** que el arnés de la Fase 6 lo mida (entrada de arriba), y que el servidor (Fase 7)
+    lo cubra con un tiempo máximo de compilación o un tope de tamaño de subida menor. Si no basta: un
+    algoritmo de determinismo en tiempo lineal o casi (Brüggemann-Klein y Wood; Groz, Maneth y
+    Staworko), o bajar el tope de D26 (cambio del alcance, D42).
+  - **Destino:** Fases 6 y 7.
+- **5.7-CR2-S1 (error secundario mal atribuido en las vueltas con contador) → próxima tarea que toque
+  `crates/xsd/src/upa.rs`.**
+  - **Dónde:** `crates/xsd/src/upa.rs` (`Upa::reentry`, `Upa::follow`); [xsd.md](xsd.md) §11.2.
+  - **Estado:** la regla mira los niveles *i*..*j* de la subida, ambos incluidos. Si el nodo entró en
+    el nivel *i* como **hermana** (no por la vuelta de la partícula de *i*), esa partícula se sale en
+    los dos caminos y su contador no los distingue. En `(a{0,2}, b?)*` salen dos errores: el de `a`
+    es real (vuelta de `a` o del grupo) y el de `b` atribuye la causa al contador de `a`. El modelo se
+    rechaza igual: no hay rechazos de más, solo un segundo mensaje con la causa mal atribuida.
+  - **Arreglo:** guardar el nivel *i* + 1 en los nodos que entran como hermana (rama
+    `Sequence`/`All` de `follow`), de modo que el rango empiece por encima de la partícula que se
+    sale; y añadir `(a{0,2}, b?)*` con su `count` al manifiesto o a `vueltas_ambiguas_con_contador`.
+  - **Destino:** próxima tarea que toque `crates/xsd/src/upa.rs`.
+- **5.7-CR2-S2 (opcional) → misma tarea.** Juntar `visited` y `level` en un `Vec<(u32, u32)>` (una
+  sola lectura de memoria por nodo sacado de la pila). Mejora constante; no cambia el resultado.
