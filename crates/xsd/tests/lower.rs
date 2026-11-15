@@ -660,6 +660,18 @@ fn errores_por_etapas_en_orden_del_documento() {
             ("content-model", 1, col(&doc, "1'/>"))
         ]
     );
+    // 5.3-CR1-S2: `minOccurs` > `maxOccurs` aunque los dos pasen de 2⁶⁴.
+    let saturados = doc.replace(
+        "minOccurs='2' maxOccurs='1'",
+        "minOccurs='18446744073709551617' maxOccurs='18446744073709551616'",
+    );
+    assert_eq!(
+        errores(&saturados),
+        [
+            ("content-model", 1, segunda),
+            ("content-model", 1, col(&saturados, "18446744073709551616'"))
+        ]
+    );
     // Con un error de la etapa 1, solo ese.
     let con_uno = doc.replace("type='xs:int' minOccurs", "type='Nadie' minOccurs");
     assert_eq!(

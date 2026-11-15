@@ -1,0 +1,17 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="A">
+    <xs:restriction base="B"/>
+  </xs:simpleType>
+  <xs:simpleType name="B">
+    <xs:restriction>
+      <xs:simpleType>
+        <xs:restriction base="A">
+          <xs:maxLength value="3"/>
+        </xs:restriction>
+      </xs:simpleType>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Deriva">
+    <xs:restriction base="A"/>
+  </xs:simpleType>
+</xs:schema>

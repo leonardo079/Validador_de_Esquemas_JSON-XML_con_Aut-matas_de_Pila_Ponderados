@@ -1,20 +1,30 @@
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
-  <!-- Todas las facetas del subconjunto (00-alcance.md §3.1). -->
-  <xs:simpleType name="Talla">
+  <!-- Todas las facetas del subconjunto (00-alcance.md §3.1). length va en
+       su propio paso: con minLength o maxLength en el mismo xs:restriction
+       es un error (I4, tarea 5.6). -->
+  <xs:simpleType name="TallaCorta">
     <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+      <xs:maxLength value=" 3 "/>
+    </xs:restriction>
+  </xs:simpleType>
+  <!-- Las enumeraciones son valores de la base (" M " tiene 3 caracteres:
+       cumple TallaCorta, xs:string conserva los espacios), no de las
+       facetas de su mismo paso. -->
+  <xs:simpleType name="Talla">
+    <xs:restriction base="TallaCorta">
       <xs:enumeration value="S"/>
       <xs:enumeration value=" M "/>
       <xs:enumeration value="L"/>
       <xs:length value="1"/>
-      <xs:minLength value="1"/>
-      <xs:maxLength value=" 3 "/>
       <xs:pattern value="[SML]"/>
+      <xs:pattern value="X+L"/>
     </xs:restriction>
   </xs:simpleType>
   <xs:simpleType name="Porcentaje">
     <xs:restriction base="xs:decimal">
       <xs:minInclusive value="0"/>
-      <xs:maxInclusive value="100"/>
+      <xs:maxInclusive value="100.0"/>
     </xs:restriction>
   </xs:simpleType>
   <xs:simpleType name="Abierto">
@@ -23,13 +33,25 @@
       <xs:maxExclusive value="+10"/>
     </xs:restriction>
   </xs:simpleType>
-  <!-- Base anónima: xs:restriction con un xs:simpleType hijo. -->
+  <!-- Cadena de 3 restricciones con base anónima: PocoPorcentaje, el tipo
+       anónimo y Porcentaje (y debajo xs:decimal). -->
   <xs:simpleType name="PocoPorcentaje">
     <xs:restriction>
       <xs:simpleType>
-        <xs:restriction base="Porcentaje"/>
+        <xs:restriction base="Porcentaje">
+          <xs:enumeration value="0"/>
+          <xs:enumeration value="5.50"/>
+          <xs:enumeration value="10"/>
+          <xs:enumeration value="50"/>
+        </xs:restriction>
       </xs:simpleType>
       <xs:maxInclusive value="10"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Peso">
+    <xs:restriction base="xs:float">
+      <xs:minExclusive value="0"/>
+      <xs:maxInclusive value="1e3"/>
     </xs:restriction>
   </xs:simpleType>
   <xs:element name="talla">
@@ -39,6 +61,11 @@
   </xs:element>
   <xs:element name="prenda">
     <xs:complexType>
+      <xs:sequence>
+        <xs:element name="descuento" type="PocoPorcentaje"/>
+        <xs:element name="peso" type="Peso" minOccurs="0"/>
+        <xs:element name="otro" type="PocoPorcentaje" minOccurs="0"/>
+      </xs:sequence>
       <xs:attribute name="color">
         <xs:simpleType>
           <xs:restriction base="xs:string">
@@ -47,7 +74,8 @@
         </xs:simpleType>
       </xs:attribute>
       <xs:attribute name="nota" fixed="  sin cambios  "/>
-      <xs:attribute name="uso" type="xs:boolean" use=" optional "/>
+      <xs:attribute name="uso" type="xs:boolean" use=" optional " default=" 1 "/>
+      <xs:attribute name="abierto" type="Abierto" default="+09"/>
     </xs:complexType>
   </xs:element>
   <xs:attribute name="global" type="xs:string" default="x"/>

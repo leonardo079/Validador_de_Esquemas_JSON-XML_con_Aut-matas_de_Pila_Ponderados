@@ -1,0 +1,15 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <!-- La etapa 2 (tipos simples) oculta los de la 3 (modelos de contenido):
+       solo salen los dos errores de facetas, en orden del documento. -->
+  <xs:complexType name="T">
+    <xs:sequence>
+      <xs:element name="a" type="Nota" minOccurs="2" maxOccurs="1"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:simpleType name="Nota">
+    <xs:restriction base="xs:integer">
+      <xs:minLength value="1"/>
+      <xs:maxInclusive value="x"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

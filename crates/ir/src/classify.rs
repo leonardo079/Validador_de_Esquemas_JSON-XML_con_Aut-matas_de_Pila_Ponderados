@@ -255,11 +255,7 @@ impl NodeClass {
 
     fn join(self, o: NodeClass) -> NodeClass {
         NodeClass {
-            class: if o.class > self.class {
-                o.class
-            } else {
-                self.class
-            },
+            class: self.class.max(o.class),
             strategies: self.strategies.union(o.strategies),
         }
     }

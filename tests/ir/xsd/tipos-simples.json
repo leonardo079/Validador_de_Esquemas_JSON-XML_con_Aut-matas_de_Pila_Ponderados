@@ -1,0 +1,237 @@
+{
+  "irVersion": 2,
+  "format": "xml",
+  "targetNamespace": null,
+  "nodeCount": 17,
+  "edgeCount": 17,
+  "classCount": {"a": 13, "b": 2, "c": 2},
+  "nodes": [
+    {
+      "id": 0,
+      "sort": "element",
+      "span": {"line": 1, "column": 1, "start": 0, "end": 2956},
+      "parent": null,
+      "step": null,
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "content", "span": {"line": 1, "column": 1, "start": 0, "end": 2956}, "class": "a", "strategy": "transition", "particles": [{"term": "choice", "children": [1, 2], "min": 1, "max": 1, "span": {"line": 1, "column": 1, "start": 0, "end": 2956}}, {"term": "element", "name": "talla", "type": 8, "min": 1, "max": 1, "span": {"line": 57, "column": 3, "start": 2017, "end": 2136}}, {"term": "element", "name": "prenda", "type": 10, "min": 1, "max": 1, "span": {"line": 62, "column": 3, "start": 2139, "end": 2882}}]}
+      ]
+    },
+    {
+      "id": 1,
+      "sort": "text",
+      "span": {"line": 5, "column": 3, "start": 251, "end": 429},
+      "parent": 0,
+      "step": {"keyword": "simpleType", "entry": "TallaCorta"},
+      "class": "b",
+      "strategies": ["transition", "register"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 6, "column": 5, "start": 289, "end": 410}, "class": "a", "strategy": "transition", "lexical": "string"},
+        {"rule": "minLength", "span": {"line": 7, "column": 7, "start": 329, "end": 354}, "class": "b", "strategy": "register", "value": 1},
+        {"rule": "maxLength", "span": {"line": 8, "column": 7, "start": 361, "end": 388}, "class": "b", "strategy": "register", "value": 3}
+      ]
+    },
+    {
+      "id": 2,
+      "sort": "text",
+      "span": {"line": 14, "column": 3, "start": 614, "end": 921},
+      "parent": 0,
+      "step": {"keyword": "simpleType", "entry": "Talla"},
+      "class": "c",
+      "strategies": ["transition", "register", "dfa"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 15, "column": 5, "start": 647, "end": 902}, "class": "a", "strategy": "transition", "lexical": "string"},
+        {"rule": "$ref", "span": {"line": 15, "column": 26, "start": 668, "end": 680}, "class": "a", "strategy": "transition", "target": 1},
+        {"rule": "enum", "span": {"line": 16, "column": 7, "start": 688, "end": 785}, "class": "a", "strategy": "transition", "values": [[["string", "S"]], [["string", " M "]], [["string", "L"]]]},
+        {"rule": "minLength", "span": {"line": 19, "column": 7, "start": 792, "end": 814}, "class": "b", "strategy": "register", "value": 1},
+        {"rule": "maxLength", "span": {"line": 19, "column": 7, "start": 792, "end": 814}, "class": "b", "strategy": "register", "value": 1},
+        {"rule": "pattern", "span": {"line": 20, "column": 7, "start": 821, "end": 880}, "class": "c", "strategy": "dfa", "source": "([SML])|(X+L)"}
+      ]
+    },
+    {
+      "id": 3,
+      "sort": "text",
+      "span": {"line": 24, "column": 3, "start": 924, "end": 1111},
+      "parent": 0,
+      "step": {"keyword": "simpleType", "entry": "Porcentaje"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 25, "column": 5, "start": 962, "end": 1092}, "class": "a", "strategy": "transition", "lexical": "decimal"},
+        {"rule": "minimum", "span": {"line": 26, "column": 7, "start": 1003, "end": 1031}, "class": "a", "strategy": "transition", "value": "0"},
+        {"rule": "maximum", "span": {"line": 27, "column": 7, "start": 1038, "end": 1070}, "class": "a", "strategy": "transition", "value": "100"}
+      ]
+    },
+    {
+      "id": 4,
+      "sort": "text",
+      "span": {"line": 30, "column": 3, "start": 1114, "end": 1293},
+      "parent": 0,
+      "step": {"keyword": "simpleType", "entry": "Abierto"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 31, "column": 5, "start": 1149, "end": 1274}, "class": "a", "strategy": "transition", "lexical": "integer"},
+        {"rule": "$ref", "span": {"line": 31, "column": 26, "start": 1170, "end": 1178}, "class": "a", "strategy": "transition", "target": 12},
+        {"rule": "exclusiveMinimum", "span": {"line": 32, "column": 7, "start": 1186, "end": 1215}, "class": "a", "strategy": "transition", "value": "-1"},
+        {"rule": "exclusiveMaximum", "span": {"line": 33, "column": 7, "start": 1222, "end": 1252}, "class": "a", "strategy": "transition", "value": "10"}
+      ]
+    },
+    {
+      "id": 5,
+      "sort": "text",
+      "span": {"line": 38, "column": 3, "start": 1428, "end": 1834},
+      "parent": 0,
+      "step": {"keyword": "simpleType", "entry": "PocoPorcentaje"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 39, "column": 5, "start": 1470, "end": 1815}, "class": "a", "strategy": "transition", "lexical": "decimal"},
+        {"rule": "$ref", "span": {"line": 40, "column": 7, "start": 1493, "end": 1757}, "class": "a", "strategy": "transition", "target": 6},
+        {"rule": "maximum", "span": {"line": 48, "column": 7, "start": 1764, "end": 1793}, "class": "a", "strategy": "transition", "value": "10"}
+      ]
+    },
+    {
+      "id": 6,
+      "sort": "text",
+      "span": {"line": 40, "column": 7, "start": 1493, "end": 1757},
+      "parent": 5,
+      "step": {"keyword": "restriction"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 41, "column": 9, "start": 1517, "end": 1734}, "class": "a", "strategy": "transition", "lexical": "decimal"},
+        {"rule": "$ref", "span": {"line": 41, "column": 30, "start": 1538, "end": 1550}, "class": "a", "strategy": "transition", "target": 3},
+        {"rule": "enum", "span": {"line": 42, "column": 11, "start": 1562, "end": 1708}, "class": "a", "strategy": "transition", "values": [[["number", "0"]], [["number", "5.5"]], [["number", "10"]], [["number", "50"]]]}
+      ]
+    },
+    {
+      "id": 7,
+      "sort": "text",
+      "span": {"line": 51, "column": 3, "start": 1837, "end": 2014},
+      "parent": 0,
+      "step": {"keyword": "simpleType", "entry": "Peso"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 52, "column": 5, "start": 1869, "end": 1995}, "class": "a", "strategy": "transition", "lexical": "float"},
+        {"rule": "exclusiveMinimum", "span": {"line": 53, "column": 7, "start": 1908, "end": 1936}, "class": "a", "strategy": "transition", "value": "0"},
+        {"rule": "maximum", "span": {"line": 54, "column": 7, "start": 1943, "end": 1973}, "class": "a", "strategy": "transition", "value": "1e3"}
+      ]
+    },
+    {
+      "id": 8,
+      "sort": "element",
+      "span": {"line": 58, "column": 5, "start": 2047, "end": 2120},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "talla"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 58, "column": 5, "start": 2047, "end": 2120}, "class": "a", "strategy": "transition", "target": 9}
+      ]
+    },
+    {
+      "id": 9,
+      "sort": "text",
+      "span": {"line": 58, "column": 5, "start": 2047, "end": 2120},
+      "parent": 8,
+      "step": {"keyword": "simpleType"},
+      "class": "c",
+      "strategies": ["transition", "register", "dfa"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 59, "column": 7, "start": 2069, "end": 2099}, "class": "a", "strategy": "transition", "lexical": "string"},
+        {"rule": "$ref", "span": {"line": 59, "column": 28, "start": 2090, "end": 2097}, "class": "a", "strategy": "transition", "target": 2}
+      ]
+    },
+    {
+      "id": 10,
+      "sort": "element",
+      "span": {"line": 63, "column": 5, "start": 2170, "end": 2866},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "prenda"},
+      "class": "b",
+      "strategies": ["transition", "register"],
+      "rules": [
+        {"rule": "content", "span": {"line": 64, "column": 7, "start": 2193, "end": 2418}, "class": "a", "strategy": "transition", "particles": [{"term": "sequence", "children": [1, 2, 3], "min": 1, "max": 1, "span": {"line": 64, "column": 7, "start": 2193, "end": 2418}}, {"term": "element", "name": "descuento", "type": 13, "min": 1, "max": 1, "span": {"line": 65, "column": 9, "start": 2215, "end": 2267}}, {"term": "element", "name": "peso", "type": 14, "min": 0, "max": 1, "span": {"line": 66, "column": 9, "start": 2276, "end": 2327}}, {"term": "element", "name": "otro", "type": 13, "min": 0, "max": 1, "span": {"line": 67, "column": 9, "start": 2336, "end": 2397}}]},
+        {"rule": "attributes", "span": {"line": 69, "column": 7, "start": 2425, "end": 2844}, "class": "b", "strategy": "register", "attributes": [{"name": "color", "required": false, "type": 11, "default": null, "fixed": null, "span": {"line": 69, "column": 7, "start": 2425, "end": 2638}}, {"name": "nota", "required": false, "type": 15, "default": null, "fixed": "  sin cambios  ", "span": {"line": 76, "column": 7, "start": 2645, "end": 2696}}, {"name": "uso", "required": false, "type": 16, "default": " 1 ", "fixed": null, "span": {"line": 77, "column": 7, "start": 2703, "end": 2778}}, {"name": "abierto", "required": false, "type": 4, "default": "+09", "fixed": null, "span": {"line": 78, "column": 7, "start": 2785, "end": 2844}}]}
+      ]
+    },
+    {
+      "id": 11,
+      "sort": "text",
+      "span": {"line": 70, "column": 9, "start": 2461, "end": 2616},
+      "parent": 10,
+      "step": {"keyword": "attribute", "entry": "color"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 71, "column": 11, "start": 2487, "end": 2591}, "class": "a", "strategy": "transition", "lexical": "string"},
+        {"rule": "enum", "span": {"line": 72, "column": 13, "start": 2533, "end": 2563}, "class": "a", "strategy": "transition", "values": [[["string", "rojo"]]]}
+      ]
+    },
+    {
+      "id": 12,
+      "sort": "text",
+      "span": {"line": 31, "column": 26, "start": 1170, "end": 1178},
+      "parent": 0,
+      "step": {"keyword": "builtin", "entry": "int"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 31, "column": 26, "start": 1170, "end": 1178}, "class": "a", "strategy": "transition", "lexical": "integer"},
+        {"rule": "minimum", "span": {"line": 31, "column": 26, "start": 1170, "end": 1178}, "class": "a", "strategy": "transition", "value": "-2147483648"},
+        {"rule": "maximum", "span": {"line": 31, "column": 26, "start": 1170, "end": 1178}, "class": "a", "strategy": "transition", "value": "2147483647"}
+      ]
+    },
+    {
+      "id": 13,
+      "sort": "element",
+      "span": {"line": 65, "column": 43, "start": 2249, "end": 2265},
+      "parent": 0,
+      "step": {"keyword": "simpleContent", "entry": "PocoPorcentaje"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 65, "column": 43, "start": 2249, "end": 2265}, "class": "a", "strategy": "transition", "target": 5}
+      ]
+    },
+    {
+      "id": 14,
+      "sort": "element",
+      "span": {"line": 66, "column": 38, "start": 2305, "end": 2311},
+      "parent": 0,
+      "step": {"keyword": "simpleContent", "entry": "Peso"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 66, "column": 38, "start": 2305, "end": 2311}, "class": "a", "strategy": "transition", "target": 7}
+      ]
+    },
+    {
+      "id": 15,
+      "sort": "text",
+      "span": {"line": 76, "column": 7, "start": 2645, "end": 2696},
+      "parent": 0,
+      "step": {"keyword": "builtin", "entry": "anySimpleType"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 76, "column": 7, "start": 2645, "end": 2696}, "class": "a", "strategy": "transition", "lexical": "string"}
+      ]
+    },
+    {
+      "id": 16,
+      "sort": "text",
+      "span": {"line": 77, "column": 37, "start": 2733, "end": 2745},
+      "parent": 0,
+      "step": {"keyword": "builtin", "entry": "boolean"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 77, "column": 37, "start": 2733, "end": 2745}, "class": "a", "strategy": "transition", "lexical": "boolean"}
+      ]
+    }
+  ]
+}

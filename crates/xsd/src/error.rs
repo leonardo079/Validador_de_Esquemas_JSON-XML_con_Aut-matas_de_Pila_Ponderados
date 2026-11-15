@@ -10,6 +10,7 @@ use core::fmt;
 
 use lexer::{short, LexErrorKind, Pos, SHORT_MAX};
 
+use crate::ast::FacetKind;
 use crate::XS_NS;
 
 /// Un error del documento de esquema. El lector se detiene en el primero y
@@ -142,9 +143,10 @@ pub enum ErrorKind {
         name: String,
         ns: Option<String>,
     },
-    /// `type` de un `xs:attribute` que nombra un tipo complejo: un atributo
-    /// solo puede tener un tipo simple.
-    NotSimpleType { name: String },
+    /// `type` de un `xs:attribute` o `base` de un `xs:restriction` que nombra
+    /// un tipo complejo: los dos solo admiten un tipo simple. `context`: qué
+    /// tiene que ser simple («el tipo de un atributo»).
+    NotSimpleType { name: String, context: &'static str },
     /// Construcción o nombre de tipo fuera del subconjunto que solo se sabe
     /// tras resolver o combinar atributos (D14, D27, tipos predefinidos
     /// fuera de `00-alcance.md` §3.2): categoría y motivo (D6).
@@ -153,12 +155,6 @@ pub enum ErrorKind {
         name: String,
         category: &'static str,
         reason: &'static str,
-    },
-    /// Construcción del subconjunto que todavía no se compila: la hará la
-    /// tarea indicada.
-    Pending {
-        construct: &'static str,
-        task: &'static str,
     },
     /// Combinación de atributos que XSD prohíbe en la construcción (`name`
     /// con `ref`, `type` con un tipo anónimo, `default` con `fixed`…;
@@ -174,6 +170,68 @@ pub enum ErrorKind {
     /// *Element Declarations Consistent* (I12): dos partículas con el mismo
     /// nombre y distinto tipo en un modelo. `first`: la primera.
     InconsistentElement { name: String, first: Pos },
+
+    // --- Tipos simples del usuario (tarea 5.6, `docs/fase3/xsd.md` §10).
+    /// Derivación circular de tipos simples: la cadena de `base` que empieza
+    /// en `name` vuelve a él tras `length` restricciones.
+    CircularBase { name: String, length: usize },
+    /// Faceta que el primitivo de la base no admite (I13: las de longitud
+    /// solo en `xs:string`, las de rango solo en los numéricos, ninguna salvo
+    /// `pattern` en `xs:boolean`).
+    FacetNotApplicable {
+        facet: &'static str,
+        primitive: &'static str,
+        reason: &'static str,
+    },
+    /// La misma faceta dos veces en un paso de restricción (I4; salvo
+    /// `xs:enumeration` y `xs:pattern`, que se acumulan). `first`: la primera.
+    RepeatedFacet { facet: &'static str, first: Pos },
+    /// Dos facetas que XSD no admite en un mismo paso: `length` con
+    /// `minLength`/`maxLength` (I4) o `min*`/`max*` inclusivo y exclusivo.
+    FacetConflict {
+        facet: &'static str,
+        other: &'static str,
+        first: Pos,
+    },
+    /// Faceta que no es una restricción válida de las de la base (*facet
+    /// valid restriction*) o que contradice otra del mismo paso
+    /// (`minInclusive` > `maxInclusive`…): `facet` = `value` tiene que ser
+    /// `relation` que `other` = `other_value`.
+    InvalidRestriction {
+        facet: FacetKind,
+        value: String,
+        relation: &'static str,
+        other: FacetKind,
+        other_value: String,
+        inherited: bool,
+    },
+    /// Valor (`what`: una faceta de rango, `xs:enumeration`, `default` o
+    /// `fixed`) que no es del tipo `ty`; `why` dice por qué.
+    InvalidTypedValue {
+        what: &'static str,
+        value: String,
+        ty: String,
+        /// En una caja: así [`XsdError`] no crece (`clippy::result_large_err`).
+        why: Box<ValueWhy>,
+    },
+}
+
+/// Por qué un valor no es del tipo ([`ErrorKind::InvalidTypedValue`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ValueWhy {
+    /// No tiene la forma léxica del primitivo, o es `INF`/`NaN` o desborda
+    /// donde D24 no lo admite (`ir::num`).
+    Lexical(ir::num::NumError),
+    /// Queda fuera de la cota `facet` = `bound` del tipo.
+    Bound { facet: FacetKind, bound: String },
+    /// Su longitud, en puntos de código, no cumple `facet` = `limit`.
+    Length {
+        facet: FacetKind,
+        limit: u64,
+        len: u64,
+    },
+    /// No es ninguno de los valores de `xs:enumeration` del tipo.
+    NotEnumerated,
 }
 
 /// Token encontrado en una celda vacía de la tabla LL(1), para el mensaje.
@@ -232,10 +290,24 @@ impl ErrorKind {
             | ErrorKind::InvalidValue { found: s, .. }
             | ErrorKind::UnsupportedValue { found: s, .. }
             | ErrorKind::DuplicateName { name: s, .. }
-            | ErrorKind::NotSimpleType { name: s }
+            | ErrorKind::NotSimpleType { name: s, .. }
+            | ErrorKind::CircularBase { name: s, .. }
             | ErrorKind::Unsupported { name: s, .. }
             | ErrorKind::Conflict { name: s, .. }
             | ErrorKind::InconsistentElement { name: s, .. } => clip_in_place(s),
+            ErrorKind::InvalidRestriction {
+                value, other_value, ..
+            } => {
+                clip_in_place(value);
+                clip_in_place(other_value);
+            }
+            ErrorKind::InvalidTypedValue { value, ty, why, .. } => {
+                clip_in_place(value);
+                clip_in_place(ty);
+                if let ValueWhy::Bound { bound, .. } = why.as_mut() {
+                    clip_in_place(bound);
+                }
+            }
             ErrorKind::Unresolved { name, ns, .. } => {
                 clip_in_place(name);
                 if let Some(ns) = ns {
@@ -253,8 +325,10 @@ impl ErrorKind {
             | ErrorKind::Unexpected { .. }
             | ErrorKind::TextNotAllowed { .. }
             | ErrorKind::MissingAttribute { .. }
-            | ErrorKind::Pending { .. }
-            | ErrorKind::ContentModel { .. } => {}
+            | ErrorKind::ContentModel { .. }
+            | ErrorKind::FacetNotApplicable { .. }
+            | ErrorKind::RepeatedFacet { .. }
+            | ErrorKind::FacetConflict { .. } => {}
         }
         self
     }
@@ -309,8 +383,7 @@ impl XsdError {
             ErrorKind::UnsupportedElement { .. }
             | ErrorKind::UnsupportedAttribute { .. }
             | ErrorKind::UnsupportedValue { .. }
-            | ErrorKind::Unsupported { .. }
-            | ErrorKind::Pending { .. } => "unsupported",
+            | ErrorKind::Unsupported { .. } => "unsupported",
             ErrorKind::InvalidValue { .. } => "value",
             ErrorKind::DuplicateName { .. } => "duplicate-name",
             ErrorKind::Unresolved { .. } | ErrorKind::NotSimpleType { .. } => "unresolved",
@@ -318,6 +391,12 @@ impl XsdError {
             ErrorKind::ContentModel { .. } | ErrorKind::InconsistentElement { .. } => {
                 "content-model"
             }
+            ErrorKind::CircularBase { .. } => "cycle",
+            ErrorKind::FacetNotApplicable { .. }
+            | ErrorKind::RepeatedFacet { .. }
+            | ErrorKind::FacetConflict { .. }
+            | ErrorKind::InvalidRestriction { .. } => "facet",
+            ErrorKind::InvalidTypedValue { .. } => "value",
         }
     }
 }
@@ -467,9 +546,9 @@ impl fmt::Display for XsdError {
                     None => write!(f, " sin espacio de nombres"),
                 }
             }
-            ErrorKind::NotSimpleType { name } => write!(
+            ErrorKind::NotSimpleType { name, context } => write!(
                 f,
-                "\"{}\" es un tipo complejo: el tipo de un atributo debe ser simple",
+                "\"{}\" es un tipo complejo: {context} debe ser simple",
                 short(name)
             ),
             ErrorKind::Unsupported {
@@ -481,10 +560,6 @@ impl fmt::Display for XsdError {
                 f,
                 "{what} \"{}\" no soportado ({category}): {reason}",
                 short(name)
-            ),
-            ErrorKind::Pending { construct, task } => write!(
-                f,
-                "{construct}: pendiente ({task}); el compilador aún no lo traduce"
             ),
             ErrorKind::Conflict {
                 construct,
@@ -506,6 +581,88 @@ impl fmt::Display for XsdError {
                 first.line,
                 first.column
             ),
+            ErrorKind::CircularBase { name, length } => write!(
+                f,
+                "derivación circular: el tipo simple \"{}\" deriva de sí mismo tras {length} {}",
+                short(name),
+                if *length == 1 {
+                    "restricción"
+                } else {
+                    "restricciones"
+                }
+            ),
+            ErrorKind::FacetNotApplicable {
+                facet,
+                primitive,
+                reason,
+            } => write!(
+                f,
+                "la faceta {facet} no se aplica a un tipo derivado de {primitive}: {reason}"
+            ),
+            ErrorKind::RepeatedFacet { facet, first } => write!(
+                f,
+                "la faceta {facet} se repite en el mismo xs:restriction (la primera está en \
+                 la línea {}, columna {})",
+                first.line, first.column
+            ),
+            ErrorKind::FacetConflict {
+                facet,
+                other,
+                first,
+            } => write!(
+                f,
+                "{facet} no puede ir con {other} en el mismo xs:restriction (línea {}, \
+                 columna {})",
+                first.line, first.column
+            ),
+            ErrorKind::InvalidRestriction {
+                facet,
+                value,
+                relation,
+                other,
+                other_value,
+                inherited,
+            } => write!(
+                f,
+                "restricción inválida: {}=\"{}\" {relation} {}=\"{}\" {}",
+                facet.local(),
+                short(value),
+                other.local(),
+                short(other_value),
+                if *inherited {
+                    "de la base"
+                } else {
+                    "del mismo xs:restriction"
+                }
+            ),
+            ErrorKind::InvalidTypedValue {
+                what,
+                value,
+                ty,
+                why,
+            } => {
+                write!(
+                    f,
+                    "{what} \"{}\" no es un valor del tipo {}: ",
+                    short(value),
+                    short(ty)
+                )?;
+                match why.as_ref() {
+                    ValueWhy::Lexical(e) => write!(f, "{e}"),
+                    ValueWhy::Bound { facet, bound } => {
+                        write!(f, "queda fuera de {}=\"{}\"", facet.local(), short(bound))
+                    }
+                    ValueWhy::Length { facet, limit, len } => write!(
+                        f,
+                        "tiene {len} {} y {} es {limit}",
+                        if *len == 1 { "carácter" } else { "caracteres" },
+                        facet.local()
+                    ),
+                    ValueWhy::NotEnumerated => {
+                        write!(f, "no es ninguno de los valores de xs:enumeration del tipo")
+                    }
+                }
+            }
         }
     }
 }

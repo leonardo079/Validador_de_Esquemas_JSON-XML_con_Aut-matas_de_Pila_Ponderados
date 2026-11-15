@@ -1,0 +1,8 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="Codigo">
+    <xs:restriction base="xs:string">
+      <xs:length value="3"/>
+      <xs:minLength value="3"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

@@ -104,13 +104,13 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
 - redondeo IEEE de float y double, con el rechazo de U4.
 
 **Criterios de aceptación:**
-- [ ] Tabla de casos y proptest:
+- [x] Tabla de casos y proptest:
   - `xs:integer` rechaza `1.0`, `1e2` y `+-1`;
   - `xs:decimal` rechaza exponentes;
   - toda reescritura es un lexema RFC 8259 que `ir::verify` acepta (I8) y tiene el mismo valor;
   - la comparación coincide con un oráculo de números racionales en los casos de prueba y es antisimétrica y transitiva en el proptest;
   - `INF`, `NaN` y `1e39` en `xs:float` se rechazan con el motivo.
-- [ ] O(longitud del lexema) por operación, también con exponentes de 10⁵ cifras (sin pánico ni desbordamiento: saturación documentada, como en `semantic/src/number.rs`).
+- [x] O(longitud del lexema) por operación, también con exponentes de 10⁵ cifras (sin pánico ni desbordamiento: saturación documentada, como en `semantic/src/number.rs`).
 
 **Verificación:** `cargo test -p xsd` (o `-p ir`, según B4); `make lint`; `make test`.
 
@@ -121,6 +121,8 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
 **Tamaño:** S.
 
 **Arrastra:** `pendientes.md` §3 (I-2, `xs:float`/`xs:double`); `ir.md` §11, pendiente 3.
+
+**Estado (14 nov):** APROBADA CON OBSERVACIONES en la revisión 1 (code-reviewer solo, D35: 0 Critical, 2 Important de documentación —5.5-CR-I1, «desviación» de −0 inexistente en XSD 1.0 2.ª ed. y regla de NaN; 5.5-CR-I2, cotas 768/113 del corte—, ambos corregidos en el cierre; 6 Suggestion), sin rondas de corrección. Casillas verificadas por el Tester 1 (`crates/ir/tests/num.rs`: `integer_forma_lexica_y_reescritura`, `decimal_forma_lexica_y_reescritura`, `reescritura_valida_y_del_mismo_valor`, `reescritura_decimal_canonica`, `comparacion_coincide_con_oraculo`, `comparacion_antisimetrica_y_transitiva`, `comparacion_casos_conocidos`, `d24_inf_nan_y_desbordes_se_rechazan_con_motivo`, `exponentes_y_fracciones_de_cien_mil_cifras`, `redondeo_ieee_casos`, `redondeo_coincide_con_std`; prueba diferencial ad hoc de ~11 000 puntos medios, 0 discrepancias). Módulo `ir::num` (B4). Decisiones: D43. Sin commit. Observaciones abiertas en `docs/fase3/pendientes.md` §36 (5.5-P1, P2 y CR-S2 → 5.6; P3 y CR-S1 → F4.1; CR-S3…S5 → próxima tarea que toque `ir`).
 
 ## Tarea 5.6: Tipos simples: `xs:simpleType`/`xs:restriction`, facetas, enumeraciones y `default`/`fixed`
 
@@ -136,8 +138,8 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
 - bajar según `ir.md` §5.2: `Ref` a la base y orígenes `#/simpleType/…`, anónimos incluidos.
 
 **Criterios de aceptación:**
-- [ ] Un esquema de `parse-ok` con tipos simples con nombre y anónimos, en cadena de 3 restricciones, con enumeración, rangos, longitudes y `pattern`, baja a una IR que pasa `verify`, con las ubicaciones de §5.2.
-- [ ] Hay un caso de `semantic-error` con línea y columna para cada una de estas obligaciones, y ninguno da un error interno:
+- [x] Un esquema de `parse-ok` con tipos simples con nombre y anónimos, en cadena de 3 restricciones, con enumeración, rangos, longitudes y `pattern`, baja a una IR que pasa `verify`, con las ubicaciones de §5.2.
+- [x] Hay un caso de `semantic-error` con línea y columna para cada una de estas obligaciones, y ninguno da un error interno:
   - ciclo directo e indirecto de `base`;
   - una cadena de 10⁵ restricciones con un ciclo al final, sin desbordamiento y en un hilo pequeño;
   - una faceta que no se aplica al tipo;
@@ -148,7 +150,7 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
   - una enumeración `1.0` en `xs:integer`;
   - `300` en una restricción de `xs:byte`;
   - un `fixed` que no es del tipo.
-- [ ] Análisis iterativo y O(n) más el costo de 5.5 por valor. La lista de «Obligaciones del frontal XSD» de `ir.md` §4 se amplía con la regla general y las restricciones de esta tarea (`pendientes.md` §3).
+- [x] Análisis iterativo y O(n) más el costo de 5.5 por valor. La lista de «Obligaciones del frontal XSD» de `ir.md` §4 se amplía con la regla general y las restricciones de esta tarea (`pendientes.md` §3).
 
 **Verificación:**
 - `cargo test -p xsd`; `make lint`; `make test`; `make docs-check`.
@@ -160,7 +162,14 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
 
 **Tamaño:** M. Es la más densa; si pasa de M, separar «valid restriction» y `default`/`fixed` en una 5.6b.
 
+**Heredado de la 5.5 (14 nov, D38; detalle en `docs/fase3/pendientes.md` §36):**
+- [x] 5.5-P1: los valores de facetas, enumeraciones y `default`/`fixed` de tipos numéricos y `xs:boolean` pasan por `ir::num` (`xsd_number`, `parse_boolean`); un `NumError` se informa como `XsdError` de código `value` en la posición del valor, con el texto recortado.
+- [x] 5.5-P2: rangos de los predefinidos acotados (`xs:byte`, `xs:int`…) y «valid restriction» respecto de la base con `ir::num::compare` (también sobre `Num` de `Float`/`Double`, por la monotonía de 5.5-CR-S2).
+- [x] 5.5-CR-S2: proptest de la monotonía del decimal más corto: x < y en binary32/binary64 ⇒ `compare(num(x), num(y)) = Less`.
+
 **Arrastra:** `pendientes.md` §3 (L-3, I-1, y la viñeta «Para la 5.6» de la 5.3); §22 (los tres `parse-ok` con `xs:simpleType` —`anotaciones`, `atributos-ajenos`, `tipos-simples`— entran en `corpus_clasificado` de `crates/xsd/tests/corpus.rs`, y la prueba comprueba que no se omite ninguno); §33 (5.3-CR1-S2 ocurrencias > 2⁶⁴, 5.3-CR1-S3 `Debug` derivado, si toca `check.rs`); §34 (ayudas de prueba duplicadas, opcional). Añadido el 4 nov.
+
+**Estado (14 nov):** APROBADA en la revisión 2 tras **1 ronda de corrección** (devuelta por el code-reviewer de la revisión 1: 5.6-CR-I1, costo cuadrático al comparar cada valor contra una cota larga —10,8 s con 4 000 valores y una cota de 10⁶ cifras—, corregido analizando cada cota una sola vez con `ir::num::Decimal`/`compare_parsed`, prueba sin reloj `cota_larga_se_analiza_una_sola_vez` que falla con los dos mutantes cuadráticos; 5.6-CR-I2, lista exacta de desviaciones frente a XSD 1.0, en documentación). Revisión 2: 0 Critical, 0 Important, 3 Suggestion (anotadas). Casillas verificadas por los Testers de las rondas 0 y 1 (`crates/xsd/tests/simple.rs`: `tipos_simples_baja_con_las_ubicaciones_de_5_2`, `origenes_de_los_tipos_anonimos`, `cadena_de_cien_mil_restricciones_con_ciclo_al_final`, `cota_larga_heredada_por_una_cadena`, `cota_larga_se_analiza_una_sola_vez`, `restriccion_valida_respecto_de_la_base`, `enumeraciones_y_valores_por_defecto_son_del_tipo`; `crates/xsd/tests/lower.rs`: `errores_semanticos_con_linea_y_columna` con 29 casos nuevos en `tests/schemas/xsd/semantic-error`, `corpus_entero_sin_error_interno`; `crates/xsd/tests/corpus.rs::corpus_clasificado`; `crates/ir/tests/num.rs`: `decimal_mas_corto_es_monotono`, `comparacion_analizada_coincide`; dorada nueva `tests/ir/xsd/tipos-simples.json`). Decisiones: D44 (modifica D40 y amplía D43). Sin commit (encadenada con la 5.5; foto de la 5.5 en `target/sondas-5.6/base-5.5/`). Observaciones abiertas en `docs/fase3/pendientes.md` §37.
 
 ## Tarea 5.7: *Unique Particle Attribution* y cierre del frontal
 
@@ -191,6 +200,11 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
 **Archivos probables:** `crates/xsd/src/upa.rs`, `crates/xsd/tests/upa.rs`, `docs/fase3/{xsd.md,ir.md,pendientes.md}`, `docs/00-alcance.md`.
 
 **Tamaño:** M.
+
+**Heredado de la 5.6 (14 nov, D38; detalle en `docs/fase3/pendientes.md` §37):**
+- [ ] 5.6-P4 (con CR-S3, CR-S4 y CR2-S2): pasar a `00-alcance.md` §3 la lista exacta de desviaciones de los tipos simples (`minExclusive` nuevo frente al `maxInclusive` de la base con `<`; `minExclusive` frente a `maxExclusive` en el mismo paso con `<`; cotas no comparadas con la enumeración de la base; enumeración frente a su propio paso; `minLength`/`maxLength` sobre `length` por las cláusulas 1.2 y 2.2). Es interfaz compartida (D42): se propone a las dos personas.
+- [ ] 5.6-T1-1: si se admiten `default`/`fixed` en `xs:element`, añadir esa forma a `cota_larga_se_analiza_una_sola_vez`.
+- [ ] 5.6-CR-S5 (si se decide aquí y no en la Fase 7): tope de errores por etapa, igual para las tres.
 
 ## Punto de control D: cierre de la casilla XSD
 

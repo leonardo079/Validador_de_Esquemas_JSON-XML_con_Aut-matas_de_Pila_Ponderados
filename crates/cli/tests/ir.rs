@@ -321,7 +321,8 @@ fn errores_xsd_iguales_que_check() {
         "schemas/xsd/semantic-error/ref-sin-resolver.xsd",
         "schemas/xsd/semantic-error/min-mayor-que-max.xsd",
         "schemas/xsd/semantic-error/todos-los-de-la-etapa.xsd",
-        "schemas/xsd/parse-ok/tipos-simples.xsd",
+        "schemas/xsd/semantic-error/base-circular-indirecta.xsd",
+        "schemas/xsd/semantic-error/etapa-de-tipos-simples.xsd",
     ] {
         let p = ruta(rel);
         let (code, out, err) = ir(&p);

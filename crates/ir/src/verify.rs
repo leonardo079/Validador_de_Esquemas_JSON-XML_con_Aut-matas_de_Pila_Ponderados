@@ -12,6 +12,7 @@ use std::collections::{HashMap, HashSet};
 
 use lexer::short;
 
+use crate::num::is_rfc8259_number;
 use crate::{
     target_sort, Constraint, ContentModel, Format, Ir, Lexical, LitToken, Literal, Node, NodeId,
     Num, Pos, Rule, RuleKind, Sort, Term,
@@ -937,45 +938,6 @@ fn scalar_of(lit: &Literal, lx: Lexical) -> bool {
         },
         _ => false,
     }
-}
-
-/// `-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?` (RFC 8259 §6).
-fn is_rfc8259_number(s: &str) -> bool {
-    let b = s.as_bytes();
-    let mut i = 0;
-    let digits = |i: &mut usize| {
-        let start = *i;
-        while b.get(*i).is_some_and(u8::is_ascii_digit) {
-            *i += 1;
-        }
-        *i > start
-    };
-    if b.first() == Some(&b'-') {
-        i += 1;
-    }
-    match b.get(i) {
-        Some(b'0') => i += 1,
-        Some(b'1'..=b'9') => {
-            digits(&mut i);
-        }
-        _ => return false,
-    }
-    if b.get(i) == Some(&b'.') {
-        i += 1;
-        if !digits(&mut i) {
-            return false;
-        }
-    }
-    if matches!(b.get(i), Some(b'e' | b'E')) {
-        i += 1;
-        if matches!(b.get(i), Some(b'+' | b'-')) {
-            i += 1;
-        }
-        if !digits(&mut i) {
-            return false;
-        }
-    }
-    i == b.len()
 }
 
 /// Si un lexema de RFC 8259 es un entero (parte fraccionaria cero, como en

@@ -86,10 +86,19 @@ impl Builtin {
     /// Los doce de §3.2 por su nombre local; `anySimpleType` no se puede
     /// nombrar (fuera de §3.2), solo es el tipo de un atributo sin tipo.
     fn by_name(local: &str) -> Option<Builtin> {
-        Builtin::ALL[..12]
+        Builtin::ALL
             .iter()
             .copied()
+            .filter(|&b| b != Builtin::AnySimpleType)
             .find(|b| b.local() == local)
+    }
+
+    /// Si su nodo `builtin/T` solo tiene `Lexical`: una restricción de él no
+    /// necesita `Ref` (`docs/fase3/ir.md` §5.2: «`Ref(B)` si B no es un
+    /// primitivo»).
+    pub(crate) fn is_primitive(self) -> bool {
+        let (_, min, max) = self.rules();
+        min.is_none() && max.is_none()
     }
 
     /// Espacio léxico y rango de valores (`docs/fase3/ir.md` §5.2): los
@@ -116,6 +125,18 @@ impl Builtin {
     }
 }
 
+/// Nombre del primitivo de un espacio léxico, para los mensajes.
+pub(crate) const fn primitive_name(lx: Lexical) -> &'static str {
+    match lx {
+        Lexical::String => "xs:string",
+        Lexical::Boolean => "xs:boolean",
+        Lexical::Decimal => "xs:decimal",
+        Lexical::Integer => "xs:integer",
+        Lexical::Float => "xs:float",
+        Lexical::Double => "xs:double",
+    }
+}
+
 /// Tipo al que lleva un `type`, un `base` o la declaración de un elemento.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TypeRef {
@@ -123,9 +144,9 @@ pub(crate) enum TypeRef {
     /// tipo (`Analysis::types`).
     Complex(usize),
     Builtin(Builtin),
-    /// Un `xs:simpleType` del usuario: pendiente de la tarea 5.6, así que
-    /// el análisis ya tiene un error y la bajada nunca lo ve.
-    UserSimple,
+    /// Un `xs:simpleType` del usuario (con nombre o anónimo), por su
+    /// posición en `Analysis::simples`.
+    Simple(usize),
     /// El error ya está informado (sin resolver, D14…): no se compara ni se
     /// baja.
     Invalid,

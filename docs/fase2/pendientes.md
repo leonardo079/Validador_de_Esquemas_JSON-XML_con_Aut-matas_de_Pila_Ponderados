@@ -110,7 +110,7 @@ decisiones» del plan (D1–D31); aquí solo se remite a ellas.
   cifras de `docs/fase1/lexico.md`. Afecta igual al validador de payloads (Fase 4). Riesgo
   bajo: el documento sigue siendo inequívoco.
 
-### 9. Normalización de los valores según su tipo XSD (tareas 5.5 y 5.6)
+### 9. Normalización de los valores según su tipo XSD (tareas 5.5 y 5.6) — RESUELTA (5.5 y 5.6)
 
 - **Estado:** el lector entrega los valores de atributo y el texto con la normalización de
   XML 1.0 (fines de línea §2.11 y atributos CDATA §3.3.3), no la del tipo XSD. Los atributos
@@ -129,6 +129,21 @@ decisiones» del plan (D1–D31); aquí solo se remite a ellas.
   `default`, `fixed`, `xs:enumeration` y `xs:pattern` sin tocar (`into_value()`); nunca modifica
   el `Attr` ([gramatica-xsd.md](gramatica-xsd.md) §6). **Queda (5.5 y 5.6):** el *whiteSpace*
   de `default`, `fixed` y `xs:enumeration` según el tipo simple base.
+- **Hecho en la 5.5 (la parte de los tipos numéricos y `xs:boolean`):** `ir::num`
+  ([../fase3/numeros-xsd.md](../fase3/numeros-xsd.md) §3) aplica *collapse* a los valores de
+  `xs:integer`, `xs:decimal`, `xs:float`, `xs:double` y `xs:boolean` antes de su forma léxica
+  (`rewrite`, `xsd_number`, `parse_boolean`, `crates/ir/src/num.rs:114`): como esos espacios
+  léxicos no admiten espacios, basta recortar los espacios XML de los extremos, sin copiar el
+  valor. **Queda (5.6):** llamar a esas funciones con el valor sin tocar (`Val::Raw`,
+  `crates/xsd/src/parser.rs:116-129`) de `default`, `fixed` y `xs:enumeration` según el
+  primitivo de la base, y dejar `xs:string` (*preserve*) como está
+  ([../fase3/pendientes.md](../fase3/pendientes.md) §36, 5.5-P1).
+- **Hecho en la 5.6:** `xs:enumeration`, `default` y `fixed` se leen según el primitivo de su tipo
+  (`crates/xsd/src/simple.rs`, `Ctx::in_space`): `xsd_number`/`parse_boolean` (que aplican el
+  *collapse*) en los numéricos y `xs:boolean`, y el texto tal como lo deja el lector en `xs:string`
+  (*preserve*: `" M "` es una enumeración de tres caracteres). En la IR, las enumeraciones bajan
+  normalizadas (el lexema de `xsd_number` o la cadena) y `default`/`fixed` sin tocar
+  ([../fase3/pendientes.md](../fase3/pendientes.md) §37, 5.6-P3). Nada queda abierto aquí.
 
 ### 10. Normalización de fines de línea y de atributos en los payloads XML (Fase 4)
 

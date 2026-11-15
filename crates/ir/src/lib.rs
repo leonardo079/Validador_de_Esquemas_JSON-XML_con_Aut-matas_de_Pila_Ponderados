@@ -31,12 +31,18 @@
 //! guardan en la IR: se derivan de [`RuleKind`] con una tabla aparte
 //! ([`RuleKind::classification`], [`classify`]).
 //!
+//! [`num`] tiene los números de XSD (forma léxica, reescritura a RFC 8259,
+//! comparación exacta de lexemas y redondeo IEEE de `xs:float`/`xs:double`,
+//! D24) que usan el frontal XSD y la Fase 4.
+//!
 //! Teoría, invariantes y correspondencia con cada palabra clave:
 //! `docs/fase3/ir.md`; la bajada de JSON Schema y el formato de exportación:
-//! `docs/fase3/bajada.md`; la clasificación: `docs/fase3/clasificacion.md`.
+//! `docs/fase3/bajada.md`; la clasificación: `docs/fase3/clasificacion.md`;
+//! los números de XSD: `docs/fase3/numeros-xsd.md`.
 
 mod classify;
 mod export;
+pub mod num;
 mod verify;
 
 pub use classify::{

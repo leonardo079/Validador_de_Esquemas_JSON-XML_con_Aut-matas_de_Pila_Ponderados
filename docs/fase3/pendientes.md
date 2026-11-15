@@ -294,7 +294,16 @@ y que se resuelven en otra fase. Las decisiones de diseño viven en el
      medido es ≈ 1,5 GiB de salida JSON y ≈ 2,5 GiB de memoria por compilación (≈ 1,6 GB y
      ≈ 2,7 GB, §1), que ningún cliente web necesita recibir.
 
-### 3. Obligaciones del frontal XSD (tareas 5.3, 5.5, 5.6 y 5.7 de la semana 2) — parte de la 5.3 RESUELTA
+### 3. Obligaciones del frontal XSD (tareas 5.3, 5.5, 5.6 y 5.7 de la semana 2) — partes de la 5.3, la 5.5 y la 5.6 RESUELTAS
+
+- **Resuelto en la tarea 5.6** ([xsd.md](xsd.md) §10; corpus `semantic-error`, 29 casos nuevos;
+  `crates/xsd/tests/simple.rs`): derivación circular de `base` iterativa y antes de seguir la cadena
+  (`cycle`), I4 (faceta repetida, `length` con `minLength`/`maxLength`), `min*`/`max*` inclusivo y
+  exclusivo a la vez, I13 del usuario (facetas que no aplican al primitivo, `xs:enumeration` en
+  `xs:boolean`, enumeraciones que no son del tipo, con la forma léxica de `ir::num`), *facet valid
+  restriction* (también los rangos de los predefinidos), `default`/`fixed` como valores del tipo
+  (salvo `pattern`, D29) y la lista de [ir.md](ir.md) §4 ampliada con la **regla general** (L-3,
+  I-1). Ya no hay error «pendiente (tarea 5.6)». **Sigue abierto:** UPA (5.7) y lo que anota §37.
 
 - **Resuelto en la tarea 5.3** ([xsd.md](xsd.md) §3; corpus `tests/schemas/xsd/semantic-error`,
   manifiesto `tests/schemas/errores-semanticos-xsd.json`, prueba `corpus_entero_sin_error_interno`):
@@ -302,14 +311,20 @@ y que se resuelven en otra fase. Las decisiones de diseño viven en el
   (*all-group limited* y *Element Declarations Consistent*), la parte de I13 que no depende de los
   tipos simples (`default` con `fixed`, requerido con `default`), D14, D27 (U7) y S-5 primera mitad
   (B3). Todo con su posición y antes de bajar; `xsd::lower` llama siempre a `verify` (D15) y
-  ningún esquema del corpus da el error interno. **Sigue abierto:** la parte de I13 de los tipos
+  ningún esquema del corpus da el error interno. ~~**Sigue abierto:** la parte de I13 de los tipos
   simples y facetas, la derivación circular y que `default`/`fixed` sean del tipo (5.6), la forma
-  léxica de los valores (5.5), UPA y la ampliación de la lista de [ir.md](ir.md) §4 (5.7). Mientras
-  no esté la 5.6, todo `xs:simpleType` es el error «pendiente (tarea 5.6)». **UPA y `xs:all`
+  léxica de los valores (funciones hechas en la 5.5, `ir::num`; falta llamarlas desde el frontal,
+  5.6, §36), UPA y la ampliación de la lista de [ir.md](ir.md) §4 (5.7). Mientras
+  no esté la 5.6, todo `xs:simpleType` es el error «pendiente (tarea 5.6)».~~ **RESUELTO en la 5.6**
+  salvo UPA (5.7); la lista de [ir.md](ir.md) §4 la amplió la 5.6. **UPA y `xs:all`
   (5.3-CR1-S4):** un `xs:all` con dos hijos del mismo nombre y tipo pasa EDC y `verify`, pero viola
   UPA; la máscara de `xs:all` de la Fase 4 (un bit por nombre, I12) depende de que la 5.7 lo
   rechace (§33).
-- **Para la 5.6 (lo que deja la 5.3):** al bajar los `xs:simpleType` del usuario hay que meterlos en
+- **Para la 5.6 (lo que deja la 5.3) — RESUELTO (tarea 5.6):** los `xs:simpleType` están en el
+  preorden de declaraciones (`Analysis::decls`), con el envoltorio sintético `#/simpleContent/T` del
+  usuario y los orígenes de los anónimos de [ir.md](ir.md) §5.2; `TypeRef::UserSimple` pasó a
+  `TypeRef::Simple(i)` y la arista colgante solo queda para un `TypeRef::Invalid`
+  ([xsd.md](xsd.md) §10.3). Texto original: al bajar los `xs:simpleType` del usuario hay que meterlos en
   el preorden de declaraciones de B3 (hoy `Analysis::types` solo tiene tipos complejos), crear el
   envoltorio `#/simpleContent/T` del usuario y los orígenes de los anónimos de [ir.md](ir.md) §5.2,
   y quitar el error «pendiente»: `TypeRef::UserSimple` y la arista colgante de
@@ -320,10 +335,11 @@ profundidad ([ir.md](ir.md) §4): todo lo que un XSD del **usuario** pueda rompe
 que rechazar antes el frontal, **con su posición**, no como el error interno de `verify`
 (código 3 de `schemac ir`, [bajada.md](bajada.md) §4).
 
-- **Lista de [ir.md](ir.md) §4, «Obligaciones del frontal XSD»** (L-3): derivación
+- **Lista de [ir.md](ir.md) §4, «Obligaciones del frontal XSD»** (L-3) — **RESUELTO (5.6)**, con
+  la regla general y lo de las tareas 5.3 y 5.6: derivación
   circular de tipos simples (iterativa, D7), I12, la parte de I13 que viene del usuario,
   *Unique Particle Attribution* y que `default`/`fixed` sean valores del tipo.
-- **La lista se queda corta** (I-1): I4, I10 e I11 también los rompe un XSD del usuario:
+- **La lista se queda corta** (I-1) — **RESUELTO (5.6)**: I4, I10 e I11 también los rompe un XSD del usuario:
   atributos repetidos (I10), `minOccurs` > `maxOccurs` (I11), una faceta repetida en una
   misma restricción o `length` junto a `minLength`/`maxLength` (I4, porque `length` baja
   a las dos reglas), y además `min*`/`max*` inclusivo y exclusivo a la vez. **Regla
@@ -334,11 +350,11 @@ que rechazar antes el frontal, **con su posición**, no como el error interno de
     - **Tarea 5.3** (invariantes estructurales): I10 (dos `xs:attribute` con el mismo nombre
       en un tipo), I11 (`minOccurs` > `maxOccurs`), I12 y la parte de I13 que viene del
       usuario.
-    - **Tarea 5.6** (tipos simples): I4 (faceta repetida, `length` con `minLength`/
+    - **Tarea 5.6** (tipos simples) — **HECHO**: I4 (faceta repetida, `length` con `minLength`/
       `maxLength`), derivación circular de `base` (iterativa, D7), `min*`/`max*` inclusivo y
       exclusivo a la vez, y que `default`/`fixed` sean valores del tipo.
-    - **Tarea 5.7:** *Unique Particle Attribution* (conservadora, D25) y la ampliación de la
-      lista de [ir.md](ir.md) §4. **Aplazada** a después del hito de la semana 3 por D28
+    - **Tarea 5.7:** *Unique Particle Attribution* (conservadora, D25); la ampliación de la
+      lista de [ir.md](ir.md) §4 ya la hizo la 5.6 (la 5.7 añade la línea de UPA cuando esté). **Aplazada** a después del hito de la semana 3 por D28
       (aplicado el 3 nov); mientras, el Glushkov de la Fase 4 es la defensa.
   - *Avance de la tarea 5.1 (base de I10):* **resuelto** que un mismo atributo XML no se
     repita en una etiqueta del documento de esquema, por nombre escrito y por nombre
@@ -353,6 +369,12 @@ que rechazar antes el frontal, **con su posición**, no como el error interno de
   desbordan al redondear a binary32/64 (`1e39` en `xs:float`) se rechazan en facetas y
   enumeraciones de `xs:float`/`xs:double` con un mensaje que lo diga; no se amplían `Num` ni
   I8.
+  **RESUELTO en la tarea 5.5** (funciones; [numeros-xsd.md](numeros-xsd.md)): `ir::num::xsd_number`
+  comprueba la forma léxica, redondea al par más cercano a binary32/binary64, guarda en `Num` el
+  decimal más corto del valor redondeado y rechaza `INF`, `-INF`, `+INF`, `NaN` (`Special`) y los
+  desbordes (`Overflow`) con su motivo (D24); [ir.md](ir.md) §5.2, §7 (fila Q) y el pendiente 3
+  de §11 están corregidos. **Llamadas desde el frontal con la posición del valor: RESUELTO (5.6).**
+  **Sigue abierto:** el comparador IEEE de la Fase 4 (§36).
 - **Orígenes sin fijar** (S-5):
   - Primera mitad, el origen de un tipo anónimo dentro de un `xs:element` **global** —
     **RESUELTO (tarea 5.3)**: padre el documento y paso `Entry("element", nombre)` (B3;
@@ -556,8 +578,12 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
     de `parse-ok`), comprueba la definición nodo a nodo y que no hay nodos (c);
     `valid-xml-pedido-01` tiene un solo nodo (b), subido solo por `Attributes`, y
     `malformed-xml-billion-laughs-01`, ninguno ([clasificacion.md](clasificacion.md) §7).
-    **Queda para la 5.6:** cuando bajen los `xs:simpleType`, los tres XSD de `parse-ok` que
-    hoy dan «pendiente» entrarán solos en el recorrido.
+    ~~**Queda para la 5.6:** cuando bajen los `xs:simpleType`, los tres XSD de `parse-ok` que
+    hoy dan «pendiente» entrarán solos en el recorrido.~~ **RESUELTO (5.6):** `anotaciones`,
+    `atributos-ajenos` y `tipos-simples` entran (y los dos nuevos `tipo-simple-*`); `ir_de` hace
+    fallar la prueba ante un error del usuario, así que no se omite ninguno, y la prueba comprueba
+    que los tres están. Los nodos (c) solo pueden salir de `pattern` (`c_solo_por_pattern`):
+    `anotaciones` y `tipos-simples` los tienen.
 - **Regenerar la tabla escrita (CR1-S7, en parte).** El bloque de [clasificacion.md](clasificacion.md) §3 no
   lo regenera `make docs`: lo comprueba la prueba `tabla_escrita_es_la_del_codigo`, que al
   fallar imprime la tabla que hay que copiar. Si se quiere en `make docs`/`make docs-check`,
@@ -713,7 +739,7 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   como hace `tabla_coincide_con_el_alcance` con «Cat.».
 - **Cuándo:** abierta a propósito.
 
-### 32. 4.3-S7: cosméticos de `classify.rs` y `export.rs` (próxima tarea que toque `crates/ir`)
+### 32. 4.3-S7: cosméticos de `classify.rs` y `export.rs` (próxima tarea que toque `crates/ir`) — `Ord::max` RESUELTO (tarea 5.5)
 
 - **Dónde:** `crates/ir/src/classify.rs:256-265` (`NodeClass::join`), `Classification::node`
   y `crates/ir/src/export.rs:111` (`Rule::assignment` por regla).
@@ -725,6 +751,9 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   a su IR (por ejemplo, devolverla junto a la `VerifiedIr`); guardar las asignaciones por
   regla si algún día pesan.
 - **Cuándo:** la próxima tarea que toque `crates/ir`.
+- **Tarea 5.5:** `NodeClass::join` usa `self.class.max(o.class)` (`crates/ir/src/classify.rs:256-261`).
+  **Sigue abierto** (opcional): `Classification::node` con otra IR y las asignaciones que
+  recalcula `export.rs`, con el mismo destino.
 
 ### Cierre de la 5.3: observaciones de la revisión (4 nov)
 
@@ -752,7 +781,10 @@ pulido.
   - **Arreglo:** que el parser deje constancia de su presencia en un `xs:element` local y el
     análisis los rechace con `ref` (`syntax`, «con ref no admite …»).
   - **Destino:** tarea 5.7 (criterio en `tasks/todo.md`).
-- **5.3-CR1-S2 (ocurrencias saturadas).**
+- **5.3-CR1-S2 (ocurrencias saturadas) — RESUELTO (tarea 5.6):** `check_model` compara los
+  lexemas cuando los dos saturan (`lexeme_gt`, `crates/xsd/src/check.rs`); pruebas
+  `ocurrencias_saturadas_se_comparan_por_lexema` y `errores_por_etapas_en_orden_del_documento`.
+  Texto original:
   - **Dónde:** `crates/xsd/src/check.rs:555-574` (`occurs_value`) y `:845` (`check_model`).
   - **Estado:** `minOccurs` > `maxOccurs` no se detecta si los dos pasan de 2⁶⁴ (ambos saturan a
     `u64::MAX`; por ejemplo `minOccurs='18446744073709551617'`, `maxOccurs='18446744073709551616'`).
@@ -761,7 +793,9 @@ pulido.
   - **Arreglo:** cuando los dos saturan, comparar los lexemas tras quitar el signo y los ceros
     iniciales (primero por longitud, después lexicográficamente).
   - **Destino:** la próxima tarea que toque `check.rs` (p. ej. 5.6).
-- **5.3-CR1-S3 (`Debug` derivado de `Analysis`).**
+- **5.3-CR1-S3 (`Debug` derivado de `Analysis`) — RESUELTO (tarea 5.6):** `Debug` manual con
+  recuentos (`crates/xsd/src/check.rs`, `impl Debug for Analysis`); `TypeInfo`, `Part`, `Term`,
+  `Attr` y `Global` ya no derivan `Debug`. Texto original:
   - **Dónde:** `crates/xsd/src/check.rs:42` (`Analysis`), `:68` (`TypeInfo`), `:86` (`Part`).
   - **Estado:** `#[derive(Debug)]` imprime el `&ComplexType` de cada tipo con sus anónimos: O(n·d)
     y recursivo (D36: solo en un hilo con `stack_size`). Hoy solo se usa en el `expect_err` de
@@ -771,7 +805,9 @@ pulido.
 - **5.3-CR1-S4 (UPA en `xs:all`).** Ver §3: dos hijos de `xs:all` con el mismo nombre y tipo pasan
   EDC y `verify` y violan UPA; la máscara de `xs:all` de la Fase 4 depende de que se rechace.
   **Destino:** tarea 5.7 (criterio en `tasks/todo.md`).
-- **5.3-CR1-S5 (legibilidad).**
+- **5.3-CR1-S5 (legibilidad) — RESUELTO (tarea 5.6):** `Builtin::by_name` filtra
+  `AnySimpleType` en lugar de `ALL[..12]`, y `Errors` tiene `component`/`simple`/`model` (una por
+  etapa). Texto original:
   - **Dónde:** `crates/xsd/src/symbols.rs:89` (`Builtin::ALL[..12]` depende de que `AnySimpleType`
     sea el último) y `crates/xsd/src/check.rs:125-131` (`Errors::push`/`Errors::model` no dicen la
     etapa).
@@ -819,6 +855,8 @@ la tarea, D41). 5.4-CR1-I1 (argumento de ρ en §1) se corrigió en el cierre de
   - **Arreglo:** comprobar que los omitidos son exactamente `anotaciones`,
     `atributos-ajenos` y `tipos-simples`, y que su error es «pendiente (tarea 5.6)».
   - **Destino:** tarea 5.6 (ya en su «Arrastra» de `tasks/todo.md`).
+  - **RESUELTO (tarea 5.6):** ya no se omite ninguno: `ir_de` falla ante cualquier error del
+    usuario y la prueba exige los tres por nombre (§22).
 - **5.4-CR1-S2 (cobertura).**
   - **Dónde:** `crates/cli/src/main.rs:567` (`fallo_interno_xsd_da_codigo_3`), con `ir_rota`
     (`:451`, `Format::Json`) y la rama `xsd::lower(&analysis).map_err(Fallo::Interno)` (`:412`).
@@ -861,3 +899,284 @@ la tarea, D41). 5.4-CR1-I1 (argumento de ρ en §1) se corrigió en el cierre de
   - **Arreglo:** una prueba de `check` con esos tres archivos que fije el código 1 y el
     mensaje de JSON.
   - **Destino:** la próxima tarea que toque la CLI (opcional).
+
+### Abiertas por la tarea 5.5 (números XSD)
+
+### 36. Lo que deja la 5.5 para la 5.6 y la Fase 4
+
+Las funciones de `ir::num` ([numeros-xsd.md](numeros-xsd.md)) son puras y nadie las llama todavía:
+las salidas de `schemac` y las doradas de `tests/ir/` no cambian.
+
+- **5.5-P1 (integración en el frontal) — RESUELTO (tarea 5.6):** facetas de rango y enumeraciones
+  numéricas con `xsd_number`, `default`/`fixed` de `xs:boolean` con `parse_boolean`, `xs:string` sin
+  *collapse*; `NumError` como `XsdError` `value` (`InvalidTypedValue`, `ValueWhy::Lexical`) en la
+  posición del valor; un caso por `NumErrorKind` en `errores-semanticos-xsd.json` (`faceta-vacia`,
+  `faceta-numerica-mal-formada`, `enumeracion-no-entera`, `exponente-en-decimal`,
+  `faceta-float-inf`, `faceta-float-desborda`); `NotNumeric` no lo produce el frontal (nunca llama a
+  `xsd_number` con `xs:string` ni `xs:boolean`). Texto original:
+  - **Dónde:** `crates/xsd/src/lower.rs:119-131` (`element_type`, `text_type`: `TypeRef::UserSimple`)
+    y los valores que el parser guarda sin *collapse* (`default`, `fixed`, `xs:enumeration`;
+    `crates/xsd/src/parser.rs:116-129`, `Val::Raw`) o con él (facetas de rango).
+  - **Estado:** la forma léxica, la reescritura y D24 existen como funciones
+    (`crates/ir/src/num.rs:205`, `:267`, `:120`), pero el frontal aún no baja `xs:simpleType`.
+  - **Arreglo:** al bajar una faceta de rango o una `xs:enumeration` de un tipo numérico, poner en
+    la IR `xsd_number(lexical_de_la_base, valor)?` (con `NumError` convertido en un `XsdError` de
+    clase `value` en la posición del valor, citando el valor recortado); en `xs:boolean`,
+    `parse_boolean` para `default`/`fixed`; `xs:string` sin *collapse*. Una prueba por cada
+    `NumErrorKind` en `tests/schemas/errores-semanticos-xsd.json`.
+  - **Destino:** tarea 5.6.
+- **5.5-P2 (rangos y «restricción válida») — RESUELTO (tarea 5.6):** *valid restriction* y
+  pertenencia a las cotas con `compare`, también sobre los `Num` de `Float`/`Double`
+  (`crates/xsd/src/simple.rs`, `valid_restriction`, `Ctx::in_space`; `faceta-fuera-de-byte.xsd`,
+  `enumeracion-fuera-de-byte.xsd`). Texto original:
+  - **Dónde:** el análisis de tipos simples de la 5.6 (`crates/xsd/src/check.rs`) y los rangos de
+    los predefinidos acotados ([ir.md](ir.md) §5.2, tabla de predefinidos).
+  - **Estado:** `compare` (`crates/ir/src/num.rs:564`) da el orden exacto, pero nadie comprueba
+    aún que una faceta de una restricción esté dentro de las de su base, que `minInclusive` ≤
+    `maxInclusive`, ni que una enumeración o `default`/`fixed` de `xs:byte` esté en
+    [−128, 127].
+  - **Arreglo:** `compare` sobre los `Num`, también en `Float`/`Double`: el decimal más corto es
+    monótono ([numeros-xsd.md](numeros-xsd.md) §6; 5.5-CR-S2). Equivale a comparar
+    `round_f32`/`round_f64` de los dos `Num` (nunca NaN tras D24).
+  - **Destino:** tarea 5.6.
+- **5.5-P3 (comparadores del payload, Fase 4).**
+  - **Dónde:** [ir.md](ir.md) §7, fila Q (`Minimum`…`ExclusiveMaximum` y `Enum` de un texto
+    `Float`/`Double`).
+  - **Estado:** el contrato está escrito ([numeros-xsd.md](numeros-xsd.md) §6): el texto del
+    payload se redondea con `round_f32`/`round_f64` y se compara en IEEE con el redondeo de `Num`.
+    Un payload `INF`, `-INF` o `NaN` sí es un valor válido de `xs:float`/`xs:double`. Regla
+    literal de XSD 1.0 2.ª ed. (Parte 2 §3.2.4 y §3.2.5): «NaN equals itself but
+    is incomparable with … any other value» y «Any value incomparable with the value used for the
+    four bounding facets … will be excluded»: **NaN es incomparable y queda excluido por cualquier
+    faceta de rango**; `INF` y `-INF` se ordenan normalmente (`INF` cumple `minInclusive` y viola
+    un `maxInclusive` finito).
+  - **Arreglo:** que el autómata de texto reconozca los tres especiales y aplique esa regla
+    (NaN viola `Minimum`…`ExclusiveMaximum`; ±INF por encima/debajo de toda cota finita); prueba
+    con los tres contra cada faceta.
+  - **Destino:** F4.1 (construcción por nodo) o la tarea de comparadores numéricos de la Fase 4.
+- **5.5-P4 (−0 y +0) — CERRADO: conforme a XSD 1.0 2.ª ed. (revisión de la 5.5).**
+  - **Dónde:** `crates/ir/src/num.rs:279-280` y `:290-291` (`xsd_number`, el cero como `0`).
+  - **Estado:** no hay desviación. XSD 1.0 Parte 2, 2.ª ed., §3.2.4 y §3.2.5: «This datatype
+    differs from that of [IEEE 754-1985] in that there is only one NaN and only one zero.» y
+    «Lexical representations for zero may take a positive or negative sign.» Un solo cero; el
+    orden −0 < +0 era de la 1.ª edición. Guardar −0 y +0 como `0` es conforme
+    ([numeros-xsd.md](numeros-xsd.md) §6). Nada que proponer en `00-alcance.md`.
+  - **Arreglo:** ninguno.
+  - **Destino:** cerrado.
+- **5.5-S1 (duplicado en `verify`, cosmético).**
+  - **Dónde:** `crates/ir/src/verify.rs:948` (`is_integer`).
+  - **Estado:** repite el cálculo de la forma científica de `ir::num` (`Sci`) con el exponente
+    saturado en `i64`, correcto para decidir si es entero (solo importa el signo de s).
+  - **Arreglo:** opcional: expresarlo con `ir::num` (entero ⇔ cero o E ≥ |D|).
+  - **Destino:** la próxima tarea que toque `crates/ir` (opcional). Ampliado por 5.5-CR-S3.
+
+Observaciones de la revisión de la 5.5 (code-reviewer: aprobado sin ronda; I-1 e I-2, de
+documentación, corregidos en el cierre: la falsa desviación de −0 y la regla de NaN, y las
+constantes 768/113 del corte en 800 cifras en `crates/ir/src/num.rs:583-590` y
+[numeros-xsd.md](numeros-xsd.md) §6).
+
+- **5.5-CR-S1 (contrato de la Fase 4 no implementable en el validador generado) → 5.5-P3 / F4.1.**
+  - **Dónde:** [numeros-xsd.md](numeros-xsd.md) §6 («Contrato para la Fase 4») y [ir.md](ir.md) §7,
+    fila Q.
+  - **Estado:** «el comparador redondea el texto del payload con `round_f32`/`round_f64`»
+    describe la semántica pero no sirve como implementación: `ir::num` asigna memoria (`Big`,
+    `String`) y el validador generado (F5.1, sin asignación dinámica) y el runtime C no pueden
+    llamarlo (en C haría falta un `strtod` correctamente redondeado y sin *locale*).
+  - **Arreglo:** compilar cada cota IEEE a su umbral decimal exacto (el punto medio con la otra
+    frontera del intervalo de redondeo del valor guardado, con la regla del empate; p. ej.
+    `round(p) ≤ F` ⇔ `p ≤ m⁺` si `F` es par, o `p < m⁺` si es impar), así el comparador sigue
+    siendo el decimal exacto de clase (a) y cabe en el lexema de ≤ 1024 bytes de
+    `00-alcance.md` §4. Documentado como vía recomendada en [numeros-xsd.md](numeros-xsd.md) §6.
+  - **Destino:** 5.5-P3, F4.1.
+- **5.5-CR-S2 (monotonía del decimal más corto) → 5.6 — RESUELTO:** proptest
+  `decimal_mas_corto_es_monotono` (`crates/ir/tests/num.rs`: pares cualesquiera y vecinos, en
+  binary32 y binary64). Texto original:
+  - **Dónde:** [numeros-xsd.md](numeros-xsd.md) §6 («Monotonía del decimal más corto»);
+    `crates/ir/src/num.rs:267` (`xsd_number`).
+  - **Estado:** enunciada y probada en el documento: x < y en binary32 ⇒
+    `compare(num(x), num(y)) = Less` (intervalos de redondeo disjuntos salvo en los puntos
+    medios, que redondean a uno solo). Sin prueba automática todavía.
+  - **Arreglo:** la 5.6 usa `compare` directamente sobre los `Num` de `Float`/`Double`; una
+    prueba proptest de la propiedad (pares de `f32` y de `f64` finitos ordenados), como criterio
+    de la 5.6.
+  - **Destino:** tarea 5.6.
+- **5.5-CR-S3 (tres implementaciones de «el lexema es entero») → próxima tarea que toque `ir` o
+  `semantic` (amplía 5.5-S1).**
+  - **Dónde:** `crates/semantic/src/number.rs` (`classify`), `crates/ir/src/verify.rs:948`
+    (`is_integer`, exponente saturado) y, implícita, `crates/ir/src/num.rs` (`Sci`: entero ⇔
+    `sig == 0` o E ≥ `sig`).
+  - **Estado:** las tres son correctas para su uso, pero repiten el mismo cálculo.
+  - **Arreglo:** una `ir::num::is_integer` exacta que usen `verify` y `semantic` (que ya depende
+    de `ir`).
+  - **Destino:** la próxima tarea que toque `crates/ir` o `crates/semantic`.
+- **5.5-CR-S4 (`unwrap_or(0.0)` en el redondeo) → próxima tarea que toque `ir`.**
+  - **Dónde:** `crates/ir/src/num.rs:626` y `:641` (`round_f32`, `round_f64`).
+  - **Estado:** `unwrap_or(0.0)` ocultaría una violación del invariante «la cadena reducida
+    siempre es válida».
+  - **Arreglo:** un `debug_assert!` sobre el resultado de `parse`, o un comentario de por qué no
+    se usa.
+  - **Destino:** la próxima tarea que toque `crates/ir`.
+- **5.5-CR-S5 (ramas duplicadas en `xsd_number`, nit) → próxima tarea que toque `ir`.**
+  - **Dónde:** `crates/ir/src/num.rs:274-295`.
+  - **Estado:** las ramas `Float` y `Double` son idénticas salvo el tipo.
+  - **Arreglo:** una función auxiliar pequeña (o un macro local) que reciba el redondeo.
+  - **Destino:** la próxima tarea que toque `crates/ir`.
+- **5.5-CR-S6 (registro de la decisión de B4) — CERRADO POR REGISTRO (lo hace el orquestador).**
+  - **Dónde:** [numeros-xsd.md](numeros-xsd.md) §8, decisión 2.
+  - **Estado:** guardar en `Num` de `Float`/`Double` el decimal más corto del valor redondeado es
+    una de las dos opciones de B4 y no cambia el JSON v2; basta registrarla. Con I-1 desaparece
+    la candidata de `00-alcance.md`.
+  - **Arreglo:** registrar la decisión en el plan general.
+  - **Destino:** registro de decisiones (orquestador).
+
+### Abiertas por la tarea 5.6 (tipos simples)
+
+### 37. Lo que deja la 5.6 (tipos simples del usuario)
+
+- **5.6-P1 (`pattern` unidas pueden tapar un error de sintaxis) → tarea `pattern` → AFD (Fase 4).**
+  - **Dónde:** `crates/xsd/src/lower.rs` (`simple_node`, la unión `(p1)|(p2)`).
+  - **Estado:** varias `xs:pattern` de un paso bajan a un solo `Pattern` (I4). Con dos patrones mal
+    formados por separado la unión puede ser válida (`(a` y `b)` dan `((a)|(b))`), y la IR ya no
+    tiene los originales. Para patrones bien formados la unión es exacta (en XSD `|` tiene la menor
+    precedencia).
+  - **Arreglo:** que el frontal compruebe la sintaxis de cada `xs:pattern` por separado con el mismo
+    analizador de expresiones regulares que use la tarea `pattern` → AFD (cuando exista, en `ir` o en
+    un crate propio), antes de unirlas; o que `Rule::Pattern` admita una lista (cambio de la IR y del
+    JSON v2: decisión compartida, D42).
+  - **Destino:** tarea `pattern` → AFD (Fase 4).
+- **5.6-P2 (`pattern` de la base en enumeraciones y `default`/`fixed`) → Fase 4 (D29).**
+  - **Dónde:** `crates/xsd/src/simple.rs` (`Ctx::in_space`, sin `pattern`).
+  - **Estado:** omisión aprobada (D29): `<xs:enumeration value="ZZZ"/>` sobre una base con
+    `pattern="[a-z]"` se acepta (prueba `enumeraciones_y_valores_por_defecto_son_del_tipo`).
+  - **Arreglo:** con el AFD de la tarea `pattern`, comprobar cada enumeración, `default` y `fixed`
+    contra las `pattern` de toda la cadena.
+  - **Destino:** tarea `pattern` → AFD (Fase 4).
+- **5.6-P3 (`default`/`fixed` sin normalizar en la IR) → F4.1.**
+  - **Dónde:** `crates/xsd/src/lower.rs` (`type_rules`, `Attribute::default`/`fixed` sin tocar).
+  - **Estado:** el frontal comprueba que son valores del tipo pero los baja tal como los dejó el
+    lector (`fixed=" 1 "` en `xs:boolean`, `+09` en `xs:int`; en `xs:float`/`xs:double` pueden ser
+    `INF`, `-INF` o `NaN`). [ir.md](ir.md) §5.2 dice que `fixed` se compara en el espacio de valores.
+  - **Arreglo:** que la Fase 4 compare `fixed` con el valor del payload en el espacio de valores
+    (*collapse* y `ir::num` en los numéricos, cadena exacta en `xs:string`, NaN igual a sí mismo en
+    `fixed`), o que el frontal lo normalice al bajar (cambia las doradas: decisión de la Fase 4).
+  - **Destino:** F4.1.
+- **5.6-P4 (alcance para la 5.7) → tarea 5.7 (`docs/00-alcance.md` §3, interfaz compartida, D42).**
+  - **Dónde:** `docs/00-alcance.md` §3.1 (fila `xs:simpleType` + `xs:restriction`) y §3.3.
+  - **Estado:** la 5.6 no toca el alcance. Hay que reflejar: las **dos** lecturas conservadoras de
+    XSD 1.0 2.ª ed. ([xsd.md](xsd.md) §10.2 y §10.6, decisión 5; corregido en la ronda 1, I-2): un
+    `minExclusive` nuevo < el `maxInclusive` de la base (la regla 2 de *minExclusive valid
+    restriction* admite ≤; `crates/xsd/src/simple.rs`, `valid_restriction`, rama `(false, true)`) y
+    `minExclusive` < `maxExclusive` en el mismo paso (XSD admite ≤; misma función, cotas del mismo
+    paso); las dos solo rechazan espacios de valores vacíos. No son desviaciones (son literales de
+    XSD): `minExclusive` < `maxExclusive` de la base (regla 4), *minExclusive < maxInclusive* del
+    mismo paso, y `minLength`/`maxLength` sobre una base con `length` solo si repiten el
+    `minLength`/`maxLength` **efectivo** de la base (cláusulas 1.2 y 2.2). Además: que el valor de una
+    faceta de rango no se compara con la enumeración de la base (decisión 6; ver 5.6-CR-S3);
+    `INF`/`-INF`/`NaN` admitidos en `default`/`fixed` de `xs:float`/`xs:double` y `+INF` rechazado
+    (decisión 7); el tipo anónimo de un atributo global se comprueba y no se baja; la omisión de D29
+    (`pattern` de la base); y 5.6-CR-S4.
+  - **Arreglo:** una nota por punto en §3.1 o una lista de desviaciones en §3, junto con las de D23,
+    D25-D27 y D39 que ya esperan a la 5.7.
+  - **Destino:** tarea 5.7.
+- **5.6-P5 (copia de la tabla de casos de prueba) — opcional.**
+  - **Dónde:** `crates/xsd/tests/simple.rs` (`compilar`, `ir_de`) repite las ayudas de
+    `crates/xsd/tests/lower.rs` y `corpus.rs` (§34).
+  - **Estado:** copias pequeñas y deliberadas, como las de §34.
+  - **Arreglo:** el módulo `tests/common` de §34.
+  - **Destino:** la próxima tarea que toque esas pruebas (opcional).
+
+Observaciones de la revisión de la 5.6 (ronda 1: I-1 abrió ronda por D38 y está resuelto; I-2 y
+S-1, de documentación, corregidos en la ronda).
+
+- **5.6-CR-I1 (costo cuadrático con una cota larga) — RESUELTO (ronda 1).**
+  - **Dónde:** `crates/xsd/src/simple.rs` (`Ctx::in_space`, `valid_restriction`) y
+    `crates/ir/src/num.rs` (`Decimal`, `compare_parsed`, `contador`).
+  - **Estado:** cada comparación llamaba a `ir::num::compare`, que vuelve a analizar los dos
+    lexemas: una cota de 1 MiB se recorría entera por cada enumeración del derivado, cada
+    `default`/`fixed` que usara el tipo y cada paso de la cadena con cota propia (medido por la
+    revisión: 2,7 s con k = 1000 y 10,8 s con k = 4000). Ahora cada cota se analiza una vez
+    (`Bound::dec`, y los predefinidos al empezar la etapa) y se compara con `compare_parsed`,
+    O(min(|valor|, |cota|)).
+  - **Prueba:** `cota_larga_se_analiza_una_sola_vez` (`crates/xsd/tests/simple.rs`), sin reloj:
+    cuenta los bytes analizados con `ir::num::contador` (feature `contadores`, solo como
+    dev-dependency de `xsd`). Con la corrección, ≈ 1,0·10⁶ por forma; con los mutantes a mano
+    (volver a `compare` en `in_space`, o en `valid_restriction`), ≈ 1,0·10⁹ y la prueba falla en
+    las formas correspondientes. Docs: [xsd.md](xsd.md) §10.1 y §10.4, [numeros-xsd.md](numeros-xsd.md) §1 y §5.
+- **5.6-CR-S2 (regex de las `pattern` y D21) → tarea `pattern` → AFD (Fase 4).**
+  - **Dónde:** `crates/xsd/src/lower.rs` (`simple_node`, unión `(p1)|(p2)`); amplía 5.6-P1.
+  - **Estado:** la unión es exacta para patrones bien formados, pero `(a` + `b)` da `((a)|(b))`,
+    que se acepta. Si el analizador de regex vive en un crate propio, `xsd` dependería de él y eso
+    modifica D21 (`xsd` → solo `lexer` e `ir`).
+  - **Arreglo:** lo más simple es que el analizador viva en `ir` (como `ir::num`), y que el
+    frontal compruebe cada `xs:pattern` por separado antes de unirlas.
+  - **Destino:** tarea `pattern` → AFD (Fase 4).
+- **5.6-CR-S3 (cota inclusiva frente a la enumeración de la base) → 5.7 (en 5.6-P4).**
+  - **Dónde:** `crates/xsd/src/simple.rs` (`restriction`, rama de las facetas de rango: solo
+    `xsd_number`, sin `in_space`); [xsd.md](xsd.md) §10.6, decisión 6.
+  - **Estado:** para una cota **inclusiva**, comprobar que está en la enumeración de la base sería
+    aplicable a la letra («en el espacio de valores de la base»); solo las exclusivas dan la
+    contradicción con la regla 1 que motivó la decisión 6. Aceptarla no cambia la validación (los
+    `Ref` hacen conjunción): queda como desviación documentada.
+  - **Arreglo:** decidir en la 5.7 si se documenta en `00-alcance.md` §3 o se comprueba también
+    para las inclusivas (`in_space` contra la base).
+  - **Destino:** tarea 5.7.
+- **5.6-CR-S4 (T-3: `length` y enumeración del mismo paso) → 5.7 (en 5.6-P4).**
+  - **Dónde:** `crates/xsd/src/simple.rs` (`restriction`, `in_space` con las facetas de la base).
+  - **Estado:** `length=2` con la enumeración `"abc"` en el mismo paso se acepta: es lo que pide
+    XSD (*enumeration valid restriction* compara con la base, no con el paso); el tipo no acepta
+    ningún valor `"abc"`.
+  - **Arreglo:** ninguno en el código; anotarlo en el alcance como comportamiento de XSD.
+  - **Destino:** tarea 5.7.
+- **5.6-CR-S5 (T-2: sin tope de errores por etapa) → Fase 7 o 5.7.**
+  - **Dónde:** `crates/xsd/src/check.rs` (`analyze`: devuelve todos los errores de la etapa).
+  - **Estado:** el número de errores es lineal en la entrada y cada mensaje está acotado por
+    `clip` (amplificación de §1), pero no hay tope.
+  - **Arreglo:** si se pone un tope (como el de §1 para JSON Schema), aplicarlo a las tres etapas
+    por igual.
+  - **Destino:** Fase 7 (servidor) o tarea 5.7.
+- **5.6-CR-S6 (enumeraciones repetidas por valor, nit) → opcional.**
+  - **Dónde:** `crates/xsd/src/lower.rs` (`simple_node`, `Rule::Enum` desde `Own::enums`).
+  - **Estado:** `1`, `1.0` y `01` en `xs:decimal` bajan a `[1, 1, 1]`; en `xs:float`, `0.1` y
+    `0.10000000149011612` dan dos veces `0.1`. `verify` los admite y el trie de la Fase 4 los
+    absorbe.
+  - **Arreglo:** quitar los repetidos conservando el orden con `ctx.sets` (cambiaría solo la
+    dorada `tipos-simples`, que no tiene repetidos, así que tampoco esa).
+  - **Destino:** opcional (la próxima tarea que toque `simple.rs`).
+- **Registro (orquestador):** la decisión 1 de [xsd.md](xsd.md) §10.6 modifica D40 (B2 pasa de dos
+  a tres etapas), y la decisión 9 amplía D43: la API de `ir::num` ya no es solo «pura», añade
+  `Decimal`, `compare_parsed` y `contador` (estado por hilo, tras la feature `contadores`).
+
+Observaciones del cierre de la 5.6 (ronda 1 aprobada: Tester PASA, code-reviewer APRUEBA con 0
+Critical y 0 Important; tres Suggestions).
+
+- **5.6-CR2-S1 (registro de decisiones) — RESUELTO en la nota (lo registra el orquestador).**
+  - **Dónde:** `docs/fase3/xsd.md:235` (decisión 9) y la nota «Registro (orquestador)» de arriba.
+  - **Estado:** la nota solo decía que la decisión 1 modifica D40; la decisión 9 amplía D43 (que
+    enumera la API de `ir::num` como «API pura») con `Decimal`, `compare_parsed` y `contador`.
+  - **Arreglo:** añadido a la nota; falta registrarlo en el plan general.
+  - **Destino:** registro de decisiones (orquestador).
+- **5.6-CR2-S2 (cita de la cláusula) — RESUELTO y confirmado.**
+  - **Dónde:** `crates/xsd/src/simple.rs:764` (comentario), `docs/fase3/xsd.md:192` y `:231`, y
+    5.6-P4 de esta sección.
+  - **Estado:** se citaba la cláusula 1.2 para `minLength` y `maxLength`. Comprobado en el texto
+    oficial (XSD 1.0 2.ª ed. Parte 2, §4.3.1.4, *length and minLength or maxLength*): la 1.2 es la
+    de `minLength` y la 2.2 la de `maxLength` («2.2 there is type definition from which this one
+    is derived by one or more restriction steps in which maxLength has the same {value} and
+    length is not specified»).
+  - **Arreglo:** los cuatro sitios dicen ahora «cláusulas 1.2 y 2.2» (el comentario de la prueba
+    `restriccion_valida_respecto_de_la_base`, que cita 1.2 para un `minLength`, ya era correcto).
+  - **Destino:** cerrado.
+- **5.6-CR2-S3 (calidad menor) — RESUELTO.**
+  - **Dónde:** `crates/ir/src/num.rs:662` (`contador::reiniciar`) y el doc comment de
+    `cota_larga_se_analiza_una_sola_vez` (`crates/xsd/tests/simple.rs`).
+  - **Estado:** a `reiniciar` le faltaba el doc comment; la prueba no decía que el contador solo ve
+    lo que pasa por `Sci::new` (clonar un `Decimal` por comparación no lo detectaría).
+  - **Arreglo:** doc comment añadido y una línea en el de la prueba (hoy `Ctx::bound` devuelve
+    `&Decimal`, sin copia).
+  - **Destino:** cerrado.
+- **5.6-T1-1 (Tester, ronda 1) → tarea 5.7.**
+  - **Dónde:** `crates/xsd/tests/simple.rs` (`cota_larga_se_analiza_una_sola_vez`).
+  - **Estado:** cubre enumeraciones, `default` de atributos y cadenas de pasos; `default`/`fixed`
+    en `xs:element` hoy son `unsupported` en el parser, así que no hay esa forma.
+  - **Arreglo:** si la 5.7 admite `default`/`fixed` en `xs:element`, añadir esa forma a la prueba.
+  - **Destino:** tarea 5.7.

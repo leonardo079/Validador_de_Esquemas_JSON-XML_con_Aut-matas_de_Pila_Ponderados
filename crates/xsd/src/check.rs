@@ -9,19 +9,25 @@
 //! 1. *componentes y nombres*: forma de `name` (NCName) y de las
 //!    ocurrencias, combinaciones de atributos (`name`/`ref`, `type`/tipo
 //!    anónimo, `default`/`fixed`, `use="required"` con `default`), D14,
-//!    nombres repetidos (globales e I10), referencias sin resolver, tipos
-//!    fuera de §3.2, D27 y `xs:simpleType` (pendiente de la 5.6);
-//! 2. *modelos de contenido*: `minOccurs` ≤ `maxOccurs` (I11), *all-group
+//!    nombres repetidos (globales e I10), referencias sin resolver (también
+//!    la `base` de los `xs:restriction`), tipos fuera de §3.2, D27 y
+//!    `base` con tipo anónimo a la vez (o ninguno);
+//! 2. *tipos simples* (tarea 5.6, [`crate::simple`]): derivación circular,
+//!    facetas (I4, I13, *valid restriction*), enumeraciones y
+//!    `default`/`fixed` como valores del tipo. Necesitan las bases
+//!    resueltas de la etapa 1;
+//! 3. *modelos de contenido*: `minOccurs` ≤ `maxOccurs` (I11), *all-group
 //!    limited* y *Element Declarations Consistent* (I12). Necesitan los
 //!    tipos resueltos de la etapa 1.
 //!
 //! **Sin recursión (D7).** El AST es un árbol de profundidad ≤ 256, pero se
-//! recorre con pilas explícitas: una de tipos complejos pendientes (que da
-//! el preorden de las declaraciones, B3) y, dentro de cada tipo, otra para
-//! aplanar su modelo de contenido en una arena en preorden. Cada
-//! construcción del AST se visita una vez en el recorrido y otra en la
-//! comprobación de su arena: O(n) en el tamaño del AST, más O(1) esperado
-//! por consulta de las tablas hash (más el hash del nombre local).
+//! recorre con pilas explícitas: una de declaraciones pendientes (tipos
+//! complejos y simples, que da el preorden de las declaraciones, B3) y,
+//! dentro de cada tipo complejo, otra para aplanar su modelo de contenido en
+//! una arena en preorden. Cada construcción del AST se visita una vez en el
+//! recorrido y otra en la comprobación de su arena: O(n) en el tamaño del
+//! AST, más O(1) esperado por consulta de las tablas hash (más el hash del
+//! nombre local).
 
 use std::collections::HashMap;
 
@@ -30,45 +36,117 @@ use lexer::{Pos, Span};
 
 use crate::ast::{
     AnonymousType, Attribute, ComplexContent, ComplexType, Compositor, Element, Group, Particle,
-    Schema, Spanned, TopLevel, Use,
+    Schema, SimpleType, Spanned, TopLevel, Use,
 };
 use crate::error::{clip, ErrorKind, XsdError};
 use crate::reader::is_ncname;
+use crate::simple::{self, Own};
 use crate::symbols::{key, Builtin, Key, Lookup, Symbols, TypeRef};
 use crate::Name;
 
 /// Un esquema que pasó el análisis: lo único que acepta [`crate::lower`].
 /// Guarda referencias al AST, así que vive lo que él.
-#[derive(Debug)]
 pub struct Analysis<'a> {
     pub(crate) schema: &'a Schema,
     /// Tipos complejos (con nombre y anónimos) en **preorden** de
-    /// declaración: su posición + 1 es su `NodeId` (B3).
+    /// declaración.
     pub(crate) types: Vec<TypeInfo<'a>>,
+    /// Tipos simples del usuario (con nombre y anónimos), en preorden de
+    /// declaración; también los de los atributos globales, que no se bajan.
+    pub(crate) simples: Vec<SimpleInfo<'a>>,
+    /// Declaraciones que se bajan, en **preorden** (B3): la *i*-ésima es el
+    /// nodo 1 + *i*.
+    pub(crate) decls: Vec<Decl>,
     /// Elementos globales en el orden del documento.
     pub(crate) globals: Vec<Global<'a>>,
 }
 
 impl Analysis<'_> {
-    /// Número de tipos complejos (con nombre y anónimos): los nodos de
-    /// declaración de la IR, sin el documento ni los sintéticos.
+    /// Número de tipos complejos (con nombre y anónimos), sin los simples
+    /// ni el documento ni los sintéticos.
     pub fn type_count(&self) -> usize {
         self.types.len()
     }
 }
 
+/// `Debug` con recuentos, no el AST (5.3-CR1-S3): el derivado imprimía cada
+/// tipo con sus anónimos, O(n·d) y recursivo.
+impl core::fmt::Debug for Analysis<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Analysis")
+            .field("tipos_complejos", &self.types.len())
+            .field("tipos_simples", &self.simples.len())
+            .field("declaraciones", &self.decls.len())
+            .field("elementos_globales", &self.globals.len())
+            .finish()
+    }
+}
+
+/// Una declaración que se baja a un nodo de la IR.
+#[derive(Clone, Copy)]
+pub(crate) enum Decl {
+    /// Tipo complejo (posición en `Analysis::types`).
+    Complex(usize),
+    /// Envoltorio `Element` del tipo simple anónimo de un elemento
+    /// (posición en `Analysis::simples`); le sigue el tipo.
+    Wrapper(usize),
+    /// Tipo simple (posición en `Analysis::simples`): un nodo `Text`.
+    Simple(usize),
+}
+
+/// Un `xs:simpleType` del usuario.
+pub(crate) struct SimpleInfo<'a> {
+    pub(crate) st: &'a SimpleType,
+    /// Su nodo `Text` (posición en `Analysis::decls`); `None` si no se baja
+    /// (el tipo de un atributo global y sus bases anónimas).
+    pub(crate) node: Option<usize>,
+    pub(crate) origin: SimpleOrigin<'a>,
+    /// Base resuelta en la etapa 1: un predefinido o otro tipo simple.
+    pub(crate) base: TypeRef,
+    /// Rango del uso de la base: el valor de `base` o el `xs:simpleType`
+    /// anónimo (para el primer uso de un predefinido, B3).
+    pub(crate) base_span: Span,
+    /// La base anónima (`TypeRef::Simple`), si la tiene.
+    pub(crate) anon_base: TypeRef,
+    /// Facetas propias ya comprobadas (etapa 2), las que se bajan.
+    pub(crate) own: Own<'a>,
+}
+
+/// De dónde cuelga el nodo de un tipo simple (`docs/fase3/ir.md` §5.2).
+#[derive(Clone, Copy)]
+pub(crate) enum SimpleOrigin<'a> {
+    /// `xs:simpleType name="T"`: padre el documento, `Entry("simpleType", T)`.
+    Named(&'a str),
+    /// Tipo anónimo del elemento `name`: el envoltorio (nodo `wrapper`, padre
+    /// `parent` o el documento, `Entry("element", name)`) y, colgando de él,
+    /// el texto con `Keyword("simpleType")`.
+    Element {
+        wrapper: usize,
+        parent: Option<usize>,
+        name: &'a str,
+    },
+    /// Tipo anónimo del atributo `name` del tipo complejo de nodo `parent`:
+    /// `Entry("attribute", name)`.
+    Attribute { parent: usize, name: &'a str },
+    /// Base anónima de la restricción del tipo de nodo `parent`:
+    /// `Keyword("restriction")`.
+    Restriction { parent: usize },
+    /// No se baja.
+    Unlowered,
+}
+
 /// Un elemento global: una partícula del documento.
-#[derive(Debug)]
 pub(crate) struct Global<'a> {
     pub(crate) el: &'a Element,
     pub(crate) ty: TypeRef,
 }
 
 /// Un tipo complejo con su contenido aplanado y resuelto.
-#[derive(Debug)]
 pub(crate) struct TypeInfo<'a> {
     pub(crate) ct: &'a ComplexType,
-    /// Tipo que contiene la declaración (`None`: el documento).
+    /// Su nodo (posición en `Analysis::decls`).
+    pub(crate) node: usize,
+    /// Nodo de la declaración que la contiene (`None`: el documento).
     pub(crate) parent: Option<usize>,
     /// Paso desde el padre: `("complexType", nombre)` o, si es anónimo,
     /// `("element", nombre del elemento)`.
@@ -79,18 +157,18 @@ pub(crate) struct TypeInfo<'a> {
     pub(crate) attributes: Vec<Attr<'a>>,
     /// Tipo de `xs:simpleContent`/`xs:extension base` y el rango del uso.
     pub(crate) simple_base: Option<(TypeRef, Span)>,
+    /// Tipo anónimo de cada atributo (`TypeRef::Invalid` si no tiene).
+    anon_attrs: Vec<TypeRef>,
 }
 
 /// Partícula del modelo aplanado (el índice de los hijos es el de la
 /// arena, como en `ir::ContentModel`).
-#[derive(Debug)]
 pub(crate) struct Part<'a> {
     pub(crate) term: Term<'a>,
     pub(crate) occurs: Occurs,
     pub(crate) span: Span,
 }
 
-#[derive(Debug)]
 pub(crate) enum Term<'a> {
     Element {
         el: &'a Element,
@@ -106,55 +184,114 @@ pub(crate) enum Term<'a> {
 }
 
 /// Un `xs:attribute` con su tipo resuelto.
-#[derive(Debug)]
 pub(crate) struct Attr<'a> {
     pub(crate) a: &'a Attribute,
     pub(crate) ty: TypeRef,
 }
 
-/// Errores de cada etapa.
+/// Errores de cada etapa (B2).
 #[derive(Default)]
-struct Errors {
+pub(crate) struct Errors {
     /// Etapa 1: componentes y nombres.
     components: Vec<XsdError>,
-    /// Etapa 2: modelos de contenido.
+    /// Etapa 2: tipos simples.
+    pub(crate) simples: Vec<XsdError>,
+    /// Etapa 3: modelos de contenido.
     models: Vec<XsdError>,
 }
 
 impl Errors {
-    fn push(&mut self, kind: ErrorKind, at: Pos) {
+    /// Un error de la etapa 1 (componentes y nombres).
+    fn component(&mut self, kind: ErrorKind, at: Pos) {
         self.components.push(XsdError::new(kind, at));
     }
 
+    /// Un error de la etapa 2 (tipos simples).
+    pub(crate) fn simple(&mut self, kind: ErrorKind, at: Pos) {
+        self.simples.push(XsdError::new(kind, at));
+    }
+
+    /// Un error de la etapa 3 (modelos de contenido).
     fn model(&mut self, kind: ErrorKind, at: Pos) {
         self.models.push(XsdError::new(kind, at));
     }
 }
 
-/// Tipo complejo encontrado y aún sin número de preorden.
+/// Declaración encontrada y aún sin número de preorden.
 struct Pending<'a> {
-    ct: &'a ComplexType,
-    parent: Option<usize>,
-    step: (&'static str, &'a str),
+    item: Item<'a>,
     slot: Slot,
 }
 
-/// Dónde se anota el número del tipo al dárselo.
+enum Item<'a> {
+    Complex {
+        ct: &'a ComplexType,
+        /// Nodo de la declaración que la contiene (`None`: el documento).
+        parent: Option<usize>,
+        step: (&'static str, &'a str),
+    },
+    Simple {
+        st: &'a SimpleType,
+        place: Place<'a>,
+    },
+}
+
+/// Dónde está un `xs:simpleType` (da su `SimpleOrigin` al numerarlo).
+enum Place<'a> {
+    Named(&'a str),
+    /// Tipo anónimo del elemento `name`, dentro del nodo `parent`.
+    Element {
+        parent: Option<usize>,
+        name: &'a str,
+    },
+    /// Tipo anónimo del atributo `name` del tipo complejo de nodo `parent`.
+    Attribute {
+        parent: usize,
+        name: &'a str,
+    },
+    /// Base anónima de una restricción; `None` si su tipo no se baja.
+    Restriction {
+        parent: Option<usize>,
+    },
+    /// Tipo de un atributo global: no se baja.
+    Unlowered,
+}
+
+/// Dónde se anota el tipo al numerarlo.
 enum Slot {
-    /// `xs:complexType` global: posición en `Schema::items`.
+    /// Declaración global: posición en `Schema::items`.
     Named(usize),
     /// Tipo anónimo de un elemento global (posición en `globals`).
     Global(usize),
     /// Tipo anónimo de la partícula `part` del tipo `ty`.
     Particle { ty: usize, part: usize },
+    /// Tipo anónimo del atributo `attr` del tipo `ty`.
+    Attribute { ty: usize, attr: usize },
+    /// Tipo anónimo de un atributo global (posición en `Schema::items`).
+    GlobalAttribute(usize),
+    /// Base anónima del tipo simple `simple`.
+    Restriction(usize),
+}
+
+/// Lo que da el recorrido de [`discover`].
+struct Found<'a> {
+    types: Vec<TypeInfo<'a>>,
+    simples: Vec<SimpleInfo<'a>>,
+    decls: Vec<Decl>,
+    globals: Vec<Global<'a>>,
+    /// Tipo de cada declaración global de tipo, por su posición en
+    /// `Schema::items`.
+    named: Vec<Option<TypeRef>>,
+    /// Tipo anónimo de cada atributo global, por su posición en
+    /// `Schema::items`.
+    global_attr_anon: Vec<TypeRef>,
 }
 
 const LOCAL_ELEMENT: &str = "xs:element local";
 const GLOBAL_ELEMENT: &str = "xs:element global";
 const REF_ELEMENT: &str = "xs:element ref";
 const ATTRIBUTE: &str = "xs:attribute";
-const SIMPLE_TYPE: &str = "xs:simpleType";
-const SIMPLE_TYPE_TASK: &str = "tarea 5.6: tipos simples del usuario y facetas";
+const RESTRICTION: &str = "xs:restriction";
 
 /// Texto de un `name` opcional (vacío si falta; el parser lo exige en las
 /// declaraciones globales).
@@ -171,7 +308,14 @@ fn text(name: &Option<Spanned<String>>) -> &str {
 /// (`docs/fase2/pendientes.md` §5).
 pub fn analyze(schema: &Schema) -> Result<Analysis<'_>, Vec<XsdError>> {
     let mut errors = Errors::default();
-    let (mut types, mut globals, named) = discover(schema);
+    let Found {
+        mut types,
+        mut simples,
+        decls,
+        mut globals,
+        named,
+        global_attr_anon,
+    } = discover(schema);
     let symbols = symbols(schema, &named, &mut errors);
 
     // Tipos de los elementos globales (antes que las partículas: un `ref`
@@ -182,118 +326,309 @@ pub fn analyze(schema: &Schema) -> Result<Analysis<'_>, Vec<XsdError>> {
     for t in &mut types {
         check_type(t, &globals, &symbols, &mut errors);
     }
-    for item in &schema.items {
-        match item {
-            // 5.2-CR-S2: sin `ref` de atributo no se pueden usar, así que no
-            // se bajan; se comprueban como cualquier declaración (XSD 1.0).
-            TopLevel::Attribute(a) => {
-                attribute(a, &symbols, &mut errors);
-            }
-            TopLevel::SimpleType(st) => errors.push(
-                ErrorKind::Pending {
-                    construct: SIMPLE_TYPE,
-                    task: SIMPLE_TYPE_TASK,
-                },
-                st.span.start,
-            ),
-            TopLevel::Element(_) | TopLevel::ComplexType(_) => {}
+    let mut global_attrs = Vec::new();
+    for (i, item) in schema.items.iter().enumerate() {
+        // 5.2-CR-S2: sin `ref` de atributo no se pueden usar, así que no se
+        // bajan; se comprueban como cualquier declaración (XSD 1.0).
+        if let TopLevel::Attribute(a) = item {
+            let ty = attribute(a, global_attr_anon[i], &symbols, &mut errors);
+            global_attrs.push(Attr { a, ty });
         }
+    }
+    for s in &mut simples {
+        restriction_base(s, &symbols, &mut errors);
+    }
+    if errors.components.is_empty() {
+        simple::check(&mut simples, &types, &global_attrs, &mut errors);
     }
     for t in &types {
         check_model(t, &mut errors);
     }
 
-    for v in [&mut errors.components, &mut errors.models] {
+    for v in [
+        &mut errors.components,
+        &mut errors.simples,
+        &mut errors.models,
+    ] {
         v.sort_by_key(|e| e.at.offset);
     }
-    if !errors.components.is_empty() {
-        return Err(errors.components);
-    }
-    if !errors.models.is_empty() {
-        return Err(errors.models);
+    for v in [errors.components, errors.simples, errors.models] {
+        if !v.is_empty() {
+            return Err(v);
+        }
     }
     Ok(Analysis {
         schema,
         types,
+        simples,
+        decls,
         globals,
     })
 }
 
-/// Recorre el AST con una pila de tipos pendientes y da a cada tipo complejo
-/// su número de **preorden** de declaración: un `xs:complexType` global o
-/// el tipo anónimo de un elemento global, en el orden del documento, y antes
-/// de los hermanos siguientes, los tipos anónimos de su propio modelo
-/// (B3). Aplana cada modelo al llegar a su tipo. Devuelve los tipos, los
-/// elementos globales y el número de cada `xs:complexType` global por su
-/// posición en `Schema::items`.
-fn discover(schema: &Schema) -> (Vec<TypeInfo<'_>>, Vec<Global<'_>>, Vec<Option<usize>>) {
-    let mut globals = Vec::new();
-    let mut named = vec![None; schema.items.len()];
+/// La base de la restricción de un tipo simple: `base` o un `xs:simpleType`
+/// hijo, exactamente uno (XSD 1.0, *src-simple-type* 2); un tipo complejo
+/// no puede ser base de un tipo simple.
+fn restriction_base(s: &mut SimpleInfo<'_>, symbols: &Symbols<'_>, errors: &mut Errors) {
+    let r = &s.st.restriction;
+    let conflict = |problem, at, errors: &mut Errors| {
+        errors.component(
+            ErrorKind::Conflict {
+                construct: RESTRICTION,
+                name: String::new(),
+                problem,
+            },
+            at,
+        );
+    };
+    s.base = match (&r.base, &r.simple_type) {
+        (Some(_), Some(st)) => {
+            conflict(
+                "no puede tener base y un xs:simpleType hijo a la vez",
+                st.span.start,
+                errors,
+            );
+            TypeRef::Invalid
+        }
+        (None, None) => {
+            conflict(
+                "necesita base o un xs:simpleType hijo",
+                r.span.start,
+                errors,
+            );
+            TypeRef::Invalid
+        }
+        (None, Some(st)) => {
+            s.base_span = st.span;
+            s.anon_base
+        }
+        (Some(b), None) => {
+            s.base_span = b.span;
+            match symbols.lookup_type(&b.value) {
+                Lookup::Found(TypeRef::Complex(_)) => {
+                    errors.component(
+                        ErrorKind::NotSimpleType {
+                            name: clip(b.value.as_str()),
+                            context: "la base de un xs:simpleType",
+                        },
+                        b.at(),
+                    );
+                    TypeRef::Invalid
+                }
+                Lookup::Found(t) => t,
+                other => {
+                    type_error(b, other, errors);
+                    TypeRef::Invalid
+                }
+            }
+        }
+    };
+}
+
+/// Recorre el AST con una pila de declaraciones pendientes y da a cada una
+/// su número de **preorden** (B3): las globales (`xs:complexType` y
+/// `xs:simpleType` con nombre, tipos anónimos de los elementos globales) en
+/// el orden del documento y, antes que los hermanos siguientes, las que
+/// contiene cada una: los tipos anónimos de su modelo, después los de sus
+/// atributos y, en un tipo simple, su base anónima. Aplana cada modelo al
+/// llegar a su tipo. Los tipos de los atributos globales se recorren igual,
+/// sin número: no se bajan.
+fn discover(schema: &Schema) -> Found<'_> {
+    let mut f = Found {
+        types: Vec::new(),
+        simples: Vec::new(),
+        decls: Vec::new(),
+        globals: Vec::new(),
+        named: vec![None; schema.items.len()],
+        global_attr_anon: vec![TypeRef::Invalid; schema.items.len()],
+    };
     let mut stack: Vec<Pending<'_>> = Vec::new();
     for (i, item) in schema.items.iter().enumerate() {
         match item {
             TopLevel::ComplexType(ct) => stack.push(Pending {
-                ct,
-                parent: None,
-                step: ("complexType", text(&ct.name)),
+                item: Item::Complex {
+                    ct,
+                    parent: None,
+                    step: ("complexType", text(&ct.name)),
+                },
+                slot: Slot::Named(i),
+            }),
+            TopLevel::SimpleType(st) => stack.push(Pending {
+                item: Item::Simple {
+                    st,
+                    place: Place::Named(text(&st.name)),
+                },
                 slot: Slot::Named(i),
             }),
             TopLevel::Element(el) => {
-                if let Some(AnonymousType::Complex(ct)) = &el.anonymous {
+                let slot = Slot::Global(f.globals.len());
+                match &el.anonymous {
                     // S-5, primera mitad (B3): padre el documento.
-                    stack.push(Pending {
-                        ct,
-                        parent: None,
-                        step: ("element", text(&el.name)),
-                        slot: Slot::Global(globals.len()),
-                    });
+                    Some(AnonymousType::Complex(ct)) => stack.push(Pending {
+                        item: Item::Complex {
+                            ct,
+                            parent: None,
+                            step: ("element", text(&el.name)),
+                        },
+                        slot,
+                    }),
+                    Some(AnonymousType::Simple(st)) => stack.push(Pending {
+                        item: Item::Simple {
+                            st,
+                            place: Place::Element {
+                                parent: None,
+                                name: text(&el.name),
+                            },
+                        },
+                        slot,
+                    }),
+                    None => {}
                 }
-                globals.push(Global {
+                f.globals.push(Global {
                     el,
                     ty: TypeRef::Invalid,
                 });
             }
-            TopLevel::SimpleType(_) | TopLevel::Attribute(_) => {}
-        }
-    }
-    stack.reverse();
-    let mut types: Vec<TypeInfo<'_>> = Vec::new();
-    let mut found = Vec::new();
-    while let Some(p) = stack.pop() {
-        let idx = types.len();
-        match p.slot {
-            Slot::Named(i) => named[i] = Some(idx),
-            Slot::Global(g) => globals[g].ty = TypeRef::Complex(idx),
-            Slot::Particle { ty, part } => {
-                if let Term::Element { ty: t, .. } = &mut types[ty].particles[part].term {
-                    *t = TypeRef::Complex(idx);
+            TopLevel::Attribute(a) => {
+                if let Some(st) = &a.simple_type {
+                    stack.push(Pending {
+                        item: Item::Simple {
+                            st,
+                            place: Place::Unlowered,
+                        },
+                        slot: Slot::GlobalAttribute(i),
+                    });
                 }
             }
         }
-        let particles = match &p.ct.content {
-            ComplexContent::Elements { model: Some(g), .. } => flatten(idx, g, &mut found),
-            _ => Vec::new(),
+    }
+    stack.reverse();
+    let mut found = Vec::new();
+    while let Some(p) = stack.pop() {
+        let t = match p.item {
+            Item::Complex { ct, parent, step } => {
+                let idx = f.types.len();
+                let node = f.decls.len();
+                f.decls.push(Decl::Complex(idx));
+                let (particles, attributes) = match &ct.content {
+                    ComplexContent::Elements { model, attributes } => (
+                        model
+                            .as_ref()
+                            .map_or_else(Vec::new, |g| flatten(idx, node, g, &mut found)),
+                        attributes,
+                    ),
+                    ComplexContent::Simple(sc) => (Vec::new(), &sc.attributes),
+                };
+                for (k, a) in attributes.iter().enumerate() {
+                    if let Some(st) = &a.simple_type {
+                        found.push(Pending {
+                            item: Item::Simple {
+                                st,
+                                place: Place::Attribute {
+                                    parent: node,
+                                    name: &a.name.value,
+                                },
+                            },
+                            slot: Slot::Attribute { ty: idx, attr: k },
+                        });
+                    }
+                }
+                f.types.push(TypeInfo {
+                    ct,
+                    node,
+                    parent,
+                    step,
+                    particles,
+                    attributes: Vec::new(),
+                    simple_base: None,
+                    anon_attrs: vec![TypeRef::Invalid; attributes.len()],
+                });
+                TypeRef::Complex(idx)
+            }
+            Item::Simple { st, place } => {
+                let idx = f.simples.len();
+                let mut number = |d| {
+                    f.decls.push(d);
+                    f.decls.len() - 1
+                };
+                let (node, origin) = match place {
+                    Place::Named(n) => (Some(number(Decl::Simple(idx))), SimpleOrigin::Named(n)),
+                    Place::Element { parent, name } => {
+                        let wrapper = number(Decl::Wrapper(idx));
+                        (
+                            Some(number(Decl::Simple(idx))),
+                            SimpleOrigin::Element {
+                                wrapper,
+                                parent,
+                                name,
+                            },
+                        )
+                    }
+                    Place::Attribute { parent, name } => (
+                        Some(number(Decl::Simple(idx))),
+                        SimpleOrigin::Attribute { parent, name },
+                    ),
+                    Place::Restriction {
+                        parent: Some(parent),
+                    } => (
+                        Some(number(Decl::Simple(idx))),
+                        SimpleOrigin::Restriction { parent },
+                    ),
+                    Place::Restriction { parent: None } | Place::Unlowered => {
+                        (None, SimpleOrigin::Unlowered)
+                    }
+                };
+                if let Some(child) = &st.restriction.simple_type {
+                    found.push(Pending {
+                        item: Item::Simple {
+                            st: child,
+                            place: Place::Restriction { parent: node },
+                        },
+                        slot: Slot::Restriction(idx),
+                    });
+                }
+                f.simples.push(SimpleInfo {
+                    st,
+                    node,
+                    origin,
+                    base: TypeRef::Invalid,
+                    base_span: st.restriction.span,
+                    anon_base: TypeRef::Invalid,
+                    own: Own::default(),
+                });
+                TypeRef::Simple(idx)
+            }
         };
-        types.push(TypeInfo {
-            ct: p.ct,
-            parent: p.parent,
-            step: p.step,
-            particles,
-            attributes: Vec::new(),
-            simple_base: None,
-        });
+        match p.slot {
+            Slot::Named(i) => f.named[i] = Some(t),
+            Slot::Global(g) => f.globals[g].ty = t,
+            Slot::Particle { ty, part } => {
+                if let Term::Element { ty: slot, .. } = &mut f.types[ty].particles[part].term {
+                    *slot = t;
+                }
+            }
+            Slot::Attribute { ty, attr } => f.types[ty].anon_attrs[attr] = t,
+            Slot::GlobalAttribute(i) => f.global_attr_anon[i] = t,
+            Slot::Restriction(s) => f.simples[s].anon_base = t,
+        }
         // Los hijos, en orden del documento: se apilan del revés.
         stack.extend(found.drain(..).rev());
     }
-    (types, globals, named)
+    f
 }
 
-/// Aplana el modelo `root` del tipo `ty` en una arena en **preorden** con
-/// una pila explícita (D7): cada partícula se añade al sacarla de la pila y
-/// se anota como hija de su grupo, que ya está en la arena; los hijos se
-/// apilan del revés, así que salen en orden. Deja en `found` los tipos
-/// anónimos complejos de sus elementos, en orden del documento.
-fn flatten<'a>(ty: usize, root: &'a Group, found: &mut Vec<Pending<'a>>) -> Vec<Part<'a>> {
+/// Aplana el modelo `root` del tipo `ty` (nodo `node`) en una arena en
+/// **preorden** con una pila explícita (D7): cada partícula se añade al
+/// sacarla de la pila y se anota como hija de su grupo, que ya está en la
+/// arena; los hijos se apilan del revés, así que salen en orden. Deja en
+/// `found` los tipos anónimos (complejos y simples) de sus elementos, en
+/// orden del documento.
+fn flatten<'a>(
+    ty: usize,
+    node: usize,
+    root: &'a Group,
+    found: &mut Vec<Pending<'a>>,
+) -> Vec<Part<'a>> {
     enum Item<'a> {
         Group(&'a Group),
         Element(&'a Element),
@@ -337,13 +672,27 @@ fn flatten<'a>(ty: usize, root: &'a Group, found: &mut Vec<Pending<'a>>) -> Vec<
                     occurs: Occurs::ONCE,
                     span: el.span,
                 });
-                if let Some(AnonymousType::Complex(ct)) = &el.anonymous {
-                    found.push(Pending {
-                        ct,
-                        parent: Some(ty),
-                        step: ("element", text(&el.name)),
-                        slot: Slot::Particle { ty, part: i },
-                    });
+                let slot = Slot::Particle { ty, part: i };
+                match &el.anonymous {
+                    Some(AnonymousType::Complex(ct)) => found.push(Pending {
+                        item: self::Item::Complex {
+                            ct,
+                            parent: Some(node),
+                            step: ("element", text(&el.name)),
+                        },
+                        slot,
+                    }),
+                    Some(AnonymousType::Simple(st)) => found.push(Pending {
+                        item: self::Item::Simple {
+                            st,
+                            place: Place::Element {
+                                parent: Some(node),
+                                name: text(&el.name),
+                            },
+                        },
+                        slot,
+                    }),
+                    None => {}
                 }
             }
         }
@@ -355,7 +704,7 @@ fn flatten<'a>(ty: usize, root: &'a Group, found: &mut Vec<Pending<'a>>) -> Vec<
 fn ncname(name: &Spanned<String>, errors: &mut Errors) -> bool {
     let ok = is_ncname(&name.value);
     if !ok {
-        errors.push(
+        errors.component(
             ErrorKind::InvalidValue {
                 attr: "name",
                 expected: "un NCName (nombre sin prefijo)",
@@ -379,7 +728,7 @@ fn declare<'a, V>(
     errors: &mut Errors,
 ) {
     match map.get(&k) {
-        Some(prev) => errors.push(
+        Some(prev) => errors.component(
             ErrorKind::DuplicateName {
                 space,
                 name: clip(&name.value),
@@ -394,7 +743,7 @@ fn declare<'a, V>(
 }
 
 /// Las tres tablas de símbolos globales, por `(targetNamespace, name)`.
-fn symbols<'a>(schema: &'a Schema, named: &[Option<usize>], errors: &mut Errors) -> Symbols<'a> {
+fn symbols<'a>(schema: &'a Schema, named: &[Option<TypeRef>], errors: &mut Errors) -> Symbols<'a> {
     let tns = schema.target_namespace.as_ref().map(|t| &t.value);
     let mut s = Symbols::default();
     let mut g = 0;
@@ -420,7 +769,7 @@ fn symbols<'a>(schema: &'a Schema, named: &[Option<usize>], errors: &mut Errors)
             TopLevel::ComplexType(ct) => {
                 if let Some(n) = &ct.name {
                     if ncname(n, errors) {
-                        let t = named[i].map_or(TypeRef::Invalid, TypeRef::Complex);
+                        let t = named[i].unwrap_or(TypeRef::Invalid);
                         let at = n.at();
                         declare(
                             &mut s.types,
@@ -438,7 +787,7 @@ fn symbols<'a>(schema: &'a Schema, named: &[Option<usize>], errors: &mut Errors)
                 if let Some(n) = &st.name {
                     if ncname(n, errors) {
                         let at = n.at();
-                        let v = (TypeRef::UserSimple, at);
+                        let v = (named[i].unwrap_or(TypeRef::Invalid), at);
                         declare(&mut s.types, (tns, &n.value), v, |p| p.1, "tipo", n, errors);
                     }
                 }
@@ -478,7 +827,7 @@ fn type_error(name: &Spanned<Name>, lookup: Lookup, errors: &mut Errors) {
             ns: name.value.ns().map(clip),
         },
     };
-    errors.push(kind, name.at());
+    errors.component(kind, name.at());
 }
 
 /// Rango de un tipo anónimo.
@@ -490,7 +839,7 @@ fn anonymous_span(t: &AnonymousType) -> Span {
 }
 
 /// Tipo de un `xs:element` con nombre (global o local): `type`, tipo
-/// anónimo (`anonymous`, ya numerado si es complejo) o ninguno (D14).
+/// anónimo (`anonymous`, ya numerado) o ninguno (D14).
 fn element_type(
     el: &Element,
     anonymous: TypeRef,
@@ -501,7 +850,7 @@ fn element_type(
     let name = text(&el.name);
     match (&el.ty, &el.anonymous) {
         (Some(_), Some(anon)) => {
-            errors.push(
+            errors.component(
                 ErrorKind::Conflict {
                     construct,
                     name: clip(name),
@@ -518,20 +867,10 @@ fn element_type(
                 TypeRef::Invalid
             }
         },
-        (None, Some(AnonymousType::Complex(_))) => anonymous,
-        (None, Some(AnonymousType::Simple(st))) => {
-            errors.push(
-                ErrorKind::Pending {
-                    construct: SIMPLE_TYPE,
-                    task: SIMPLE_TYPE_TASK,
-                },
-                st.span.start,
-            );
-            TypeRef::Invalid
-        }
+        (None, Some(_)) => anonymous,
         // D14: el tipo implícito sería `xs:anyType`.
         (None, None) => {
-            errors.push(
+            errors.component(
                 ErrorKind::Unsupported {
                     what: "xs:element",
                     name: clip(name),
@@ -552,7 +891,7 @@ fn element_type(
 /// opcional, `-` solo si vale cero) saturado en `u64::MAX` (`ir.md` §5.1), o
 /// `unbounded` en `maxOccurs` (`None`). El valor ya viene con *collapse*.
 /// `Err(())` si no tiene esa forma.
-fn occurs_value(v: &str, unbounded: bool) -> Result<Option<u64>, ()> {
+pub(crate) fn occurs_value(v: &str, unbounded: bool) -> Result<Option<u64>, ()> {
     if unbounded && v == "unbounded" {
         return Ok(None);
     }
@@ -584,7 +923,7 @@ fn occurs(
     if let Some(m) = min {
         match occurs_value(&m.value, false) {
             Ok(Some(n)) => o.min = n,
-            _ => errors.push(
+            _ => errors.component(
                 ErrorKind::InvalidValue {
                     attr: "minOccurs",
                     expected: "un entero no negativo",
@@ -597,7 +936,7 @@ fn occurs(
     if let Some(m) = max {
         match occurs_value(&m.value, true) {
             Ok(n) => o.max = n,
-            Err(()) => errors.push(
+            Err(()) => errors.component(
                 ErrorKind::InvalidValue {
                     attr: "maxOccurs",
                     expected: "un entero no negativo o unbounded",
@@ -611,12 +950,17 @@ fn occurs(
 }
 
 /// Restricciones de un `xs:attribute` (global o local) y su tipo: un tipo
-/// simple predefinido, `xs:anySimpleType` si no tiene tipo, o un
-/// `xs:simpleType` (pendiente de la 5.6).
-fn attribute(a: &Attribute, symbols: &Symbols<'_>, errors: &mut Errors) -> TypeRef {
+/// simple predefinido o del usuario, su tipo anónimo (`anonymous`, ya
+/// numerado) o `xs:anySimpleType` si no tiene tipo.
+fn attribute(
+    a: &Attribute,
+    anonymous: TypeRef,
+    symbols: &Symbols<'_>,
+    errors: &mut Errors,
+) -> TypeRef {
     ncname(&a.name, errors);
     let conflict = |problem, at, errors: &mut Errors| {
-        errors.push(
+        errors.component(
             ErrorKind::Conflict {
                 construct: ATTRIBUTE,
                 name: clip(&a.name.value),
@@ -655,9 +999,10 @@ fn attribute(a: &Attribute, symbols: &Symbols<'_>, errors: &mut Errors) -> TypeR
         }
         (Some(ty), None) => match symbols.lookup_type(&ty.value) {
             Lookup::Found(TypeRef::Complex(_)) => {
-                errors.push(
+                errors.component(
                     ErrorKind::NotSimpleType {
                         name: clip(ty.value.as_str()),
+                        context: "el tipo de un atributo",
                     },
                     ty.at(),
                 );
@@ -669,16 +1014,7 @@ fn attribute(a: &Attribute, symbols: &Symbols<'_>, errors: &mut Errors) -> TypeR
                 TypeRef::Invalid
             }
         },
-        (None, Some(st)) => {
-            errors.push(
-                ErrorKind::Pending {
-                    construct: SIMPLE_TYPE,
-                    task: SIMPLE_TYPE_TASK,
-                },
-                st.span.start,
-            );
-            TypeRef::Invalid
-        }
+        (None, Some(_)) => anonymous,
         (None, None) => TypeRef::Builtin(Builtin::AnySimpleType),
     }
 }
@@ -697,7 +1033,7 @@ fn check_type<'a>(
             let base = match symbols.lookup_type(&sc.base.value) {
                 Lookup::Found(TypeRef::Complex(_)) => {
                     // D27 (U7): derivar un tipo complejo de otro.
-                    errors.push(
+                    errors.component(
                         ErrorKind::Unsupported {
                             what: "tipo base",
                             name: clip(sc.base.value.as_str()),
@@ -723,9 +1059,9 @@ fn check_type<'a>(
     };
     // I10: dos atributos con el mismo nombre en el tipo.
     let mut seen: HashMap<&str, Pos> = HashMap::with_capacity(attributes.len());
-    for a in attributes {
+    for (k, a) in attributes.iter().enumerate() {
         if let Some(first) = seen.get(a.name.value.as_str()) {
-            errors.push(
+            errors.component(
                 ErrorKind::DuplicateName {
                     space: "atributo",
                     name: clip(&a.name.value),
@@ -736,7 +1072,7 @@ fn check_type<'a>(
         } else {
             seen.insert(&a.name.value, a.name.at());
         }
-        let ty = attribute(a, symbols, errors);
+        let ty = attribute(a, t.anon_attrs[k], symbols, errors);
         t.attributes.push(Attr { a, ty });
     }
 
@@ -766,7 +1102,7 @@ fn particle_element<'a>(
 ) -> (&'a str, TypeRef) {
     let Some(r) = &el.reference else {
         let Some(n) = &el.name else {
-            errors.push(
+            errors.component(
                 ErrorKind::Conflict {
                     construct: LOCAL_ELEMENT,
                     name: String::new(),
@@ -783,7 +1119,7 @@ fn particle_element<'a>(
     // XSD 1.0, src-element 2: con `ref` no hay `name`, `type` ni tipo
     // anónimo.
     let conflict = |problem, at, errors: &mut Errors| {
-        errors.push(
+        errors.component(
             ErrorKind::Conflict {
                 construct: REF_ELEMENT,
                 name: clip(r.value.as_str()),
@@ -813,7 +1149,7 @@ fn particle_element<'a>(
     match symbols.elements.get(&key(&r.value)) {
         Some(&(g, _)) => (text(&globals[g].el.name), globals[g].ty),
         None => {
-            errors.push(
+            errors.component(
                 ErrorKind::Unresolved {
                     what: "elemento global",
                     name: clip(r.value.as_str()),
@@ -826,6 +1162,17 @@ fn particle_element<'a>(
     }
 }
 
+/// `a` > `b` para dos enteros no negativos ya validados por
+/// [`occurs_value`] (signo opcional, ceros a la izquierda): por longitud sin
+/// ceros a la izquierda y después lexicográficamente. O(|a| + |b|).
+fn lexeme_gt(a: &str, b: &str) -> bool {
+    fn digits(s: &str) -> &str {
+        s.trim_start_matches(['+', '-']).trim_start_matches('0')
+    }
+    let (a, b) = (digits(a), digits(b));
+    (a.len(), a) > (b.len(), b)
+}
+
 /// `minOccurs` y `maxOccurs` de una partícula, tal como se escribieron.
 fn occurs_of<'p>(p: &Part<'p>) -> (&'p Option<Spanned<String>>, &'p Option<Spanned<String>>) {
     match p.term {
@@ -834,7 +1181,7 @@ fn occurs_of<'p>(p: &Part<'p>) -> (&'p Option<Spanned<String>>, &'p Option<Spann
     }
 }
 
-/// Etapa 2 de un tipo: `minOccurs` ≤ `maxOccurs` (I11), *all-group limited*
+/// Etapa 3 de un tipo: `minOccurs` ≤ `maxOccurs` (I11), *all-group limited*
 /// y *Element Declarations Consistent* (I12). Un recorrido de la arena.
 fn check_model(t: &TypeInfo<'_>, errors: &mut Errors) {
     // Partícula con el error y posición: el valor de `maxOccurs` si está
@@ -842,8 +1189,13 @@ fn check_model(t: &TypeInfo<'_>, errors: &mut Errors) {
     let at_of =
         |v: &Option<Spanned<String>>, p: &Part<'_>| v.as_ref().map_or(p.span.start, |v| v.at());
     for p in &t.particles {
-        if p.occurs.max.is_some_and(|max| p.occurs.min > max) {
-            let (min, max) = occurs_of(p);
+        let (min, max) = occurs_of(p);
+        // 5.3-CR1-S2: si los dos saturan en `u64::MAX`, se comparan los
+        // lexemas.
+        let saturated = p.occurs.min == u64::MAX
+            && p.occurs.max == Some(u64::MAX)
+            && matches!((min, max), (Some(a), Some(b)) if lexeme_gt(&a.value, &b.value));
+        if saturated || p.occurs.max.is_some_and(|max| p.occurs.min > max) {
             let at = if max.is_some() {
                 at_of(max, p)
             } else {
@@ -930,7 +1282,16 @@ fn check_model(t: &TypeInfo<'_>, errors: &mut Errors) {
 
 #[cfg(test)]
 mod tests {
-    use super::occurs_value;
+    use super::{lexeme_gt, occurs_value};
+
+    /// 5.3-CR1-S2: el orden de dos ocurrencias que saturan en `u64::MAX`.
+    #[test]
+    fn ocurrencias_saturadas_se_comparan_por_lexema() {
+        assert!(lexeme_gt("18446744073709551617", "18446744073709551616"));
+        assert!(lexeme_gt("+0100000000000000000000", "99999999999999999999"));
+        assert!(!lexeme_gt("18446744073709551616", "018446744073709551616"));
+        assert!(!lexeme_gt("18446744073709551616", "18446744073709551617"));
+    }
 
     /// Forma léxica de `xs:nonNegativeInteger` (signo opcional, `-` solo con
     /// valor cero) y `unbounded` solo en `maxOccurs`; saturación en

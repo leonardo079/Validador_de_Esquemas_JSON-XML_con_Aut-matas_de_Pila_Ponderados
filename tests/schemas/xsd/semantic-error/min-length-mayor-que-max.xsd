@@ -1,0 +1,12 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="Base">
+    <xs:restriction base="xs:string">
+      <xs:maxLength value="5"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Derivado">
+    <xs:restriction base="Base">
+      <xs:minLength value="8"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

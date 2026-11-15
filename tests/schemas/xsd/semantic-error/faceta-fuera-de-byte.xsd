@@ -1,0 +1,7 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="Grande">
+    <xs:restriction base="xs:byte">
+      <xs:minInclusive value="300"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

@@ -1,0 +1,14 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="Color">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="rojo"/>
+      <xs:enumeration value="azul"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Primario">
+    <xs:restriction base="Color">
+      <xs:enumeration value="rojo"/>
+      <xs:enumeration value="verde"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

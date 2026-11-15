@@ -3,9 +3,11 @@
 //! `docs/fase3/pendientes.md` §22) y de `ir_doradas`
 //! (`crates/semantic/tests/lower.rs`).
 //!
-//! Todo esquema XSD del corpus que pasa el análisis sale clasificado según
-//! la definición de `docs/fase3/clasificacion.md` §4, y ninguno tiene un nodo
-//! (c): el subconjunto XSD no tiene reglas (c) (`00-alcance.md` §3.1). Los
+//! Todo esquema XSD de `parse-ok` pasa el análisis (desde la 5.6 también los
+//! de `xs:simpleType`) y sale clasificado según la definición de
+//! `docs/fase3/clasificacion.md` §4; la única regla (c) del subconjunto XSD
+//! es la faceta `pattern` (`00-alcance.md` §3.1), así que un nodo es (c)
+//! solo por un `Pattern` propio o por el `Ref` a una base que lo tenga. Los
 //! dos casos XSD de `tests/cases` pasan con el **texto original** de su campo
 //! `schema`, y la IR de cada XSD con dorada en `tests/ir/xsd` es la dorada.
 
@@ -26,19 +28,40 @@ fn files(dir: &Path, ext: &str) -> Vec<PathBuf> {
     v
 }
 
-/// IR verificada del texto, o `None` si el esquema tiene errores del
-/// usuario (de la Fase 2 o del análisis; los de `parse-ok` con
-/// `xs:simpleType` dan «pendiente (tarea 5.6)»). Un error interno hace
-/// fallar la prueba con su registro.
-fn ir_de(nombre: &str, texto: &[u8]) -> Option<VerifiedIr> {
-    let schema = parse(texto).ok()?;
-    let analysis = analyze(&schema).ok()?;
+/// IR verificada del texto. Un error del usuario (de la Fase 2 o del
+/// análisis) o un error interno hace fallar la prueba con sus mensajes
+/// (5.4-CR1-S1: ningún XSD de `parse-ok` se omite en silencio).
+fn ir_de(nombre: &str, texto: &[u8]) -> VerifiedIr {
+    let schema = parse(texto).unwrap_or_else(|e| panic!("{nombre}: {e}"));
+    let analysis = analyze(&schema).unwrap_or_else(|errs| {
+        panic!(
+            "{nombre}: no pasa el análisis:\n{}",
+            errs.iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+    });
     match lower(&analysis) {
-        Ok(ir) => Some(ir),
+        Ok(ir) => ir,
         Err(e) => panic!(
             "{nombre}: error interno de la bajada:\n{}",
             e.detail(8).collect::<Vec<_>>().join("\n")
         ),
+    }
+}
+
+/// La única regla (c) que puede tener un XSD es `Pattern`: cualquier otro
+/// nodo (c) lo es por la definición (un `Ref` a un nodo (c)), que comprueba
+/// `cumple_la_definicion`.
+#[track_caller]
+fn c_solo_por_pattern(nombre: &str, ir: &VerifiedIr) {
+    for (i, node) in ir.nodes().iter().enumerate() {
+        for r in &node.rules {
+            if r.rule.assignment().class == Class::C {
+                assert_eq!(r.rule.kind(), RuleKind::Pattern, "{nombre}: nodo {i}");
+            }
+        }
     }
 }
 
@@ -121,30 +144,36 @@ fn cumple_la_definicion(nombre: &str, ir: &VerifiedIr) -> Vec<NodeClass> {
     c.nodes().to_vec()
 }
 
-/// Criterio de la tarea 5.4 (`pendientes.md` §22): los XSD del corpus que
-/// pasan el análisis (los de `tests/schemas/xsd/parse-ok` y los dos de
-/// `tests/cases`) salen clasificados según la definición y sin ningún nodo
-/// (c). El pedido (`valid-xml-pedido-01`) tiene exactamente un nodo (b),
+/// Criterio de las tareas 5.4 y 5.6 (`pendientes.md` §22, §35): **todos**
+/// los XSD de `tests/schemas/xsd/parse-ok` (también los tres con
+/// `xs:simpleType` que hasta la 5.6 daban «pendiente»: `anotaciones`,
+/// `atributos-ajenos` y `tipos-simples`) y los dos de `tests/cases` pasan el
+/// análisis y salen clasificados según la definición, con nodos (c) solo
+/// por `pattern`. El pedido (`valid-xml-pedido-01`) tiene exactamente un nodo (b),
 /// el tipo anónimo de `pedido`, por su `Attributes` (`id` requerido), y el
 /// esquema de `malformed-xml-billion-laughs-01`, ninguno. Los casos usan el
 /// texto de su campo `schema`, que es el de la copia en `parse-ok`.
 #[test]
 fn corpus_clasificado() {
-    let mut clasificados = 0;
+    let mut clasificados = Vec::new();
+    let mut con_c = Vec::new();
     for path in files(&Path::new(TESTS_DIR).join("schemas/xsd/parse-ok"), "xsd") {
         let nombre = path.display().to_string();
-        let Some(ir) = ir_de(&nombre, &std::fs::read(&path).unwrap()) else {
-            continue;
-        };
+        let ir = ir_de(&nombre, &std::fs::read(&path).unwrap());
         let clases = cumple_la_definicion(&nombre, &ir);
-        let c = clases.iter().filter(|n| n.class == Class::C).count();
-        assert_eq!(c, 0, "{nombre}: {c} nodos (c)");
-        clasificados += 1;
+        c_solo_por_pattern(&nombre, &ir);
+        let corto = path.file_stem().unwrap().to_string_lossy().into_owned();
+        if clases.iter().any(|n| n.class == Class::C) {
+            con_c.push(corto.clone());
+        }
+        clasificados.push(corto);
     }
-    assert!(
-        clasificados >= 7,
-        "pocos XSD de parse-ok bajan: {clasificados}"
-    );
+    for n in ["anotaciones", "atributos-ajenos", "tipos-simples"] {
+        assert!(clasificados.iter().any(|c| c == n), "falta {n}");
+    }
+    assert!(clasificados.len() >= 12, "{clasificados:?}");
+    // Los dos con `xs:pattern` tienen nodos (c), y ninguno más.
+    assert_eq!(con_c, ["anotaciones", "tipos-simples"]);
 
     let casos = casos_xml();
     let ids: Vec<&str> = casos.iter().map(|c| c.id.as_str()).collect();
@@ -165,7 +194,7 @@ fn corpus_clasificado() {
             "{nombre}: distinto de {}",
             copia.display()
         );
-        let ir = ir_de(&nombre, &caso.schema).unwrap_or_else(|| panic!("{nombre}: no baja"));
+        let ir = ir_de(&nombre, &caso.schema);
         let clases = cumple_la_definicion(&nombre, &ir);
         assert!(
             clases.iter().all(|n| n.class != Class::C),
@@ -209,7 +238,7 @@ fn ir_doradas_xsd() {
             .join(format!("{nombre}.xsd"));
         let texto = std::fs::read(&fuente).unwrap_or_else(|e| panic!("{nombre}: {e}"));
         let salida = |t: &[u8]| {
-            let ir = ir_de(&nombre, t).unwrap_or_else(|| panic!("{nombre}: no baja"));
+            let ir = ir_de(&nombre, t);
             let mut s = String::new();
             ir::write_json(&ir, &mut s).unwrap();
             s

@@ -1,0 +1,12 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="Porcentaje">
+    <xs:restriction base="xs:decimal">
+      <xs:maxInclusive value="100"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:simpleType name="Ampliado">
+    <xs:restriction base="Porcentaje">
+      <xs:maxInclusive value="200"/>
+    </xs:restriction>
+  </xs:simpleType>
+</xs:schema>

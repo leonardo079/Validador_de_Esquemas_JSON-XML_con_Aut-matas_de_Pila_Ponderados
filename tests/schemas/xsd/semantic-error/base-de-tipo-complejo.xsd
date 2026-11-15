@@ -1,0 +1,6 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:complexType name="C"/>
+  <xs:simpleType name="S">
+    <xs:restriction base="C"/>
+  </xs:simpleType>
+</xs:schema>

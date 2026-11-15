@@ -18,8 +18,12 @@
 //! - la **bajada** a la IR común ([`lower`], tarea 5.3), siempre verificada
 //!   (D15) (`docs/fase3/xsd.md`).
 //!
-//! Faltan los tipos simples del usuario y las facetas (5.5, 5.6) y *Unique
-//! Particle Attribution* (5.7); `schemac` lo usa desde la tarea 5.4. Todo el
+//! - los **tipos simples** del usuario (tarea 5.6, `simple`): derivación
+//!   circular, facetas, enumeraciones y `default`/`fixed`, con los números de
+//!   `ir::num` (tarea 5.5).
+//!
+//! Falta *Unique Particle Attribution* (5.7); `schemac` lo usa desde la
+//! tarea 5.4. Todo el
 //! crate es de tiempo de compilación: puede reservar memoria, pero no usa
 //! recursión sin cota sobre la entrada (D7): el lector, el análisis y la
 //! bajada usan pilas explícitas y la recursión del parser está acotada por
@@ -34,11 +38,12 @@ pub mod error;
 mod lower;
 mod parser;
 mod reader;
+mod simple;
 mod subset;
 mod symbols;
 
 pub use check::{analyze, Analysis};
-pub use error::{ErrorKind, Found, XsdError};
+pub use error::{ErrorKind, Found, ValueWhy, XsdError};
 pub use lexer::{Pos, Span};
 pub use lower::lower;
 pub use parser::{parse, parse_chunks, parse_with_max_depth, DEFAULT_MAX_DEPTH, MAX_DEPTH_LIMIT};
