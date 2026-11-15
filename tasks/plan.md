@@ -66,3 +66,48 @@ U1-U9 aprobadas el 29 oct como D21-D29 del plan general (todas según la recomen
   - Corpus en `tests/schemas/xsd/{parse-ok,parse-error,semantic-error}`, con manifiestos `errores-xsd.json` y `errores-semanticos-xsd.json` (línea y columna), en el estilo de `tests/schemas/errores.json`.
   - El equivalente de `corpus_clasificado` en `crates/xsd/tests/corpus.rs`, que lee los casos `format: "xml"` de `tests/cases`.
 - **B7. Algoritmo de UPA y de *Element Declarations Consistent* (EDC).** Iterativo, sin recursión sobre el árbol de partículas (D7).
+
+---
+
+# Plan de F4.1 (Fase 4): definición formal de M, construcción composicional y pesos tropicales
+
+Fecha: 15 nov 2026. Planner del 15 nov; aprobado por Leonardo el 15 nov con las recomendaciones (F4-U1…U8 = D47 del plan general). Las etiquetas llevan el prefijo `F4-` para no confundirlas con las U1-U9/B1-B7 de la tarea 5 de arriba. F4-U3, F4-U6 y F4-U7 son interfaz compartida (D42): provisionales hasta que Bayron las apruebe (al cerrar F4.1a).
+
+## Decisiones del usuario (aprobadas)
+
+- **F4-U1. Alfabeto:** Σ = clases de **eventos del lexer** (el lexer `no_std` va delante como transductor finito determinista). Estructurales como clases fijas; `StringChar`/`NameChar`/`AttrValueChar`/`TextChar` agrupados en clases de punto de código calculadas por esquema (partición inducida por tries, espacios léxicos y AFD de `pattern`). Una pasada: cada byte entra una vez al lexer y cada evento una vez a δ; O(1) amortizado por byte. Componer el transductor con el DPDA da un DPDA (se documenta; no se pliega para no multiplicar estados). «Tablas densas por clase de byte» de F5.1 = dos niveles densos (lexer y δ); el C generado (F5.2) lleva también el lexer.
+- **F4-U2. `$ref` y E₌:** expansión en compilación memorizada por **conjunto canónico de `NodeId`** (cierre conjuntivo C(v): v y los destinos de `Ref` y `AllOf`; finito por I14; componentes = `NodeId` distintos, S-3). Marco = producto de los autómatas de sus reglas; despacho de claves e índices componente a componente (§6.2); conjunto vacío → marco «cualquiera»; cada `Constraint` cuenta su propia violación. Sin ε. `$ref` sin hermanas = alias. `$ref` con hermanas y `allOf` pasan a F4.1b; F4.5 se queda con `anyOf`, `oneOf` (diferida), `not` (inversión al desapilar), literales compuestos, `uniqueItems`, `dependentSchemas` y el respaldo diferido al pasar el tope. Cierra §27 y la parte JSON de §22.
+- **F4-U3. Pesos (D4)** (interfaz compartida, provisional): w(t) ∈ ℕ ∪ {∞} = número de comprobaciones que fallan en t: **1 por `Constraint` violada por instancia** (`ir.md` §7). ∞ = malformado o límite (absorbe ⊗; por eso el corpus omite `violations` en `lexical`/`syntax`; un límite atraviesa `not` sin invertirse, S-2). Peso del recorrido = ⊗ (suma); ⊕ = mín solo entre alternativas (F4.5: `anyOf` = mín de las ramas). `not` y `oneOf` como veredicto al desapilar. **Costo:** segundo peso estático c: `RuleKind` → ℕ (tabla con `match` exhaustivo) que ordena las comprobaciones de cada transición (baratas primero; fallo temprano). **Dos modos** sobre el mismo M: conformidad total (sigue tras una violación con recuperación uniforme: clave prohibida suma 1 y el hijo va con el marco «cualquiera»; elemento XML inesperado suma 1, se salta su subárbol y el Glushkov no se mueve; un `type` incumplido no suspende las demás reglas) y fallo temprano (se detiene en la primera transición con w > 0). `expected.violations` del corpus se lee en modo total, «por regla» (avisar a Bayron: `tests/README.md` y su ejecutor).
+- **F4-U4. Representación:** F4.1 construye M ya como **tablas**: `δ[q][clase] → TransId` total (error de peso ∞ por defecto); transición = (q', operación de pila, operaciones de registros, comprobaciones ordenadas por c); marcos con disposición de registros fija y metadatos para el DOT; simulador std sobre eventos para probar L(M). F4.6 = intérprete `no_std` de esas tablas en `runtime-rs` (lexer, límites, reporte, bloques); F5.1 = tablas como `const` + ese intérprete; F5.2 lo porta a C. Las rutinas numéricas `no_std` (comparación decimal, `is_integer`, `multipleOf`) viven en `runtime-rs` desde F4.1b.
+- **F4-U5. Lo no implementado:** rechazo en compilación `BuildError::Pending { nodo, regla, tarea }` con ubicación recortada; `schemac automaton` da código 1 («estrategia pendiente: pattern (F4.4) en #/properties/x»). Reparto: `pattern` → F4.4; `anyOf`, `oneOf`, `not`, `enum`/`const` compuestos, `uniqueItems`, `dependentSchemas` → F4.5.
+- **F4-U6. Límites nuevos en `00-alcance.md` §4** (interfaz compartida, provisional): presupuesto de transiciones por esquema 2²⁰ (contado antes de reservar, `limit`); tope de `location_clipped` 256 bytes; divisor de `multipleOf` con parte coprima con 10 < 2⁶⁰ (si no, `limit` con posición); como mucho 4 096 nombres por objeto (`properties` ∪ `required` ∪ `dependentRequired`; máscara de 512 B). Se proponen a Bayron al cerrar F4.1a.
+- **F4-U7. Salida:** `schemac automaton [--dot] <esquema>`: JSON pequeño de tamaños (estados, transiciones, marcos, clases, bytes de registros y de marco máximo, productos, pendientes) + DOT completo (interfaz compartida, provisional). El JSON del grafo para Cytoscape se diseña con Bayron en la Fase 7.
+- **F4-U8. Orden:** F4.1a → F4.1b → F4.1c. F4.3 y F4.4 pueden empezar tras F4.1a (solo necesitan el tipo `Dfa`). Si F4.1c se atrasa: D28 (2), facetas de rango de `xs:float`/`xs:double` como pendientes.
+
+## Decisiones que puede tomar el Builder (registrarlas en `docs/fase4/`)
+
+- **F4-B1. Dependencias:** `automaton` depende de `ir` y `lexer` (y de `runtime-rs` desde F4.1b); `semantic` pasa a dependencia de pruebas (hoy `crates/automaton/Cargo.toml` depende de `semantic`, en contra de D13/D43). §13 (`AnalyzedTable`) sigue abierta: `automaton` no llama a `lower`.
+- **F4-B2. Tipos:** `StateId(u32)`, `FrameId(u32)`, `TransId(u32)`, `ClassId(u16)` sobre arenas `Vec`; δ total; un `automaton::dfa::Dfa` propio (estados × clases → estado, con salidas) para tries y espacios léxicos, que F4.3 minimiza y F4.4 produce desde `pattern`.
+- **F4-B3. Clases de caracteres por esquema:** rangos ordenados → clase, separados por contexto (clave o valor en JSON; nombre, valor de atributo o texto en XML).
+- **F4-B4. Registros:** por marco: máscara de declared ∪ required ∪ claves y listas de `dependentRequired` (S-1); contadores de miembros, ítems y ocurrencias en `u64` saturado; máscara de `xs:all` y de atributos; id del nombre del elemento. Globales (un solo escalar abierto a la vez): el lexema del número (≤ 1 024 bytes) y el contador de puntos de código.
+- **F4-B5. Pila:** una instancia = un marco; se apila con el primer evento de su valor (aplicándolo) y se desapila con el último; la altura depende solo del payload.
+- **F4-B6. Costo:** valores concretos de c por `RuleKind`; empates por el orden de las reglas.
+- **F4-B7. Capa de buena formación del runtime (F4.6), fuera de M:** claves no declaradas repetidas (hash acotado por `max_claves_adicionales`; las declaradas repetidas las detecta la máscara con peso ∞); atributos XML repetidos y nombres de etiquetas de elementos saltados.
+- **F4-B8.** `location_clipped(&VerifiedIr, id, max)` como función de `automaton` sobre `Origin` (público); no cambia la API de `ir`.
+- **F4-B9. Construcción iterativa (D7):** lista de trabajo de marcos por conjunto canónico (`Vec<NodeId>` ordenado con hash) y pilas explícitas.
+- **F4-B10.** DOT: un clúster por marco.
+- **F4-B11.** `BuildError::{Pending, Limit, Internal}` (`Internal` para la defensa en profundidad, p. ej. un Glushkov no determinista).
+- **F4-B12. Números:** comparación decimal exacta sobre el registro del lexema; entero = fracción nula tras desplazar por el exponente saturado; `multipleOf` = resto módulo M′ en `u64` más valuaciones de 2 y 5 frente al exponente; `xs:float`/`xs:double` con umbrales decimales m± calculados en compilación con `ir::num` (5.5-CR-S1) y la regla de NaN/INF (5.5-P3).
+- **F4-B13. XML:** trie de nombres + tabla Glushkov (x, nombre) → (y, actualización, comprobaciones) (determinismo fuerte por la enmienda de D25: un destino y una actualización por par; las guardas solo suman peso); declaración `<?xml …?>` en el marco del documento; nombres por su parte local; `xmlns`/`xmlns:*` no cuentan como atributos.
+
+## Riesgos y recortes
+
+1. Calendario (congelamiento 19 nov; faltan F4.1a-c, F4.3, F4.4, F4.5, F4.6, F5.1-F5.3). Mitigación: F4-U2, U4, U8. Orden de recorte que cumple el PDF: (1) JSON de resumen en vez del grafo para la web; (2) F4.3 limitado a determinismo y Hopcroft sobre los `Dfa`; (3) respaldo de `anyOf`/`allOf` por encima del tope como simulación paralela de ramas; (4) D28 (2) para las facetas de `xs:float`/`xs:double`. No se recortan los emisores C ni Rust.
+2. Explosión de marcos y tamaño de `sv_state_t`: tope por producto contado antes de reservar, presupuesto global (F4-U6), escalares globales (F4-B4), informe del tamaño del marco máximo.
+3. Glushkov cuadrático (5.7-P1): presupuesto de transiciones y tabla (x, nombre).
+4. Corrección numérica: proptest contra `ir::num` y los casos frontera de `numeros-xsd.md` §6.
+5. Huecos fuera de M hasta F4.6 (claves no declaradas repetidas, atributos repetidos, etiquetas saltadas): criterio de F4.6.
+6. Interfaces compartidas sin aprobar (F4-U3, U6, U7; además D45 y los cambios del alcance pendientes de Bayron): provisionales hasta cerrar F4.1a.
+7. El C generado lleva también el lexer (F5.2): sus tablas ya son densas.
+8. XML: espacios de nombres en el payload: solo nombre local; si no basta para `00-alcance.md` §1.2, desviación a proponer al cerrar F4.1c (ante la duda, rechazar).
+9. F4.6 depende de F6.7 (Bayron); si no llega, el oráculo se compara con los `expected` del corpus.

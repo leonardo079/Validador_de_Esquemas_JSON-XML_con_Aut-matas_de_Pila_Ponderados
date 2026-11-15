@@ -56,12 +56,14 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 
 ## Fase 4 — autómata de pila ponderado (`crates/automaton`, `crates/runtime-rs`)
 
-- [ ] **F4.1** · Definición formal M = (Q, Σ, Γ, δ, q0, Z0, F, w), construcción composicional por nodo de `VerifiedIr` y pesos en el semianillo tropical (D4: costo por transición para el fallo temprano y conteo de violaciones; incluye la antigua F4.2, D46) (`docs/fase4/`) — *Pista:* A · *Depende:* PC-C, PC-D · *Resp.:* Leonardo · *Estado:* en curso (15 nov)
-- [x] **F4.2** · ~~Pesos en el semianillo tropical~~ — fusionada en F4.1 (D46, 15 nov) — *Pista:* A · *Resp.:* — · *Estado:* fusionada
-- [ ] **F4.3** · Verificación de determinismo de δ y Hopcroft en las partes finitas — *Pista:* A · *Depende:* F4.1 · *Resp.:* — · *Estado:* libre
-- [ ] **F4.4** · `pattern` → AFD sobre un subconjunto regular (clases, alternativas, cuantificadores; sin retrocesos) y rechazo con mensaje claro de lookaround y retrorreferencias en la Fase 3 (ReDoS, D6, D46); minimizado con Hopcroft (F4.3) — *Pista:* A · *Depende:* F4.1 · *Resp.:* — · *Estado:* libre
-- [ ] **F4.5** · Combinadores (D46): producto acotado para `allOf`/`anyOf` con tope de 4 096 estados (al excederlo, verificación diferida; el tamaño va al informe); `oneOf` siempre verificación diferida (propone el cambio de su fila en `00-alcance.md` §2.7 a las dos personas, D42); `not` como complemento por inversión del veredicto — *Pista:* A · *Depende:* F4.3, F4.4 · *Resp.:* — · *Estado:* libre
-- [ ] **F4.6** · Intérprete de referencia del DPDA (oráculo) en `runtime-rs`; acepta y rechaza el corpus igual que la línea base — *Pista:* A · *Depende:* F4.1, F4.5, F6.7 · *Resp.:* — · *Estado:* libre
+- [ ] **F4.1a** · Modelo formal de M (Σ = eventos del lexer, Γ con marcos y registros, δ densa y total), pesos tropicales y costo, esqueleto JSON (`type`, `$ref` alias, `properties`, `items`, `required`/`dependentRequired`, claves duplicadas), simulador, `schemac automaton [--dot]`, `docs/fase4/` (D47) — *Pista:* A · *Depende:* PC-C, PC-D · *Resp.:* Leonardo · *Estado:* en curso (15 nov)
+- [ ] **F4.1b** · Contadores, `enum`/`const` escalares, rangos y `multipleOf` exactos (rutinas `no_std` en `runtime-rs`); `$ref` con hermanas y `allOf` como conjunción con tope de 4 096 (D47) — *Pista:* A · *Depende:* F4.1a · *Resp.:* — · *Estado:* libre
+- [ ] **F4.1c** · XML: documento, elementos, Glushkov con contadores, `xs:all`, atributos, textos con tipos simples (NaN/INF), presupuesto de transiciones (D47) — *Pista:* A · *Depende:* F4.1b · *Resp.:* — · *Estado:* libre
+- [x] **F4.2** · ~~Pesos en el semianillo tropical~~ — fusionada en F4.1a (D46, 15 nov) — *Pista:* A · *Resp.:* — · *Estado:* fusionada
+- [ ] **F4.3** · Verificación de determinismo de δ y Hopcroft en las partes finitas — *Pista:* A · *Depende:* F4.1a · *Resp.:* — · *Estado:* libre
+- [ ] **F4.4** · `pattern` → AFD sobre un subconjunto regular (clases, alternativas, cuantificadores; sin retrocesos) y rechazo con mensaje claro de lookaround y retrorreferencias en la Fase 3 (ReDoS, D6, D46); minimizado con Hopcroft (F4.3) — *Pista:* A · *Depende:* F4.1a · *Resp.:* — · *Estado:* libre
+- [ ] **F4.5** · Combinadores y respaldo (D46, D47): producto acotado para `anyOf` con tope de 4 096 estados (al excederlo, verificación diferida; el tamaño va al informe); `oneOf` siempre verificación diferida (propone el cambio de su fila en `00-alcance.md` §2.7 a las dos personas, D42); `not` por inversión del veredicto al desapilar; `enum`/`const` compuestos; `uniqueItems` y `dependentSchemas` (verificación diferida). `allOf` y `$ref` con hermanas ya los hace F4.1b — *Pista:* A · *Depende:* F4.1c, F4.3, F4.4 · *Resp.:* — · *Estado:* libre
+- [ ] **F4.6** · Intérprete `no_std` de las tablas de M (oráculo) en `runtime-rs`, con lexer, límites, reporte, bloques y la capa de buena formación (F4-B7); lo reutiliza F5.1 (D47); acepta y rechaza el corpus igual que la línea base — *Pista:* A · *Depende:* F4.1c, F4.5, F6.7 · *Resp.:* — · *Estado:* libre
 
 ## Fase 5 — generación de código (`crates/codegen`, `crates/runtime-c`)
 

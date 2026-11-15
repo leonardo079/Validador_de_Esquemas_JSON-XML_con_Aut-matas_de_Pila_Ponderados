@@ -216,3 +216,99 @@ Detalle en `tasks/plan.md`. Una subtarea por vez; 5.1 y 5.2 están cerradas (en 
 
 **Estado (15 nov):** hecho. `make lint`, `make test` (442 pasan, 0 fallan, 1 ignorada por D1) y `make docs-check` en verde sobre `21dbe84`. `schemac ir` (release) sobre los 12 `parse-ok` de `tests/schemas/xsd/` da código 0 con todos los nodos clasificados (clase y estrategias); los 95 `parse-error` y los 78 `semantic-error` dan código 1 (ningún 3); los 2 casos XML de `tests/cases` pasan por `corpus_clasificado`. Casilla XSD de la semana 2 marcada en el plan general.
 
+
+# Fase 4 — F4.1: definición formal de M, construcción composicional y pesos tropicales (plan del Planner del 15 nov, aprobado por Leonardo el 15 nov con F4-U1…U8 = D47)
+
+Detalle y decisiones en `tasks/plan.md` («Plan de F4.1»). Una subtarea por vez, en orden F4.1a → F4.1b → F4.1c. Revisión (D35): solo `code-reviewer` en las tres (el simulador es de pruebas; el payload no confiable entra en F4.6).
+
+## Tarea F4.1a: Modelo formal de M, pesos tropicales y esqueleto JSON (va primero)
+
+**Descripción:**
+- `crates/automaton`: tipos de M (Σ como clases de eventos del lexer, Q, Γ con marcos y registros, δ densa y total, q₀, Z₀, F), el semianillo tropical y la tabla de costo por `RuleKind`.
+- Constructor JSON sobre `&VerifiedIr`:
+  - marco «cualquiera», que es la gramática JSON de `docs/fase2/gramatica-json.md` como DPDA;
+  - `type` (con `integer` por el registro del lexema), `Reject`, `true`;
+  - `$ref` sin hermanas como alias;
+  - `properties`/`additionalProperties` con trie de claves;
+  - `prefixItems`/`items`;
+  - `required` y `dependentRequired` con máscara (D5, S-1);
+  - claves declaradas repetidas con peso ∞ (D2).
+- Lo demás sale como `Pending` con la tarea que lo cubrirá (F4-U5).
+- Simulador std sobre eventos, en los dos modos (conformidad total y fallo temprano).
+- `location_clipped`.
+- `schemac automaton [--dot] <esquema>` (F4-U7: resumen JSON de tamaños + DOT completo).
+- `docs/fase4/automata.md` (definición formal, Σ y la pasada única, Γ y registros, δ con la propiedad de pila visible, pesos y costo, construcción por regla, complejidad) y `docs/fase4/pendientes.md`.
+
+**Criterios de aceptación:**
+- [ ] Con el esquema `true`, el simulador acepta con w = 0 todos los payloads JSON bien formados del corpus, y da w = ∞ en el offset del evento que lo detecta con `{"a" 1}`, `[1,]`, `{,}`, `]`, `1 2`, `{"a":1}}` y la entrada vacía; el resultado es idéntico alimentando el lexer en bloques de 1, 7 y 4096 bytes.
+- [ ] Corpus: `valid-recursive-tree-01` da 0; `invalid-missing-required-01` da 1 violación, de la regla `required` del nodo correcto, en el offset 64; los casos `non-dpda` dan `Pending` con la tarea que los cubrirá (F4.4/F4.5), nunca aceptación.
+- [ ] Dorada verificable a mano: el DPDA de `{"type":"object","properties":{"a":{"type":"integer"}},"required":["a"],"additionalProperties":false}`, en `tests/` y como `docs/fase4/*.dot` generado por `make docs` y comprobado por `make docs-check`; el número de estados y transiciones que da `automata.md`, contado a mano, coincide con el de la prueba.
+- [ ] Propiedades: leyes del semianillo por proptest (asociatividad, conmutatividad, distributividad, 0 y ∞); δ total (cada (q, clase) alcanzable tiene una transición); entero: `1.0`, `1e2` y `10e-1` lo son, `1.5` y `1e-1` no, exponentes de 10⁵ cifras sin pánico; en fallo temprano, la violación informada es la de menor costo c.
+- [ ] D7: se construyen en un hilo de 256 KiB una cadena de 10⁵ `$ref` y un esquema recursivo productivo; el simulador recorre un payload de 10⁵ niveles sin recursión.
+
+**Verificación:** `cargo test -p automaton`, `make lint`, `make test`, `make docs-check`. Manual: `schemac automaton --dot` sobre la dorada, pasado por `dot -Tsvg`, y el resumen JSON.
+
+**Dependencias:** PC-C, PC-D (hechas); F4-U1…U5, U7.
+
+**Archivos probables:** `crates/automaton/{Cargo.toml, src/lib.rs, src/weight.rs, src/model.rs, src/dfa.rs, src/json.rs, src/sim.rs, src/export.rs}`, `crates/automaton/tests/{json.rs,corpus.rs}`, `crates/cli/src/main.rs` y `crates/cli/tests/automaton.rs`, `Makefile` (`docs`, `docs-check`), `docs/fase4/{automata.md,pendientes.md}`.
+
+**Tamaño:** M, en el borde alto. Si pasa de M, la CLI, la dorada y el DOT van a F4.1b.
+
+**Arrastra:** `docs/fase3/pendientes.md` §4 (`location_clipped`); §5 S-1 (bits de `DependentRequired`; el hash de claves no declaradas queda documentado para F4.6); §27 (cerrar con la corrección de `clasificacion.md` §4.2); `ir.md` §7 (filas Σ y Γ corregidas); la dependencia `automaton → semantic` (F4-B1: `semantic` solo como dependencia de pruebas).
+
+## Tarea F4.1b: Registros y escalares JSON; conjunción por E₌ con tope
+
+**Descripción:**
+- Contadores: `minProperties`/`maxProperties`, `minItems`/`maxItems`, `minLength`/`maxLength` (en puntos de código, tras los escapes).
+- `enum`/`const` de escalares: trie de cadenas, números por valor, `true`/`false`/`null`; `enum: []` (D11).
+- `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum` y `multipleOf` exactos sobre el registro del lexema, con las rutinas numéricas `no_std` en `runtime-rs` (F4-U4, F4-B12).
+- Marcos por conjunto canónico de `NodeId` (F4-U2): `$ref` con hermanas y `allOf` como conjunción, con el tope de 4 096 estados por producto, configurable y contado antes de reservar (L-1).
+- Literales compuestos → `Pending` (F4.5).
+
+**Criterios de aceptación:**
+- [ ] El comparador coincide con `ir::num::compare` en un proptest de lexemas de RFC 8259, con exponentes largos y negativos.
+- [ ] Tabla de `multipleOf` contra un oráculo racional: `0.01` con `0.1`/`0.10`/`1e-2`/`0.005`; `3` con `1e2` y `3e2`; `2.5`; exponentes de 10⁴ cifras. Un divisor por encima del tope de F4-U6 da `limit` con posición.
+- [ ] `minLength`/`maxLength` cuentan `"😀"` y `"ñ"` como 1; un `enum` de cadenas con prefijos compartidos y la cadena vacía funciona; `1`, `1.0` y `1e0` son el mismo valor en `enum`/`const`; `enum` y `const` juntos funcionan.
+- [ ] Conjunción: el ejemplo de `ir.md` §6.2 (`allOf` + `additionalProperties: false`) rechaza `{"a":1}` con 1 violación; `{"$ref":"#/$defs/a","minimum":3}` exige las dos cosas; la cadena de diamantes de 10⁴ nodos (`referencias_compartidas_tamano_lineal`) se compila con un número lineal de marcos (comprobando el resultado, no el tiempo, D1); con el tope bajado a 8, un producto mayor da `limit` antes de reservar.
+- [ ] Todos los casos JSON del corpus sin `Pending` dan el `valid`, `violations` y `offset` esperados.
+
+**Verificación:** `cargo test -p automaton -p runtime-rs`, `make lint`, `make test`, `make docs-check`.
+
+**Dependencias:** F4.1a; F4-U2, U4, U6.
+
+**Archivos probables:** `crates/runtime-rs/src/{lib.rs,num.rs}`, `crates/automaton/src/{json.rs,conj.rs}`, `crates/automaton/tests/{escalares.rs,conjuncion.rs}`, `docs/fase4/automata.md`.
+
+**Tamaño:** M.
+
+**Arrastra:** `docs/fase3/pendientes.md` §5 L-1 (el mecanismo del tope, que F4.5 reutiliza; el caso de los 15 primos va a F4.4/F4.5) y S-3; §22, parte JSON (cerrar sin cambiar el alcance).
+
+## Tarea F4.1c: XML: elementos, Glushkov con contadores, atributos y textos
+
+**Descripción:**
+- Marco del documento, con la `Choice` de los globales y la declaración `<?xml …?>`.
+- Marcos de elemento con despacho por nombre local.
+- Glushkov de cada `Content` sin determinizar (5.7-P1): transiciones de vuelta y de hermana; guardas de contador como comprobaciones; salida sin exigir el mínimo si el cuerpo es anulable; comprobación de determinismo como defensa en profundidad (`Internal`).
+- Máscara de `xs:all`.
+- `Attributes`: trie, máscara de requeridos, `fixed` comparado en el espacio de valores (5.6-P3); `default` no afecta a la validación.
+- Textos: espacios léxicos como `Dfa` con *collapse*; `enum` por valor; rangos exactos y, en `Float`/`Double`, umbrales IEEE con NaN e INF (5.5-P3, CR-S1); longitudes.
+- Contenido vacío sin espacios; contenido de solo elementos que ignora los espacios.
+- Presupuesto de transiciones (F4-U6).
+
+**Criterios de aceptación:**
+- [ ] `valid-xml-pedido-01` da 0.
+- [ ] `(a?){2,3}`: `<r/>`, `<r><a/></r>` y tres `a` son válidos; cuatro `a` dan 1 violación. `(a{1,2}, b){2,2}` exige sus mínimos.
+- [ ] `xs:all` acepta cualquier orden; el hijo requerido que falta y el repetido dan violación.
+- [ ] Atributos: el requerido que falta, el no declarado y el `fixed` distinto por valor dan violación; iguales por valor y por tanto válidos: `fixed="1"` en `xs:boolean` frente a `true`, y `+01` frente a `1` en `xs:int`; NaN en `fixed`; `xmlns` se ignora.
+- [ ] `xs:float maxInclusive="0.1"` acepta `0.10000000000000000001` y rechaza el flotante siguiente; NaN viola toda faceta de rango; `INF` viola un máximo finito y cumple un mínimo.
+- [ ] Una IR hecha a mano que viola la UPA da `Internal`, sin pánico. Con el presupuesto bajado, `(e₁|…|e₄₀₉₅)*` da `limit` antes de reservar.
+- [ ] Un XSD con 10⁴ secuencias anidadas se construye en un hilo de 256 KiB, y el simulador recorre un XML de 10⁵ niveles.
+
+**Verificación:** `cargo test -p automaton`, `make lint`, `make test`, `make docs-check`. Manual: `schemac automaton --dot` sobre el pedido.
+
+**Dependencias:** F4.1b (comparador, trie, contadores); F4-U6.
+
+**Archivos probables:** `crates/automaton/src/{xml.rs,glushkov.rs,text.rs}`, `crates/automaton/tests/{xml.rs,glushkov.rs}`, `docs/fase4/automata.md`.
+
+**Tamaño:** M, en el borde alto. Si se pasa: F4.1c1 (elementos, Glushkov y atributos) y F4.1c2 (textos y `fixed`). Si no hay tiempo, D28 (2): facetas de rango de `xs:float`/`xs:double` como `Pending`.
+
+**Arrastra:** `docs/fase3/pendientes.md` §36 (5.5-P3, CR-S1); §37 (5.6-P3, y 5.6-CR-S6: las enumeraciones repetidas por valor las absorbe el comparador, con una prueba); §38 (5.7-P1 y su presupuesto).
