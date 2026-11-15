@@ -51,17 +51,17 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 - [x] **PC-C** · Punto de control C: `make lint`/`test`/`docs-check` en verde, revisar `schemac ir` sobre el pedido, detección de formato (D22) y texto de uso — *Pista:* A · *Depende:* T5.4 · *Resp.:* Leonardo · *Estado:* hecha (14 nov) · lint/test (393 pruebas)/docs-check en verde; 5.5-5.7 pasan a la pista A y van antes de la Fase 4 (decisión de Leonardo, 14 nov)
 - [x] **T5.5** · Números XSD: forma léxica, reescritura a RFC 8259, comparación exacta, redondeo IEEE (D24) — *Pista:* A · *Depende:* — (independiente) · *Resp.:* Leonardo · *Estado:* hecha (14 nov) · 0 rondas · `b37428a` · observaciones en `docs/fase3/pendientes.md` §36 · criterios en `tasks/todo.md`
 - [x] **T5.6** · Tipos simples: `xs:simpleType`/`xs:restriction`, facetas, enumeraciones, `default`/`fixed` — *Pista:* A · *Depende:* PC-C, T5.5 · *Resp.:* Leonardo · *Estado:* hecha (14 nov) · 1 ronda · `b37428a` · observaciones en `docs/fase3/pendientes.md` §37 · criterios en `tasks/todo.md`
-- [x] **T5.7** · UPA (D25-D26) y cierre del frontal (docs, alcance, pendientes) — *Pista:* A · *Depende:* PC-C · *Resp.:* Leonardo · *Estado:* hecha (15 nov) · 1 ronda · sin commit · alcance §3-§4, enmienda D25 y precisión D26 por aprobar con Bayron (D45) · observaciones en `docs/fase3/pendientes.md` §38 · criterios en `tasks/todo.md`
-- [ ] **PC-D** · Punto de control D: todo el corpus XSD sale como IR clasificada — *Pista:* A · *Depende:* T5.6, T5.7 · *Resp.:* — · *Estado:* libre
+- [x] **T5.7** · UPA (D25-D26) y cierre del frontal (docs, alcance, pendientes) — *Pista:* A · *Depende:* PC-C · *Resp.:* Leonardo · *Estado:* hecha (15 nov) · 1 ronda · `21dbe84` · alcance §3-§4, enmienda D25 y precisión D26 aprobados por Leonardo; falta visto bueno de Bayron (D45) · observaciones en `docs/fase3/pendientes.md` §38 · criterios en `tasks/todo.md`
+- [x] **PC-D** · Punto de control D: todo el corpus XSD sale como IR clasificada — *Pista:* A · *Depende:* T5.6, T5.7 · *Resp.:* Leonardo · *Estado:* hecha (15 nov) · 12 `parse-ok` como IR clasificada; 173 casos de error con código 1
 
 ## Fase 4 — autómata de pila ponderado (`crates/automaton`, `crates/runtime-rs`)
 
-- [ ] **F4.1** · Definición formal M = (Q, Σ, Γ, δ, q0, Z0, F, w) y construcción composicional por nodo de `VerifiedIr` (`docs/fase4/`) — *Pista:* A · *Depende:* PC-C, PC-D · *Resp.:* — · *Estado:* libre
-- [ ] **F4.2** · Pesos en el semianillo tropical (D4): costo por transición y conteo de violaciones — *Pista:* A · *Depende:* F4.1 · *Resp.:* — · *Estado:* libre
+- [ ] **F4.1** · Definición formal M = (Q, Σ, Γ, δ, q0, Z0, F, w), construcción composicional por nodo de `VerifiedIr` y pesos en el semianillo tropical (D4: costo por transición para el fallo temprano y conteo de violaciones; incluye la antigua F4.2, D46) (`docs/fase4/`) — *Pista:* A · *Depende:* PC-C, PC-D · *Resp.:* Leonardo · *Estado:* en curso (15 nov)
+- [x] **F4.2** · ~~Pesos en el semianillo tropical~~ — fusionada en F4.1 (D46, 15 nov) — *Pista:* A · *Resp.:* — · *Estado:* fusionada
 - [ ] **F4.3** · Verificación de determinismo de δ y Hopcroft en las partes finitas — *Pista:* A · *Depende:* F4.1 · *Resp.:* — · *Estado:* libre
-- [ ] **F4.4** · `pattern` → AFD sin retrocesos; rechazar lookaround y retrorreferencias en la Fase 3 (ReDoS) — *Pista:* A · *Depende:* F4.1 · *Resp.:* — · *Estado:* libre
-- [ ] **F4.5** · Producto acotado `allOf`/`anyOf`/`oneOf`/`not` con tope de 4 096 estados y verificación diferida — *Pista:* A · *Depende:* F4.3, F4.4 · *Resp.:* — · *Estado:* libre
-- [ ] **F4.6** · Intérprete de referencia del DPDA (oráculo) en `runtime-rs`; acepta y rechaza el corpus igual que la línea base — *Pista:* A · *Depende:* F4.2, F4.5, F6.7 · *Resp.:* — · *Estado:* libre
+- [ ] **F4.4** · `pattern` → AFD sobre un subconjunto regular (clases, alternativas, cuantificadores; sin retrocesos) y rechazo con mensaje claro de lookaround y retrorreferencias en la Fase 3 (ReDoS, D6, D46); minimizado con Hopcroft (F4.3) — *Pista:* A · *Depende:* F4.1 · *Resp.:* — · *Estado:* libre
+- [ ] **F4.5** · Combinadores (D46): producto acotado para `allOf`/`anyOf` con tope de 4 096 estados (al excederlo, verificación diferida; el tamaño va al informe); `oneOf` siempre verificación diferida (propone el cambio de su fila en `00-alcance.md` §2.7 a las dos personas, D42); `not` como complemento por inversión del veredicto — *Pista:* A · *Depende:* F4.3, F4.4 · *Resp.:* — · *Estado:* libre
+- [ ] **F4.6** · Intérprete de referencia del DPDA (oráculo) en `runtime-rs`; acepta y rechaza el corpus igual que la línea base — *Pista:* A · *Depende:* F4.1, F4.5, F6.7 · *Resp.:* — · *Estado:* libre
 
 ## Fase 5 — generación de código (`crates/codegen`, `crates/runtime-c`)
 
