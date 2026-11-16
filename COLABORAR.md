@@ -49,7 +49,7 @@ simultáneo, cada uno desde su cuenta (D42 de `tasks/plan-general.md`).
 - Validación O(n) en bytes y O(d) en pila; el validador generado no construye árbol del payload.
 - Sin asignación dinámica en el camino de validación (lexer `no_std` sin `alloc`; `sv_state_t` de tamaño fijo).
 - Determinismo: una transición por (q, clase, X); mismo resultado con bloques de 1, 7 y 4096 bytes.
-- `unsafe_code = "deny"`, clippy con `-D warnings`, finales de línea LF.
+- `unsafe_code = "deny"` (única excepción nombrada: el asignador contador de `crates/automaton/tests/sin_reservas.rs`, D52; `make lint` falla ante cualquier otro `unsafe`), clippy con `-D warnings`, finales de línea LF.
 - Pruebas deterministas: nada de umbrales de tiempo en `cargo test` (D1); las mediciones van a `crates/bench`.
 - Todo lo que recorre entrada del usuario es iterativo o va en un hilo con `stack_size` explícito (D7).
 - Los `.dot` y `ll1-*.md` de `docs/` se generan con `make docs`; no se editan a mano.

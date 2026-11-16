@@ -56,18 +56,21 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 
 ## Fase 4 — autómata de pila ponderado (`crates/automaton`, `crates/runtime-rs`)
 
-- [ ] **F4.1a** · Modelo formal de M (Σ = eventos del lexer, Γ con marcos y registros, δ densa y total), pesos tropicales y costo, esqueleto JSON (`type`, `$ref` alias, `properties`, `items`, `required`/`dependentRequired`, claves duplicadas), simulador, `schemac automaton [--dot]`, `docs/fase4/` (D47) — *Pista:* A · *Depende:* PC-C, PC-D · *Resp.:* Leonardo · *Estado:* en curso (15 nov)
+- [x] **F4.1a** · Modelo formal de M (Σ = eventos del lexer, Γ con marcos y registros, δ densa y total), pesos tropicales y costo, esqueleto JSON (`type`, `$ref` alias, `properties`, `items`, `required`/`dependentRequired`, claves duplicadas), núcleo `no_std` del ejecutor en `runtime-rs`, `schemac automaton [--dot]`, `docs/fase4/` (D47, D51) — *Pista:* A · *Depende:* PC-C, PC-D · *Resp.:* Leonardo · *Estado:* hecha (16 nov) · 0 rondas · sin commit · observaciones en `docs/fase4/pendientes.md`; criterios heredados en F4.1b y F4.6
 - [ ] **F4.1b** · Contadores, `enum`/`const` escalares, rangos y `multipleOf` exactos (rutinas `no_std` en `runtime-rs`); `$ref` con hermanas y `allOf` como conjunción con tope de 4 096 (D47) — *Pista:* A · *Depende:* F4.1a · *Resp.:* — · *Estado:* libre
 - [ ] **F4.1c** · XML: documento, elementos, Glushkov con contadores, `xs:all`, atributos, textos con tipos simples (NaN/INF), presupuesto de transiciones (D47) — *Pista:* A · *Depende:* F4.1b · *Resp.:* — · *Estado:* libre
 - [x] **F4.2** · ~~Pesos en el semianillo tropical~~ — fusionada en F4.1a (D46, 15 nov) — *Pista:* A · *Resp.:* — · *Estado:* fusionada
-- [ ] **F4.3** · Verificación de determinismo de δ y Hopcroft en las partes finitas — *Pista:* A · *Depende:* F4.1a · *Resp.:* — · *Estado:* libre
-- [ ] **F4.4** · `pattern` → AFD sobre un subconjunto regular (clases, alternativas, cuantificadores; sin retrocesos) y rechazo con mensaje claro de lookaround y retrorreferencias en la Fase 3 (ReDoS, D6, D46); minimizado con Hopcroft (F4.3) — *Pista:* A · *Depende:* F4.1a · *Resp.:* — · *Estado:* libre
-- [ ] **F4.5** · Combinadores y respaldo (D46, D47): producto acotado para `anyOf` con tope de 4 096 estados (al excederlo, verificación diferida; el tamaño va al informe); `oneOf` siempre verificación diferida (propone el cambio de su fila en `00-alcance.md` §2.7 a las dos personas, D42); `not` por inversión del veredicto al desapilar; `enum`/`const` compuestos; `uniqueItems` y `dependentSchemas` (verificación diferida). `allOf` y `$ref` con hermanas ya los hace F4.1b — *Pista:* A · *Depende:* F4.1c, F4.3, F4.4 · *Resp.:* — · *Estado:* libre
-- [ ] **F4.6** · Intérprete `no_std` de las tablas de M (oráculo) en `runtime-rs`, con lexer, límites, reporte, bloques y la capa de buena formación (F4-B7); lo reutiliza F5.1 (D47); acepta y rechaza el corpus igual que la línea base — *Pista:* A · *Depende:* F4.1c, F4.5, F6.7 · *Resp.:* — · *Estado:* libre
+- [ ] **F4.3** · Verificación de determinismo de δ y Hopcroft en todas las partes finitas (`Dfa`) (D51) — *Pista:* A (o Bayron, en paralelo) · *Depende:* F4.1a · *Resp.:* — · *Estado:* libre · criterios en `tasks/todo.md`
+- [ ] **F4.4a** · Analizador de `pattern` en `ir::regex` (ECMA y XSD) y rechazo anti-ReDoS en la Fase 3 (D51) — *Pista:* A (o Bayron, en paralelo) · *Depende:* — · *Resp.:* — · *Estado:* libre · criterios en `tasks/todo.md`
+- [ ] **F4.4b** · `pattern` → AFD minimizado dentro de M (D51) — *Pista:* A · *Depende:* F4.1c, F4.3, F4.4a · *Resp.:* — · *Estado:* libre
+- [ ] **F4.5a** · Combinadores: producto con salidas y puertas al desapilar (`anyOf`, `oneOf`, `not`, `dependentSchemas`), tope de 4 096 (D51) — *Pista:* A · *Depende:* F4.1b, F4.4b · *Resp.:* — · *Estado:* libre
+- [ ] **F4.5b** · `uniqueItems` diferido (hash canónico) y literales compuestos de `enum`/`const` (D51) — *Pista:* A · *Depende:* F4.5a · *Resp.:* — · *Estado:* libre
+- [ ] **F4.6** · Ejecutor completo sobre el núcleo `no_std`: lexer, límites, reporte, bloques y buena formación; oráculo contra `expected` y la línea base `baseline` (D48, D51) — *Pista:* A · *Depende:* F4.1c (F6.7a para la comparación JSON) · *Resp.:* — · *Estado:* libre
+- [ ] **PC-E** · Punto de control E: un esquema JSON y el pedido XSD pasan por esquema → M → validador Rust y el corpus pasa — *Pista:* A · *Depende:* F4.6, F5.1 · *Resp.:* — · *Estado:* libre
 
 ## Fase 5 — generación de código (`crates/codegen`, `crates/runtime-c`)
 
-- [ ] **F5.1** · Emisor Rust: tablas densas por clase de byte, pila acotada `SV_MAX_DEPTH`, sin asignación dinámica — *Pista:* A · *Depende:* F4.6 · *Resp.:* — · *Estado:* libre
+- [ ] **F5.1** · Emisor Rust: tablas de M como `const` + el núcleo `no_std` (D51), pila acotada `SV_MAX_DEPTH`, sin asignación dinámica — *Pista:* A · *Depende:* F4.6 · *Resp.:* — · *Estado:* libre
 - [ ] **F5.2** · Emisor C11 con la API C-ABI (`sv_init`/`sv_feed`/`sv_finish`); header con cbindgen — *Pista:* A · *Depende:* F5.1 · *Resp.:* — · *Estado:* libre
 - [ ] **F5.3** · Prueba diferencial intérprete / C / Rust en todo el corpus (bloques de 1, 7 y 4096 bytes) — *Pista:* A · *Depende:* F5.2 · *Resp.:* — · *Estado:* libre
 - [ ] **F5.4** · Generador de payloads válidos desde la IR, con semilla; 20 primeros casos al corpus — *Pista:* AB · *Depende:* PC-C · *Resp.:* — · *Estado:* libre

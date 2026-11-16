@@ -15,6 +15,7 @@ tests/
 │   └── extreme/     # payloads enormes, números gigantes, billion laughs…
 ├── schemas/         # esquemas sueltos para el parser (Fase 2) y el análisis semántico (Fase 3) (ver abajo)
 ├── ir/              # IR doradas (`schemac ir`) de esquemas de schemas/parse-ok (ver abajo)
+├── automata/        # resúmenes dorados del autómata M (`schemac automaton`, Fase 4; ver abajo)
 └── large/           # caché local de payloads generados (ignorado por git; ningún caso la referencia)
 ```
 
@@ -108,6 +109,12 @@ Las pruebas de la Fase 3 leen el esquema de un caso con su **texto original** (`
 ## IR doradas (`ir/`)
 
 `ir/<nombre>.json` es la salida exacta de `schemac ir schemas/parse-ok/<nombre>.json` (formato en [docs/fase3/bajada.md](../docs/fase3/bajada.md) §5.1; versión 2, con la clase y la estrategia de cada nodo y regla). La prueba `ir_doradas` compara byte a byte; si un cambio de la bajada o del formato las altera a propósito, se revisa el `diff` y se regeneran con `make doradas`. Para añadir una, crear el archivo vacío con el nombre de un esquema de `schemas/parse-ok` y ejecutar `make doradas`.
+
+## Autómatas dorados (`automata/`)
+
+`automata/<nombre>.json` es la salida exacta de `schemac automaton schemas/parse-ok/<nombre>.json`: el resumen de tamaños del autómata de pila ponderado M de la Fase 4 (estados, transiciones, clases, marcos; [docs/fase4/automata.md](../docs/fase4/automata.md) §8). Hoy hay una, `objeto-cerrado`, contada a mano en ese apartado; su DOT es `docs/fase4/automata-objeto-cerrado.dot`, que generan `make docs` y comprueba `make docs-check`. La prueba `resumen_de_la_dorada` (`crates/cli/tests/automaton.rs`) compara byte a byte; se regeneran con `make doradas`.
+
+El corpus de `cases/` lo recorre también el autómata (`crates/automaton/tests/corpus.rs`): con el esquema `true` acepta todo payload JSON bien formado y rechaza los malformados en su offset; los casos cuyo esquema ya compila dan su `expected`, y los `non-dpda` dan «estrategia pendiente» con la tarea que los cubrirá.
 
 ## Semillas de proptest (`*.proptest-regressions`)
 

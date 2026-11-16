@@ -1,0 +1,12 @@
+{
+  "automatonVersion": 1,
+  "format": "json",
+  "states": 24,
+  "transitions": 77,
+  "frames": 3,
+  "classes": 16,
+  "registerBytes": 8,
+  "maxFrameBytes": 16,
+  "products": 0,
+  "pending": 0
+}

@@ -1,13 +1,15 @@
 [package]
 name = "runtime-rs"
-description = "Soporte no_std del validador Rust generado"
+description = "Soporte no_std del validador Rust generado: núcleo del ejecutor de M y formato de sus tablas"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+# Solo `lexer`, que también es `no_std` sin `alloc` (F4-U9).
 [dependencies]
+lexer.workspace = true
 
 [lints]
 workspace = true

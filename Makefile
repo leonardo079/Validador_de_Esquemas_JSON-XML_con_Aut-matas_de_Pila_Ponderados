@@ -1,7 +1,7 @@
 # Tareas comunes del proyecto. En Windows sin `make`, usar scripts/lint.ps1.
 C_SOURCES := $(shell find crates/runtime-c -name '*.c' -o -name '*.h' 2>/dev/null)
 
-.PHONY: all build test fmt fmt-check clippy c-fmt-check lint coverage docs docs-check doradas clean
+.PHONY: all build test fmt fmt-check clippy c-fmt-check unsafe-check lint coverage docs docs-check doradas clean
 
 all: build
 
@@ -24,8 +24,34 @@ clippy:
 c-fmt-check:
 	$(if $(C_SOURCES),clang-format --dry-run --Werror $(C_SOURCES))
 
+# Invariante `unsafe_code = "deny"` con una única excepción nombrada,
+# decidida por el usuario el 16 nov (opción A, docs/fase4/pendientes.md §8):
+# el asignador contador de UNSAFE_OK (`GlobalAlloc` es un rasgo `unsafe`).
+# Falla si aparece `allow(unsafe_code)`, `unsafe impl`, `unsafe fn`,
+# `unsafe extern`, `unsafe trait` o un bloque `unsafe {` en cualquier `.rs`
+# fuera de UNSAFE_OK, o si en UNSAFE_OK hay algo más que el `allow`, el
+# `unsafe impl GlobalAlloc` y sus tres funciones que delegan en `System`.
+# Las líneas de comentario (`//`) no cuentan. Solo `find` y `grep -E`.
+UNSAFE_OK := crates/automaton/tests/sin_reservas.rs
+UNSAFE_RE := allow\(unsafe_code\)|unsafe[[:space:]]+(impl|fn|extern|trait)|unsafe[[:space:]]*\{
+UNSAFE_PERMITIDO := ^[0-9]+:(\#\[allow\(unsafe_code\)\]|unsafe impl GlobalAlloc for Contador \{|    unsafe fn (alloc|dealloc|realloc)\(.*|        unsafe \{ System\.(alloc|dealloc|realloc)\(.*\) \})$$
+unsafe-check:
+	@fuera=$$(find . -path ./target -prune -o -path '*/node_modules' -prune -o \
+		-name '*.rs' ! -path './$(UNSAFE_OK)' -print \
+		| xargs grep -nHE '$(UNSAFE_RE)' /dev/null | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//'); \
+	dentro=$$(grep -nE '$(UNSAFE_RE)' $(UNSAFE_OK) | grep -vE '^[0-9]+:[[:space:]]*//' \
+		| grep -vE '$(UNSAFE_PERMITIDO)' | sed 's|^|$(UNSAFE_OK):|'); \
+	n=$$(grep -cE '^unsafe impl GlobalAlloc for Contador \{$$' $(UNSAFE_OK)); \
+	if [ -n "$$fuera$$dentro" ] || [ "$$n" -ne 1 ]; then \
+		[ -n "$$fuera$$dentro" ] && printf '%s\n' "$$fuera" "$$dentro" | grep -v '^$$'; \
+		[ "$$n" -ne 1 ] && echo "$(UNSAFE_OK): se esperaba un solo 'unsafe impl GlobalAlloc' y hay $$n"; \
+		echo "unsafe-check: unsafe fuera de la única excepción registrada ($(UNSAFE_OK), docs/fase4/pendientes.md §8)"; \
+		exit 1; \
+	fi; \
+	echo "unsafe-check: sin unsafe salvo la excepción registrada ($(UNSAFE_OK), docs/fase4/pendientes.md §8)"
+
 # El frontend (web/) se añade a este objetivo en T7.7 (eslint + prettier).
-lint: fmt-check clippy c-fmt-check
+lint: fmt-check clippy c-fmt-check unsafe-check
 
 coverage:
 	cargo llvm-cov --workspace --lcov --output-path lcov.info
@@ -36,6 +62,10 @@ coverage:
 # lo mismo con los XSD de tests/schemas/xsd/parse-ok (tarea 5.4).
 IR_DOT := arbol-recursivo
 IR_DOT_XSD := pedido
+# AUT_DOT: esquemas de tests/schemas/parse-ok cuyo autómata M (Fase 4,
+# `schemac automaton --dot`) se dibuja en docs/fase4/automata-<nombre>.dot;
+# `objeto-cerrado` es la dorada contada a mano en docs/fase4/automata.md §8.
+AUT_DOT := objeto-cerrado
 docs:
 	for a in utf8 json xml; do \
 		cargo run -q -p cli -- dot $$a > docs/fase1/afd-$$a.dot && \
@@ -49,6 +79,10 @@ docs:
 		cargo run -q -p cli -- ir --dot tests/schemas/xsd/parse-ok/$$e.xsd > docs/fase3/ir-$$e.dot && \
 		dot -Tsvg docs/fase3/ir-$$e.dot -o docs/fase3/ir-$$e.svg; \
 	done
+	for e in $(AUT_DOT); do \
+		cargo run -q -p cli -- automaton --dot tests/schemas/parse-ok/$$e.json > docs/fase4/automata-$$e.dot && \
+		dot -Tsvg docs/fase4/automata-$$e.dot -o docs/fase4/automata-$$e.svg; \
+	done
 	python3 scripts/ll1.py docs/fase2/json.ll1 > docs/fase2/ll1-json.md
 	python3 scripts/ll1.py docs/fase2/xml.ll1 > docs/fase2/ll1-xml.md
 	python3 scripts/ll1.py docs/fase2/esquema.ll1 > docs/fase2/ll1-esquema.md
@@ -57,7 +91,8 @@ docs:
 
 # Comprueba que los artefactos deterministas de `make docs` coinciden con los
 # versionados: los `.dot` de la Fase 1, las tablas `ll1-*.md` de la Fase 2 y
-# los `.dot` de la IR de la Fase 3 (de JSON Schema y de XSD).
+# los `.dot` de la IR de la Fase 3 (de JSON Schema y de XSD) y los del
+# autómata M de la Fase 4.
 # Los regenera en `target/` y los compara con los del árbol de trabajo, así
 # que no depende de git ni del estado del índice. Los `.svg` quedan fuera: la
 # salida de `dot -Tsvg` incluye la versión de Graphviz y coordenadas que
@@ -81,6 +116,10 @@ docs-check:
 		cargo run -q -p cli -- ir --dot tests/schemas/xsd/parse-ok/$$e.xsd > $(DOCS_TMP)/ir-$$e.dot || exit 1; \
 		diff -u docs/fase3/ir-$$e.dot $(DOCS_TMP)/ir-$$e.dot || fallo=1; \
 	done; \
+	for e in $(AUT_DOT); do \
+		cargo run -q -p cli -- automaton --dot tests/schemas/parse-ok/$$e.json > $(DOCS_TMP)/automata-$$e.dot || exit 1; \
+		diff -u docs/fase4/automata-$$e.dot $(DOCS_TMP)/automata-$$e.dot || fallo=1; \
+	done; \
 	for g in json xml esquema xsd; do \
 		python3 scripts/ll1.py docs/fase2/$$g.ll1 > $(DOCS_TMP)/ll1-$$g.md || exit 1; \
 		diff -u docs/fase2/ll1-$$g.md $(DOCS_TMP)/ll1-$$g.md || fallo=1; \
@@ -91,11 +130,12 @@ docs-check:
 		echo "docs/ desincronizado con el código: ejecutar 'make docs' y versionar el resultado"; \
 		exit 1; \
 	fi; \
-	echo "docs-check: .dot de la Fase 1, ll1-*.md de la Fase 2 y .dot de la IR (Fase 3) sincronizados"
+	echo "docs-check: .dot de la Fase 1, ll1-*.md de la Fase 2, .dot de la IR (Fase 3) y del autómata (Fase 4) sincronizados"
 
 # Regenera las IR doradas de tests/ir (`schemac ir` de cada esquema de
-# tests/schemas/parse-ok con el mismo nombre) y las XSD de tests/ir/xsd (de
-# tests/schemas/xsd/parse-ok/<nombre>.xsd; tarea 5.4). Solo tras un cambio
+# tests/schemas/parse-ok con el mismo nombre), las XSD de tests/ir/xsd (de
+# tests/schemas/xsd/parse-ok/<nombre>.xsd; tarea 5.4) y los resúmenes del
+# autómata de tests/automata (`schemac automaton`, F4.1a). Solo tras un cambio
 # de la bajada o del formato revisado a mano: las pruebas comparan contra
 # ellas. Escribe en un `.tmp` y lo mueve solo si `schemac` termina bien, así
 # una compilación fallida no deja la dorada vacía.
@@ -106,6 +146,10 @@ doradas:
 	done
 	for f in tests/ir/xsd/*.json; do \
 		cargo run -q -p cli -- ir tests/schemas/xsd/parse-ok/$$(basename $$f .json).xsd > $$f.tmp \
+			&& mv $$f.tmp $$f || { rm -f $$f.tmp; exit 1; }; \
+	done
+	for f in tests/automata/*.json; do \
+		cargo run -q -p cli -- automaton tests/schemas/parse-ok/$$(basename $$f) > $$f.tmp \
 			&& mv $$f.tmp $$f || { rm -f $$f.tmp; exit 1; }; \
 	done
 

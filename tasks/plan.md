@@ -173,3 +173,58 @@ Rust 1.100.0 `x86_64-pc-windows-msvc` (fijado por `rust-toolchain.toml`), MSVC B
 - Unificar los lectores de corpus de `lexer` y `semantic` sobre `baseline::corpus` (opcional).
 - Revisar el recuento de violaciones cuando F4.2 fije el peso de `additionalProperties`, `required` y `type` + `enum`.
 - XML en Windows solo a través de Docker.
+
+---
+
+# Plan del resto de la Fase 4 (F4.3, F4.4a/b, F4.5a/b, F4.6)
+
+Fecha: 15 nov 2026 (Planner); aprobado por Leonardo el 16 nov con las recomendaciones (F4-U9…U19 = D51). Las marcadas **[compartida]** necesitan también el visto bueno de Bayron (D42); mientras tanto valen como provisionales.
+
+## Decisiones del usuario (aprobadas)
+
+- **F4-U9. Un solo ejecutor** (enmienda F4-U4): el «simulador» de F4.1a se escribe directamente como núcleo `no_std` en `runtime-rs` (lee `runtime_rs::Tables<'a>` aplanadas con *slices*, usa memoria del llamador, recibe eventos); F4.1b/c, F4.4b y F4.5 añaden sus operaciones ahí; F4.6 pone delante el lexer, los límites, el reporte, la capa de buena formación y los bloques. Ahorra un M y elimina divergencias; F5.1 = tablas `const` + ese núcleo; F5.2 porta un solo núcleo.
+- **F4-U10. Combinadores con salidas y puertas:** el producto de F4.1b se generaliza con **salidas** (contadores por rama en el marco): `allOf` y `$ref` con hermanas cuentan en la salida del padre; `anyOf`, `oneOf`, `not` y `dependentSchemas` abren una salida por rama; los hijos que apila una componente cuentan en su salida; al desapilar, **puertas** (ANY, ONE, NOT, IMPLIES(bit de la clave)) dan el veredicto. Exacto, sin búfer, O(1) por evento con el producto tabulado; no cambia la IR. Justificación: los autómatas de pila visible son cerrados bajo intersección y complemento (`ir.md` §6.1).
+- **F4-U11. Al pasar el tope de 4 096 estados** [compartida: texto de §2.7]: en marcos escalares (cadena, número), simulación paralela de las componentes (cada una con su AFD y su salida; cubre los 15 primos); en marcos con hijos, `limit` con el tamaño alcanzado, que va al informe. Se aparta de D46 (4) en ese último caso.
+- **F4-U12. `oneOf`** (enmienda D46 (4)): igual que `anyOf` (producto acotado con la puerta «exactamente una», con multiplicidad, S-3). No cambia `00-alcance.md` §2.7 ni la estrategia `bounded-determinization` de D19.
+- **F4-U13. Peso de los combinadores** [compartida: precisa F4-U3]: `anyOf`, `oneOf` y `not` cuentan **1** violación (su `Constraint`); `allOf`, `$ref` con hermanas y `dependentSchemas` (si salta) suman las de dentro; ⊕ = mín dentro de la puerta (homomorfismo ℕ∪{∞} → 𝔹). Acerca el conteo a `jsonschema` (F6.7).
+- **F4-U14. Subconjunto de `pattern`** [compartida: `00-alcance.md` §2.4, §3.1, §3.4]: puntos de código (semántica `u`); literales, `.`, clases `[...]`/`[^...]` con rangos, alternancia, grupos, `* + ? {m} {m,} {m,n}`, escapes de control y `\uHHHH`. ECMA: búsqueda sin anclar; `^`/`$` solo al principio o al final de una alternativa de primer nivel; `\d`=[0-9], `\w`=[A-Za-z0-9_], `\s` con la lista de ECMA; `.` excluye `\n \r U+2028 U+2029`; se rechazan retrorreferencias, *lookaround*, `\b`/`\B`, perezosos/posesivos, grupos con nombre, `\p{}`, `\cX`, `\u{}`, anclas en medio. XSD: anclado implícito; `^`/`$` literales; `.` excluye `\n \r`; `\s \S` exactos; `\d` = [0-9] como desviación conservadora (§3.4); se rechazan `\D \w \W \i \I \c \C \p \P` y la resta de clases (con un mensaje que propone `[0-9]`).
+- **F4-U15. `ir::regex`:** analizador + AST en arena + `matches` por simulación de posiciones, como `ir::num` (D43); `xsd` sigue dependiendo solo de `lexer` e `ir` (D21); `Rule::Pattern(String)` no cambia (`automaton` lo vuelve a analizar; si falla, `Internal`). Toca `crates/ir`, no la IR ni el JSON v2.
+- **F4-U16. Límites nuevos o precisados** [compartida: `00-alcance.md` §4]: `pattern` ≤ 4 096 posiciones tras expandir `{m,n}` (Fase 3) y ≤ 4 096 estados del AFD, anidamiento ≤ 256; claves no declaradas ≤ 1 024 por objeto y una reserva común de 4 096 entre todos los objetos abiertos (igual para atributos por etiqueta); `uniqueItems` 4 096 elementos entre todos los arreglos abiertos; hash de 64 bits con clave (probabilidad de colisión documentada); el tope de 4 096 de la «determinización acotada» vale para todo producto y todo AFD. `sv_state_t` ≈ 64 KiB + 256 × marco.
+- **F4-U17. `uniqueItems` y literales compuestos:** `uniqueItems` por hash canónico en *streaming* (números por valor, objetos sin orden), SipHash-1-3 con clave en `Limits`, comprobado al leer `]` (estrategia `deferred`); bajo `not` se admite y se documenta (falso «repetido» con probabilidad ≤ 2⁻⁴¹). `enum`/`const` compuestos traducidos en compilación a su autómata exacto (objeto: `const` por clave, todas requeridas, sin adicionales; arreglo: `prefixItems` + longitud exacta) con la puerta ANY.
+- **F4-U18. Reporte y API del ejecutor** [compartida: forma de `sv_report_t` y la API C-ABI]: `new(tables, &Limits, mem: &mut [u64])`, `feed(&[u8]) -> Continue|Stop` (0 / <0), `finish() -> Report`; `Report`: `valid`, `violations` (u64 saturado), `error_kind` (lexical/syntax/schema/limit) y el **primer** error (offset, línea, columna, `RuleKind`, ubicación del esquema recortada a 256 B guardada en las tablas); el modo (total / fallo temprano) en las opciones; la estrategia de respaldo en el resumen de `schemac automaton` (amplía F4-U7), no en `sv_report_t`.
+- **F4-U19. Orden:** F4.6 justo después de F4.1c y antes que F4.4b/F4.5 (con U9 ya no depende de los combinadores): camino completo pronto (esquema → M → ejecutor → F5.1, PC-E). F4.6 se cierra contra `expected` y contra la línea base de F6.7a. Reparto con la Fase 6: puntero de la instancia → F6.1; exponer límites en `sv_limits_t`, tiempo y el campo `limits` del corpus → F6.2.
+
+## Decisiones que puede tomar el Builder (registrarlas en `docs/fase4/`)
+
+- **F4-B14.** Forma de `Dfa`, fijada en F4.1a: `{ n_classes, start, trans: Vec<u32> por filas, out: Vec<Out> }`, completo, con estado muerto explícito; Hopcroft devuelve una numeración canónica (BFS desde el inicial, clases en orden).
+- **F4-B15.** Hopcroft iterativo (transiciones inversas por clase, «la mitad menor»); Moore O(n²k) solo como oráculo de pruebas.
+- **F4-B16.** `determinism::check` corre en cada `build` (O(|δ|)); un fallo da `Internal`.
+- **F4-B17.** AST de las expresiones regulares en arena, sin `Box`; análisis con pila explícita; posiciones contadas con multiplicación saturada antes de expandir.
+- **F4-B18.** Patrón → AFD: Glushkov (sin ε) + subconjuntos sobre las clases del patrón; anclaje por alternativa (sin `^` se reinyecta el inicial en cada subconjunto; sin `$`, estado «encontrado» absorbente); en XSD, el patrón ve el texto tras el *collapse* cuando el tipo lo pide.
+- **F4-B19.** Códigos de error de `pattern` en la Fase 3: JSON `meta-schema` (mal formada), `unsupported` (fuera del subconjunto), `limit` (demasiado grande); XSD `facet`/`value`, `unsupported`, `limit`; posición de la cadena; constructo citado recortado.
+- **F4-B20.** Salidas como contadores u32 saturados; puertas en orden fijo de compilación; las salidas que llegan a la raíz solo por conjunciones son «globales» (detienen el fallo temprano); clave de memorización de un tipo de marco = lista canónica de pares (`NodeId`, etiqueta de salida); la transición que apila lleva el mapa de salidas.
+- **F4-B21.** SipHash-1-3 propio `no_std`, clave fija por defecto en `Limits`; forma canónica de los números para el hash (signo, cifras sin ceros sobrantes, exponente ajustado; si no cabe en i64, `limit`).
+- **F4-B22.** Reservas: un solo arreglo de u64 usado como pila de regiones; claves y atributos con búsqueda lineal en su región (≤ 1 024) y error en la repetida; `uniqueItems` con heapsort de la región al leer `]`.
+- **F4-B23.** Unidad del límite de cadena (bytes UTF-8 decodificados) y contador de referencias XML; si el lexer no lo expone sin coste, pendiente para F6.2.
+- **F4-B24.** `automaton::validate(&VerifiedIr, &[u8], Mode) -> Report` (std) para pruebas, arnés F6.5 y servidor.
+- **F4-B25.** Prueba de «sin reservas» con un asignador global contador en un binario de prueba aparte.
+- **F4-B26.** Documentos: `docs/fase4/{automata.md, pattern.md, runtime.md, pendientes.md}`.
+
+## Ajustes a F4.1a-c (aprobados; ya reflejados en `tasks/todo.md`)
+
+1. F4-U9: el «simulador std» de F4.1a se escribe como núcleo `no_std` en `runtime-rs` (lee `Tables<'a>` aplanadas que construye `automaton`, usa la memoria del llamador; criterio añadido: 0 reservas en el camino de validación); F4.1b y F4.1c añaden registros, Glushkov y contadores en ese núcleo.
+2. El formato de las tablas reserva desde F4.1a los campos de F4.5a: `slot` en cada comprobación (siempre 0 en F4.1), `slots` y `gates` en cada tipo de marco (vacíos), mapa de salidas en cada transición que apila (identidad).
+3. La forma de `Dfa` (F4-B14) se fija en F4.1a.
+4. F4.1b: el producto atribuye cada comprobación a su componente; el error de tope devuelve el número alcanzado y si el marco es escalar; la prueba «con el tope bajado a 8, `limit`» usa un producto de **marcos de objeto**.
+5. Etiquetas de `Pending`: `pattern` → F4.4b; `anyOf`/`oneOf`/`not`/`dependentSchemas` → F4.5a; `uniqueItems` y literales compuestos → F4.5b.
+6. F4.1c: el transductor de *collapse* es una pieza reutilizable (F4.4b lo usa delante del AFD del `pattern`).
+7. Documentación: con F4-U13, `automata.md` dice «`anyOf`/`oneOf`/`not`: 1 violación, veredicto al desapilar».
+
+## Orden, paralelo y calendario
+
+Pista A: F4.1a → F4.1b → F4.1c → F4.6 → F5.1 → [PC-E] → F4.4b → F4.5a → F4.5b → F5.2 → F5.3. En paralelo: F4.4a (sin dependencias) y F4.3 (tras el commit de F4.1a), idealmente Bayron; si no, Leonardo entre F4.1c y F4.4b. Calendario objetivo: dom 15 F4.1a (y F4.4a); lun 16 F4.1b, F4.1c (y F4.3); mar 17 F4.6, F5.1, F4.4b; mié 18 F4.5a, F4.5b, F5.2 empieza como muy tarde a las 18 h; jue 19 F5.2, F5.3 y congelamiento. Si no se cumple: congelamiento el viernes 20.
+
+## Riesgos y orden de recorte
+
+Riesgos: calendario (≈ 11 M en 4 días; depende de U9 y de la ayuda de Bayron); F5.2 (portar el núcleo a C) va último (mantener el núcleo pequeño y basado en tablas; si el mié 18 a las 18 h F4.5a no está, F5.2 empieza igual); explosión de tipos de marco (tope por producto, presupuesto 2²⁰, `limit` con tamaño); corrección Unicode de las expresiones regulares (oráculo `matches`, proptest); colisiones de hash (clave secreta, cota documentada); F6.7 tarde (comparar con `expected`); decisiones compartidas sin aprobar (U11, U13, U14, U16, U18: provisionales; proponerlas a Bayron en un solo mensaje); corpus pequeño (casos nuevos en F4.4b-F4.6).
+Orden de recorte (ninguno deja de cumplir el PDF): (1) D29 (`pattern` en enumeraciones y `default`/`fixed`); (2) literales compuestos de `enum`/`const` rechazados con mensaje [compartida: §2.2]; (3) simulación paralela en marcos escalares → `limit` con el tamaño; (4) Hopcroft solo sobre los AFD de `pattern`; (5) resumen mínimo de `schemac automaton`. No se recortan: determinismo + Hopcroft, `pattern` → AFD con rechazo anti-ReDoS, producto acotado de `anyOf`/`allOf`, `not`/`oneOf` como puertas, `uniqueItems` diferido, el ejecutor sobre el corpus, los emisores Rust y C.

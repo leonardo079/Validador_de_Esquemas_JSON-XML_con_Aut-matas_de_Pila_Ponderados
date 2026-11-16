@@ -395,7 +395,15 @@ que rechazar antes el frontal, **con su posición**, no como el error interno de
     complejo de otro queda fuera del alcance, como `xs:complexContent`). **RESUELTO (tarea
     5.3)**: `unsupported` en el valor de `base` (`semantic-error/simple-content-base-compleja.xsd`).
 
-### 4. Ubicación recortada para los mensajes del validador (Fases 4 y 5)
+### 4. Ubicación recortada para los mensajes del validador (Fases 4 y 5) — RESUELTO (tarea F4.1a)
+
+- **Resuelto (F4.1a):** `automaton::location_clipped(&VerifiedIr, id, max)` (F4-B8,
+  [fase4/automata.md](../fase4/automata.md) §6.5) sube por los padres y escribe solo lo
+  que cabe: O(profundidad + max), principio, `…` y final, sin partir caracteres ni
+  `~0`/`~1`. `max` = 256 (`automaton::LOCATION_MAX`, F4-U6); las tablas de M guardan la de
+  cada regla comprobada y la usan los mensajes de `Pending` y del reporte. Falta escribir
+  el tope en `00-alcance.md` §4 ([fase4/pendientes.md](../fase4/pendientes.md) §2) y la
+  fila de la tabla ρ de §1 cuando existan los mensajes del payload (F4.6).
 
 - **Estado:** `Ir::location` construye la ruta entera, sin tope ([ir.md](ir.md) §11,
   pendiente 2). La 4.2 no la usa en ningún mensaje: `schemac ir` escribe el padre y el
@@ -417,6 +425,12 @@ Observaciones de la revisión final de 4.1 sobre [ir.md](ir.md) §6–§7:
   (D5); falta la tabla hash acotada de claves no declaradas (D2,
   `max_claves_adicionales`); y decir que los registros salen «de las reglas (b)» no es
   exacto.
+  **RESUELTO en parte (F4.1a):** la máscara tiene un bit por nombre de `properties` ∪
+  `required` ∪ claves y listas de `dependentRequired`, que se comprueban al cerrar el
+  objeto (D5), y las claves declaradas repetidas dan peso ∞ (D2)
+  ([fase4/automata.md](../fase4/automata.md) §3.1); la fila Γ de [ir.md](ir.md) §7 está
+  corregida. La tabla de claves no declaradas queda documentada para F4.6
+  ([fase4/pendientes.md](../fase4/pendientes.md) §1).
 - **`not` y los límites** (S-2): un error de límite atraviesa `not` sin invertirse, y la
   inversión exige un veredicto exacto (con `uniqueItems` por hash no lo es).
 - **Componentes del producto** (S-3): son el conjunto de `NodeId` **distintos** alcanzados
@@ -698,7 +712,12 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   tocar `00-alcance.md` (aplazada a después del hito de la semana 3 por D28). Como ya está
   aprobado, cualquier tarea anterior que lo necesite puede aplicarlo.
 
-### 27. 4.3-S2: «en un solo marco» en `clasificacion.md` §4.2 supone que E₌ se expande (Fase 4)
+### 27. 4.3-S2: «en un solo marco» en `clasificacion.md` §4.2 supone que E₌ se expande (Fase 4) — RESUELTO (tarea F4.1a)
+
+- **Resuelto (F4.1a, F4-U2):** la Fase 4 **expande** E₌ en compilación, memorizado por
+  conjunto canónico de `NodeId` (`$ref` sin hermanas es un alias; con hermanas y `allOf`,
+  producto en F4.1b), sin llamadas ε ([fase4/automata.md](../fase4/automata.md) §6.4).
+  La frase de [clasificacion.md](clasificacion.md) §4.2 es exacta y se matizó para decirlo.
 
 - **Dónde:** [clasificacion.md](clasificacion.md) §4.2, primera frase.
 - **Estado:** dice que la instancia de *v* la lee «en un solo marco, el producto» de sus

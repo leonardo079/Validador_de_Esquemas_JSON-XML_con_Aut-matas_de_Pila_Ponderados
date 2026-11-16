@@ -18,6 +18,11 @@ comandos:
   ir [--dot] <esquema>   analiza el esquema, lo baja a la IR verificada y la
                          escribe en JSON (o en DOT con --dot), con la clase
                          (a)/(b)/(c) y la estrategia de cada nodo y regla
+  automaton [--dot] <esquema>
+                         construye el autómata de pila ponderado M de la Fase 4
+                         y escribe el resumen de sus tamaños en JSON (o M
+                         completo en DOT con --dot); lo que aún no se compila
+                         es un error con la tarea que lo cubrirá
   dot <utf8|json|xml>    escribe el AFD indicado en formato DOT (Graphviz)
   version                muestra la versión
 
@@ -30,7 +35,8 @@ códigos de salida: 0 bien (también si el lector de la salida la cierra
 antes de tiempo); 1 el esquema tiene errores; 2 no se pudo leer el archivo,
 supera el tamaño máximo, los argumentos son inválidos, no se pudo escribir
 la salida o no se pudo crear el hilo de análisis;
-3 error interno del compilador (la IR no pasa su verificación o el análisis
+3 error interno del compilador (la IR no pasa su verificación, el
+constructor del autómata falla en una comprobación interna o el análisis
 falló con un pánico)";
 
 /// Pila del hilo que analiza el esquema. El parser es recursivo y su tope de
@@ -83,6 +89,15 @@ fn main() -> ExitCode {
             ir(Path::new(ruta), Salida::Dot)
         }
         ([Some("ir"), w], [_, ruta]) if !es_opcion(*w) => ir(Path::new(ruta), Salida::Json),
+        ([Some("automaton"), Some("--dot"), w], [_, _, ruta])
+        | ([Some("automaton"), w, Some("--dot")], [_, ruta, _])
+            if !es_opcion(*w) =>
+        {
+            automata(Path::new(ruta), Salida::Dot)
+        }
+        ([Some("automaton"), w], [_, ruta]) if !es_opcion(*w) => {
+            automata(Path::new(ruta), Salida::Json)
+        }
         ([Some("version")], _) => ExitCode::from(imprimir(&format!(
             "schemac {}\n",
             env!("CARGO_PKG_VERSION")
@@ -342,6 +357,9 @@ enum Fallo {
     Esquema(Vec<String>),
     /// La IR no pasa `verify` (código 3).
     Interno(InternalError),
+    /// El constructor del autómata falla en una comprobación interna
+    /// (código 3; `schemac automaton`).
+    Constructor(String),
 }
 
 /// `schemac ir`: 0 con la IR en stdout; 1 con los errores del esquema, los
@@ -391,6 +409,11 @@ fn ejecutar_ir(
             }
             SALIDA_INTERNA
         }
+        // `bajar` no construye el autómata.
+        Err(Fallo::Constructor(e)) => {
+            avisar(err, &format!("{ruta}: {e}"));
+            SALIDA_INTERNA
+        }
     }
 }
 
@@ -422,6 +445,58 @@ fn escribir(ir: &VerifiedIr, salida: Salida) -> String {
     }
     .expect("escribir en un String no falla");
     out
+}
+
+/// `schemac automaton` (F4-U7): 0 con el resumen JSON de tamaños de M (o
+/// M en DOT); 1 con los errores del esquema (los de `check`), una regla
+/// pendiente con su tarea (F4-U5) o un límite; 2 si no se pudo leer o
+/// escribir; 3 si hay un error interno (la IR o el constructor).
+fn automata(path: &Path, salida: Salida) -> ExitCode {
+    let ruta = path.display().to_string();
+    let err = &mut io::stderr();
+    let resultado = match en_hilo(path, "schemac-automaton", err, move |b| {
+        construir(b, salida)
+    }) {
+        Ok(r) => r,
+        Err(code) => return ExitCode::from(code),
+    };
+    match resultado {
+        Ok(texto) => ExitCode::from(imprimir(&texto)),
+        Err(Fallo::Esquema(errores)) => {
+            for e in &errores {
+                avisar(err, &format!("{ruta}: {e}"));
+            }
+            ExitCode::from(1)
+        }
+        Err(Fallo::Interno(e)) => {
+            for linea in informe_interno(&ruta, &e) {
+                avisar(err, &linea);
+            }
+            ExitCode::from(SALIDA_INTERNA)
+        }
+        Err(Fallo::Constructor(e)) => {
+            avisar(err, &format!("{ruta}: {e}"));
+            ExitCode::from(SALIDA_INTERNA)
+        }
+    }
+}
+
+/// La bajada de [`bajar`] y la construcción de M. Una regla pendiente o un
+/// límite son errores del esquema (código 1); un error interno del
+/// constructor, código 3.
+fn construir(bytes: &[u8], salida: Salida) -> Result<String, Fallo> {
+    let ir = bajar(bytes)?;
+    let a = automaton::build(&ir).map_err(|e| match e {
+        automaton::BuildError::Internal(_) => Fallo::Constructor(e.to_string()),
+        _ => Fallo::Esquema(vec![e.to_string()]),
+    })?;
+    let mut out = String::new();
+    match salida {
+        Salida::Json => a.write_summary_json(&mut out),
+        Salida::Dot => a.write_dot(&mut out),
+    }
+    .expect("escribir en un String no falla");
+    Ok(out)
 }
 
 /// Lo que se escribe en stderr ante un error interno: **un** error de texto

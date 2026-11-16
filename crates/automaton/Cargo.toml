@@ -7,8 +7,21 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+# F4-B1: solo la IR, el lexer y el núcleo del ejecutor; ningún frontal (D13).
+# `semantic` y `schema-parser` bajan los esquemas de las pruebas, y
+# `baseline` lee el corpus (D48); `xsd` prueba que XML es `Pending`.
 [dependencies]
+ir.workspace = true
+lexer.workspace = true
+runtime-rs.workspace = true
+
+[dev-dependencies]
+schema-parser.workspace = true
 semantic.workspace = true
+xsd.workspace = true
+baseline.workspace = true
+proptest = "1.12.0"
+serde_json = "1.0.154"
 
 [lints]
 workspace = true
