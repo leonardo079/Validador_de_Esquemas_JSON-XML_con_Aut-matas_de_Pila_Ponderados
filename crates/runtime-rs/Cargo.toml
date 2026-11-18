@@ -13,3 +13,8 @@ lexer.workspace = true
 
 [lints]
 workspace = true
+
+# Oráculos de las rutinas numéricas (F4.1b): `ir::num` y proptest.
+[dev-dependencies]
+ir.workspace = true
+proptest = "1.12.0"

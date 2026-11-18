@@ -362,17 +362,18 @@ fn ref_sin_hermanas_es_alias() {
 
 #[test]
 fn lo_no_implementado_es_pending_con_su_tarea() {
+    // Lo de F4.1b ya compila.
+    for src in [
+        r#"{"minimum": 1}"#,
+        r#"{"enum": [1, "a"]}"#,
+        r#"{"allOf": [true]}"#,
+        r##"{"$ref": "#/$defs/a", "type": "object", "$defs": {"a": true}}"##,
+    ] {
+        assert!(build(&bajar(src)).is_ok(), "{src}");
+    }
     for (src, rule, task) in [
-        (r#"{"minimum": 1}"#, RuleKind::Minimum, Task::Registers),
-        (r#"{"enum": [1, "a"]}"#, RuleKind::Enum, Task::Registers),
         (r#"{"enum": [[1]]}"#, RuleKind::Enum, Task::Literals),
         (r#"{"const": {"a": 1}}"#, RuleKind::Const, Task::Literals),
-        (r#"{"allOf": [true]}"#, RuleKind::AllOf, Task::Registers),
-        (
-            r##"{"$ref": "#/$defs/a", "type": "object", "$defs": {"a": true}}"##,
-            RuleKind::Ref,
-            Task::Registers,
-        ),
         (
             r#"{"properties": {"x": {"pattern": "a"}}}"#,
             RuleKind::Pattern,
@@ -391,7 +392,7 @@ fn lo_no_implementado_es_pending_con_su_tarea() {
             RuleKind::UniqueItems,
             Task::Literals,
         ),
-        // La tarea más tardía: `not` (F4.5a) dentro de `allOf` (F4.1b).
+        // `not` (F4.5a) dentro de `allOf` (que ya compila).
         (
             r#"{"allOf": [{"not": {"minLength": 1}}]}"#,
             RuleKind::Not,

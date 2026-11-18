@@ -13,7 +13,7 @@
 //!   comprobaciones de cada transición.
 
 use ir::{NodeId, RuleKind};
-use runtime_rs::tables::{CharRange, Check, Dep, Frame, Rule, Trans};
+use runtime_rs::tables::{CharRange, Check, Dep, DivisorRef, Frame, Lexeme, Rule, Trans};
 use runtime_rs::Tables;
 
 /// Estado de control.
@@ -56,6 +56,9 @@ pub struct Automaton {
     pub(crate) frames: Vec<Frame>,
     pub(crate) masks: Vec<u64>,
     pub(crate) deps: Vec<Dep>,
+    pub(crate) nums: Vec<Lexeme>,
+    pub(crate) lexemes: Vec<u8>,
+    pub(crate) divisors: Vec<DivisorRef>,
     pub(crate) ascii: Vec<u32>,
     pub(crate) ranges: Vec<CharRange>,
     pub(crate) rules: Vec<Rule>,
@@ -64,6 +67,8 @@ pub struct Automaton {
     pub(crate) groups: Vec<String>,
     pub(crate) class_names: Vec<String>,
     pub(crate) frame_names: Vec<String>,
+    /// Subautómatas producto (conjuntos de ≥ 2 componentes).
+    pub(crate) products: usize,
 }
 
 /// Tamaños de M (F4-U7: el resumen de `schemac automaton`).
@@ -82,10 +87,13 @@ pub struct Summary {
     /// El marco más grande en la pila (cabecera y registros), en bytes:
     /// la pila de profundidad d ocupa como mucho d veces esto.
     pub max_frame_bytes: usize,
-    /// Marcos producto (F4.1b); 0 en F4.1a.
+    /// Subautómatas producto: los de un conjunto canónico de ≥ 2 componentes
+    /// (`$ref` con hermanas, `allOf`), uno por subautómata de objeto,
+    /// arreglo, número o cadena.
     pub products: usize,
-    /// Reglas con estrategia de respaldo (F4.5); 0 en F4.1a.
-    pub pending: usize,
+    /// Reglas con estrategia de respaldo (verificación diferida, F4.5); 0
+    /// hasta entonces. Se llamaba `pending` (F4.1a-CR-S5).
+    pub deferred: usize,
 }
 
 impl Automaton {
@@ -101,6 +109,10 @@ impl Automaton {
             frames: &self.frames,
             masks: &self.masks,
             deps: &self.deps,
+            nums: &self.nums,
+            lexemes: &self.lexemes,
+            divisors: &self.divisors,
+            scalar_slots: 0,
             ascii: &self.ascii,
             ranges: &self.ranges,
             rules: &self.rules,
@@ -189,8 +201,8 @@ impl Automaton {
                 .map(|f| (f.words as usize + 1) * 8)
                 .max()
                 .unwrap_or(0),
-            products: 0,
-            pending: 0,
+            products: self.products,
+            deferred: 0,
         }
     }
 }

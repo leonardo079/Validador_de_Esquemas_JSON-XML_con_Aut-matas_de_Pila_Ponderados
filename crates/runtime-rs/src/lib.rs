@@ -11,10 +11,11 @@
 
 mod core;
 mod json;
+pub mod num;
 pub mod tables;
 mod weight;
 
-pub use crate::core::{Core, ErrorAt, ErrorKind, Mode, Options, Report, Stop};
+pub use crate::core::{Core, ErrorAt, ErrorKind, Mode, Options, Report, Stop, LEXEME_MAX};
 pub use json::{Flow, JsonValidator};
 pub use tables::Tables;
 pub use weight::Weight;

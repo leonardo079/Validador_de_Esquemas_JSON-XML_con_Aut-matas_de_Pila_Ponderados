@@ -421,6 +421,18 @@ Observaciones de la revisión final de 4.1 sobre [ir.md](ir.md) §6–§7:
   `Ref` con reglas hermanas y `not` sobre un subesquema (c). Contar estados y transiciones
   **antes** de reservar. Caso de prueba: un `allOf` de `pattern` `^(a{p})*$` con los 15
   primeros primos (el producto tiene ∏ p estados).
+  **RESUELTO el mecanismo (F4.1b):** todo subautómata producto (de un conjunto canónico con
+  ≥ 2 componentes: `allOf` y `$ref` con hermanas) cuenta sus estados en el análisis, antes de
+  reservar (el trie de la unión, contado sin construirlo), y pasar el tope (4 096,
+  configurable con `automaton::BuildOptions`) da `BuildError::ProductLimit` con el número
+  alcanzado y si el marco es escalar ([fase4/automata.md](../fase4/automata.md) §6.4;
+  prueba `tope_de_estados_por_producto`). El tope se comprueba en cuanto se conocen los
+  nombres (o el mayor `prefixItems`) y el número de componentes, antes de calcular los hijos,
+  y ese trabajo se descuenta antes del presupuesto de los cierres; ninguna reserva crece con
+  nombres × componentes (ronda 1: `tope_de_producto_antes_de_reservar` y
+  `presupuesto_de_los_cierres_da_limit`, con el asignador contador de
+  `crates/automaton/tests/sin_reservas.rs`). F4.5 lo reutiliza para `anyOf`/`oneOf`/`not`; el
+  caso de los 15 primos va a F4.4b/F4.5 ([fase4/pendientes.md](../fase4/pendientes.md) §23).
 - **Registros de la fila Γ** (S-1): a la máscara le faltan los bits de `DependentRequired`
   (D5); falta la tabla hash acotada de claves no declaradas (D2,
   `max_claves_adicionales`); y decir que los registros salen «de las reglas (b)» no es
@@ -437,6 +449,13 @@ Observaciones de la revisión final de 4.1 sobre [ir.md](ir.md) §6–§7:
   por E₌, no los caminos (la cadena de `cadena_de_referencias_tamano_lineal`,
   [bajada.md](bajada.md) §7, tiene 2^(10⁴ − 1) caminos y 10⁴ nodos); los combinadores se
   evalúan como un circuito, con multiplicidad en `oneOf`.
+  **RESUELTO para la conjunción (F4.1b):** los componentes de un marco son el conjunto
+  canónico de `NodeId` distintos del cierre conjuntivo por `$ref`/`allOf`
+  ([fase4/automata.md](../fase4/automata.md) §6.4, `crates/automaton/src/conj.rs`); una rama
+  repetida cuenta una vez (`rama_repetida_cuenta_una_vez`) y la cadena de diamantes de 10⁴
+  nodos compila con un tamaño lineal (`referencias_compartidas_tamano_lineal` de
+  `crates/automaton/tests/conjuncion.rs`). El circuito de `anyOf`/`oneOf`/`not` (puertas con
+  multiplicidad) es de F4.5a.
 
 ### 6. CI — SIN EFECTO (D32, 3 nov) → [historial.md](historial.md) §6
 
@@ -583,7 +602,7 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
 
 ### Abiertas por la tarea 4.3 (clasificación)
 
-### 22. Clasificación: `$ref` con hermanas y XSD (Fase 4 y frontal XSD) — parte XSD RESUELTA (tareas 5.4, 5.6 y 5.7); sigue abierta la de JSON
+### 22. Clasificación: `$ref` con hermanas y XSD (Fase 4 y frontal XSD) — RESUELTO (parte XSD: tareas 5.4, 5.6 y 5.7; parte JSON: F4.1b)
 
 - **`$ref` con reglas hermanas (Fase 4; CR1-S6).** Es (a) por el alcance (`00-alcance.md` §2.1),
   pero la Fase 4 lo compila como un producto con sus hermanas ([ir.md](ir.md) §7), igual
@@ -591,6 +610,15 @@ quedaron abiertas; 4.2-I2 es §15. La tarea 4.3, que toca la CLI y `crates/ir`, 
   producto; el tope de estados de §5 (L-1) ya lo cubre. Si la Fase 4 mide que se comporta
   como el producto de `allOf`, proponer al usuario cambiar la fila de `$ref` en el alcance
   ([clasificacion.md](clasificacion.md) §8, pendiente 1). Mientras, manda el alcance.
+  **RESUELTO (F4.1b), sin cambiar el alcance:** `$ref` con hermanas se compila como el
+  producto del nodo y su destino, por el mismo mecanismo que `allOf`, con el tope de §5
+  ([fase4/automata.md](../fase4/automata.md) §6.4). Con las reglas (a)/(b) que puede llevar al
+  lado, los **estados** del producto crecen con la **suma** de sus componentes (tries de la
+  unión, índices, contadores), no con su producto, así que se comporta como (a) y no hace
+  falta proponer el cambio de su fila; las comprobaciones y los lexemas que sí pueden crecer
+  como un producto se comparten o cuentan en el presupuesto de F4-U6 antes de reservar
+  ([fase4/automata.md](../fase4/automata.md) §6.4, ronda 2 de F4.1b); un `$ref` con un `pattern` al lado sí es un
+  producto de AFD, pero `pattern` ya es (c) por sí mismo.
 - **Cierre (tarea 5.7):** la parte XSD está entera (abajo; los tres `parse-ok` con `xs:simpleType`
   entraron con la 5.6, y la UPA de la 5.7 no cambia ninguna clasificación ni dorada: solo rechaza).
   Sigue abierto solo lo de JSON (`$ref` con hermanas, Fase 4) y los dos puntos de abajo.

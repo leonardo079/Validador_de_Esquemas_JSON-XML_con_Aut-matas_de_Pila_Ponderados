@@ -25,7 +25,7 @@ impl Automaton {
         writeln!(w, "  \"registerBytes\": {},", s.register_bytes)?;
         writeln!(w, "  \"maxFrameBytes\": {},", s.max_frame_bytes)?;
         writeln!(w, "  \"products\": {},", s.products)?;
-        writeln!(w, "  \"pending\": {}", s.pending)?;
+        writeln!(w, "  \"deferred\": {}", s.deferred)?;
         writeln!(w, "}}")
     }
 
@@ -99,16 +99,32 @@ impl Automaton {
         if tr.bit != runtime_rs::tables::NO_BIT {
             let _ = write!(suffix, " / bit {}", tr.bit);
         }
+        if tr.count {
+            suffix.push_str(" / +1");
+        }
         let checks: Vec<String> = self
             .checks_of(t)
             .iter()
             .map(|c| {
                 let (_, kind) = self.rule(c.rule);
                 let test = match c.test {
-                    Test::Fails => "✗",
-                    Test::Integer => "entero",
-                    Test::Mask => "máscara",
-                    Test::Dependent => "dependencias",
+                    Test::Fails => "✗".to_owned(),
+                    Test::Integer => "entero".to_owned(),
+                    Test::Mask => "máscara".to_owned(),
+                    Test::Dependent => "dependencias".to_owned(),
+                    Test::CountMin => format!("n ≥ {}", c.bound()),
+                    Test::CountMax => format!("n ≤ {}", c.bound()),
+                    Test::LengthMin => format!("|s| ≥ {}", c.bound()),
+                    Test::LengthMax => format!("|s| ≤ {}", c.bound()),
+                    Test::NumMin => format!("≥ {}", self.num_text(c.arg)),
+                    Test::NumExMin => format!("> {}", self.num_text(c.arg)),
+                    Test::NumMax => format!("≤ {}", self.num_text(c.arg)),
+                    Test::NumExMax => format!("< {}", self.num_text(c.arg)),
+                    Test::NumEnum => format!("∈ {} valores", c.len),
+                    Test::MultipleOf => match self.divisors.get(c.arg as usize) {
+                        Some(d) => format!("múltiplo de {}", self.num_text(d.lexeme)),
+                        None => "múltiplo".to_owned(),
+                    },
                 };
                 format!("{} {test} c={}", kind.key(), c.cost)
             })
@@ -122,6 +138,19 @@ impl Automaton {
             _ => format!("q{}", tr.next),
         };
         (to, suffix)
+    }
+}
+
+impl Automaton {
+    /// Un lexema del esquema para el DOT, recortado a 24 bytes.
+    fn num_text(&self, i: u32) -> String {
+        let l = self.tables().num(i).unwrap_or(&[]);
+        let s = String::from_utf8_lossy(l);
+        if s.len() > 24 {
+            format!("{}…", &s[..24])
+        } else {
+            s.into_owned()
+        }
     }
 }
 

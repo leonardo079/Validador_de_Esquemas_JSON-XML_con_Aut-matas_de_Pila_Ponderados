@@ -260,7 +260,7 @@ Detalle y decisiones en `tasks/plan.md` («Plan de F4.1»). Una subtarea por vez
 
 **Arrastra:** `docs/fase3/pendientes.md` §4 (`location_clipped`); §5 S-1 (bits de `DependentRequired`; el hash de claves no declaradas queda documentado para F4.6); §27 (cerrar con la corrección de `clasificacion.md` §4.2); `ir.md` §7 (filas Σ y Γ corregidas); la dependencia `automaton → semantic` (F4-B1: `semantic` solo como dependencia de pruebas).
 
-**Estado (16 nov):** APROBADA CON OBSERVACIONES en la revisión 1 (code-reviewer solo, D35: 0 Critical, 4 Important —I1, I2, I3 de documentación, corregidos en el cierre; I4 de cobertura, pasa a F4.1b por D38—, 12 Suggestion), **sin rondas de corrección**. Nada pasó a F4.1b: CLI, dorada y DOT incluidos. Casillas verificadas por el Tester 1 (`crates/automaton/tests/json.rs`: `true_acepta_json_bien_formado`, `true_rechaza_malformados_en_su_offset`, `dorada_contada_a_mano` —24 estados, 16 clases, 77 transiciones—, `delta_total_y_estados_alcanzables`, `entero_por_los_registros_del_numero`, `fallo_temprano_informa_la_de_menor_costo`, `d7_cadena_de_ref_y_payload_profundo`; `tests/corpus.rs`: `esquema_true_sobre_todo_el_corpus`, `arbol_recursivo_da_cero`, `falta_required_da_una_violacion_en_64`, `non_dpda_da_pending`; `tests/weight.rs` (proptest del semianillo); `tests/sin_reservas.rs::cero_reservas_al_validar`; `crates/cli/tests/automaton.rs`: `resumen_de_la_dorada`, `dot_de_la_dorada`; sondas adversarias de ~100 payloads × 30 esquemas contra `baseline`, sin aceptaciones en falso). Decisión del usuario (16 nov): el contador de reservas de `crates/automaton/tests/sin_reservas.rs` se mantiene como **única excepción nombrada** de `unsafe_code = "deny"`, vigilada por `make lint` (`unsafe-check`). Decisiones: D52. Sin commit. Observaciones abiertas en `docs/fase4/pendientes.md` (§1-§20); las que heredan F4.1b y F4.6, como criterios en sus tareas.
+**Estado (16 nov):** APROBADA CON OBSERVACIONES en la revisión 1 (code-reviewer solo, D35: 0 Critical, 4 Important —I1, I2, I3 de documentación, corregidos en el cierre; I4 de cobertura, pasa a F4.1b por D38—, 12 Suggestion), **sin rondas de corrección**. Nada pasó a F4.1b: CLI, dorada y DOT incluidos. Casillas verificadas por el Tester 1 (`crates/automaton/tests/json.rs`: `true_acepta_json_bien_formado`, `true_rechaza_malformados_en_su_offset`, `dorada_contada_a_mano` —24 estados, 16 clases, 77 transiciones—, `delta_total_y_estados_alcanzables`, `entero_por_los_registros_del_numero`, `fallo_temprano_informa_la_de_menor_costo`, `d7_cadena_de_ref_y_payload_profundo`; `tests/corpus.rs`: `esquema_true_sobre_todo_el_corpus`, `arbol_recursivo_da_cero`, `falta_required_da_una_violacion_en_64`, `non_dpda_da_pending`; `tests/weight.rs` (proptest del semianillo); `tests/sin_reservas.rs::cero_reservas_al_validar`; `crates/cli/tests/automaton.rs`: `resumen_de_la_dorada`, `dot_de_la_dorada`; sondas adversarias de ~100 payloads × 30 esquemas contra `baseline`, sin aceptaciones en falso). Decisión del usuario (16 nov): el contador de reservas de `crates/automaton/tests/sin_reservas.rs` se mantiene como **única excepción nombrada** de `unsafe_code = "deny"`, vigilada por `make lint` (`unsafe-check`). Decisiones: D52. Commit `d0624d2`. Observaciones abiertas en `docs/fase4/pendientes.md` (§1-§20); las que heredan F4.1b y F4.6, como criterios en sus tareas.
 
 ## Tarea F4.1b: Registros y escalares JSON; conjunción por E₌ con tope
 
@@ -272,11 +272,11 @@ Detalle y decisiones en `tasks/plan.md` («Plan de F4.1»). Una subtarea por vez
 - Literales compuestos → `Pending` (F4.5b). El producto atribuye cada comprobación a su componente; el error de tope devuelve el número alcanzado y si el marco es escalar (D51).
 
 **Criterios de aceptación:**
-- [ ] El comparador coincide con `ir::num::compare` en un proptest de lexemas de RFC 8259, con exponentes largos y negativos.
-- [ ] Tabla de `multipleOf` contra un oráculo racional: `0.01` con `0.1`/`0.10`/`1e-2`/`0.005`; `3` con `1e2` y `3e2`; `2.5`; exponentes de 10⁴ cifras. Un divisor por encima del tope de F4-U6 da `limit` con posición.
-- [ ] `minLength`/`maxLength` cuentan `"😀"` y `"ñ"` como 1; un `enum` de cadenas con prefijos compartidos y la cadena vacía funciona; `1`, `1.0` y `1e0` son el mismo valor en `enum`/`const`; `enum` y `const` juntos funcionan.
-- [ ] Conjunción: el ejemplo de `ir.md` §6.2 (`allOf` + `additionalProperties: false`) rechaza `{"a":1}` con 1 violación; `{"$ref":"#/$defs/a","minimum":3}` exige las dos cosas; la cadena de diamantes de 10⁴ nodos (`referencias_compartidas_tamano_lineal`) se compila con un número lineal de marcos (comprobando el resultado, no el tiempo, D1); con el tope bajado a 8, un producto de **marcos de objeto** mayor da `limit` antes de reservar.
-- [ ] Todos los casos JSON del corpus sin `Pending` dan el `valid`, `violations` y `offset` esperados.
+- [x] El comparador coincide con `ir::num::compare` en un proptest de lexemas de RFC 8259, con exponentes largos y negativos.
+- [x] Tabla de `multipleOf` contra un oráculo racional: `0.01` con `0.1`/`0.10`/`1e-2`/`0.005`; `3` con `1e2` y `3e2`; `2.5`; exponentes de 10⁴ cifras. Un divisor por encima del tope de F4-U6 da `limit` con posición.
+- [x] `minLength`/`maxLength` cuentan `"😀"` y `"ñ"` como 1; un `enum` de cadenas con prefijos compartidos y la cadena vacía funciona; `1`, `1.0` y `1e0` son el mismo valor en `enum`/`const`; `enum` y `const` juntos funcionan.
+- [x] Conjunción: el ejemplo de `ir.md` §6.2 (`allOf` + `additionalProperties: false`) rechaza `{"a":1}` con 1 violación; `{"$ref":"#/$defs/a","minimum":3}` exige las dos cosas; la cadena de diamantes de 10⁴ nodos (`referencias_compartidas_tamano_lineal`) se compila con un número lineal de marcos (comprobando el resultado, no el tiempo, D1); con el tope bajado a 8, un producto de **marcos de objeto** mayor da `limit` antes de reservar.
+- [x] Todos los casos JSON del corpus sin `Pending` dan el `valid`, `violations` y `offset` esperados.
 
 **Verificación:** `cargo test -p automaton -p runtime-rs`, `make lint`, `make test`, `make docs-check`.
 
@@ -289,12 +289,13 @@ Detalle y decisiones en `tasks/plan.md` («Plan de F4.1»). Una subtarea por vez
 **Arrastra:** `docs/fase3/pendientes.md` §5 L-1 (el mecanismo del tope, que F4.5 reutiliza; el caso de los 15 primos va a F4.4/F4.5) y S-3; §22, parte JSON (cerrar sin cambiar el alcance).
 
 **Heredado de la revisión de F4.1a (16 nov, D38; detalle en `docs/fase4/pendientes.md`):**
-- [ ] F4.1a-CR-I4 (cobertura): `BuildError::Limit` probado: 4 096 nombres por objeto compilan y 4 097 dan `limit`; un esquema por encima de 2²⁰ entradas de δ da `limit` sin reservar (`crates/automaton/src/json.rs:375`, `:395`).
-- [ ] F4.1a-CR-S1: al añadir contadores al marco, separar la máscara de los contadores (`mask_words` o un desplazamiento) para que `Test::Mask` no lea contadores (`tables.rs:146-154`, `core.rs:386-392`).
-- [ ] F4.1a-CR-S4: `expect("reservado")` (`json.rs:873,906`) y el bucle de `resolve_aliases` (`json.rs:159-176`) devuelven `BuildError::Internal` en vez de pánico o cuelgue.
-- [ ] F4.1a-CR-S10: proptest de `Number::is_integer` frente a `ir::num`.
-- [ ] F4.1a-CR-I1: las salidas de una instancia escalar (cadena, número, `true`/`false`/`null`) se diseñan como zona global de tamaño máximo por esquema y «cerrar la instancia» (`Pop`, `Leave` o la entrada de un valor de un evento), para que F4.5a no tenga que rediseñar (`docs/fase4/automata.md` §9.2).
+- [x] F4.1a-CR-I4 (cobertura): `BuildError::Limit` probado: 4 096 nombres por objeto compilan y 4 097 dan `limit`; un esquema por encima de 2²⁰ entradas de δ da `limit` sin reservar (`crates/automaton/src/json.rs:375`, `:395`).
+- [x] F4.1a-CR-S1: al añadir contadores al marco, separar la máscara de los contadores (`mask_words` o un desplazamiento) para que `Test::Mask` no lea contadores (`tables.rs:146-154`, `core.rs:386-392`).
+- [x] F4.1a-CR-S4: `expect("reservado")` (`json.rs:873,906`) y el bucle de `resolve_aliases` (`json.rs:159-176`) devuelven `BuildError::Internal` en vez de pánico o cuelgue.
+- [x] F4.1a-CR-S10: proptest de `Number::is_integer` frente a `ir::num`.
+- [x] F4.1a-CR-I1: las salidas de una instancia escalar (cadena, número, `true`/`false`/`null`) se diseñan como zona global de tamaño máximo por esquema y «cerrar la instancia» (`Pop`, `Leave` o la entrada de un valor de un evento), para que F4.5a no tenga que rediseñar (`docs/fase4/automata.md` §9.2).
 
+**Estado (18 nov):** APROBADA en la revisión 4 tras **3 rondas de corrección**: ronda 1 (Tester: el tope de los productos de objetos se comprobaba después de reservar una matriz nombres × componentes —841 KB → 490 MB—; ahora tope y `spend` antes de los hijos, pruebas con el asignador contador y mutantes; además pruebas de `MAX_CLOSURE_WORK` y de `multipleOf` con lexemas largos); ronda 2 (code-reviewer: las tablas `checks`, `nums` y `lexemes` crecían multiplicativamente sin presupuesto —157 KB → 700 MB; 383 KB → 31 s y 2,3 GB— y casts `as u32` sin comprobar podían dar un veredicto incorrecto; ahora comprobaciones de entrada compartidas, una copia por (nodo, regla), lo multiplicativo descontado del presupuesto de δ de F4-U6 y `u32::try_from`); ronda 3 (code-reviewer: el tiempo crecía como conjuntos × |`enum`| —49 s y > 150 s—; ahora máscara de entrada y divisor memorizados por (nodo, regla): 0,3-0,4 s). Revisión 4: 0 Critical, 1 Important de documentación (factor ℓ de los nombres en la cota de tiempo de §7, corregido en el cierre), 4 Suggestion anotadas. Casillas verificadas por los Testers de las rondas 0-3 (`crates/runtime-rs/tests/num.rs`, `crates/automaton/tests/{escalares,conjuncion,sin_reservas,corpus}.rs`, `json::tests::enum_compartido_se_recorre_una_vez`; sondas diferenciales contra `baseline` de hasta 16 000 esquemas y ~113 000 payloads, calibradas, sin discrepancias). Decisiones: D53. Sin commit. Observaciones abiertas en `docs/fase4/pendientes.md` (§2-§29); lo que heredan F4.1c, F4.5a y F4.6, como criterios en sus tareas.
 
 ## Tarea F4.1c: XML: elementos, Glushkov con contadores, atributos y textos
 
@@ -326,6 +327,11 @@ Detalle y decisiones en `tasks/plan.md` («Plan de F4.1»). Una subtarea por vez
 **Tamaño:** M, en el borde alto. Si se pasa: F4.1c1 (elementos, Glushkov y atributos) y F4.1c2 (textos y `fixed`). Si no hay tiempo, D28 (2): facetas de rango de `xs:float`/`xs:double` como `Pending`.
 
 **Arrastra:** `docs/fase3/pendientes.md` §36 (5.5-P3, CR-S1); §37 (5.6-P3, y 5.6-CR-S6: las enumeraciones repetidas por valor las absorbe el comparador, con una prueba); §38 (5.7-P1 y su presupuesto).
+
+**Heredado de la revisión de F4.1b (17 nov, D38; detalle en `docs/fase4/pendientes.md`):**
+- [ ] F4.1b-CR-S5: el marco admite hoy un solo contador (`Trans::count: bool`, disposición `[máscara][contador 0 o 1]`, `tables.rs:109-111`, `194-197`, `core.rs:398-416`); el Glushkov con contadores de 5.7-P1 necesita k contadores por elemento y su reinicio al volver a entrar: índice de contador en `Trans` y en `Check` más una operación de reinicio, documentado en `automata.md` §3.1.
+- [ ] F4.1b-CR2-S3: el presupuesto de transiciones de F4.1c usa la misma cuenta que la precisión de F4-U6 de F4.1b (`docs/fase4/pendientes.md` §22.5): las transiciones y guardas del Glushkov entran en `extra` y se comprueban antes de reservar, para que la regla sea única en JSON y XML; y ningún recorrido por literal, cota o nombre se repite por conjunto (memo por (nodo, regla), como el arreglo de F4.1b ronda 3).
+- [ ] F4.1b-CR-S6: antes de escribir `xml.rs`, extraer las utilidades genéricas de las tablas de `json.rs` (`Builder::{group, state, frame, trans, rule, check, checks, lexeme, trie_states}`, `trie_size`, `label`) a un módulo común, y partir `Analysis::set` (~235 líneas) en objeto, arreglo, número y cadena, para no duplicarlas.
 
 # Tarea F6.7: líneas base (pista B, Bayron; plan del Planner del 13 nov, aprobado el 13 nov con U1-U10)
 
@@ -508,6 +514,10 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 
 **Tamaño:** M (alto). **Arrastra:** §5 L-1, S-2, S-3; D5; D46 (4) enmendado por D51; §22 (parte JSON); `clasificacion.md` §4.2 y §8. **Revisión:** `code-reviewer` (el núcleo lo revisa `security-auditor` en F4.6).
 
+**Heredado de la revisión de F4.1b (17 nov, D38):**
+- [ ] F4.1b-CR3-S2: con F4-B20 la clave de un tipo de marco pasa a ser (`NodeId`, salida) y el mismo nodo aparece en más conjuntos: máscaras de entrada, `enum` ordenados, conjuntos de cadenas, divisores y lexemas siguen memorizados por (nodo, regla) sin depender de la salida; las comprobaciones por salida entran en `extra` antes de reservar; prueba sin reloj como `enum_compartido_se_recorre_una_vez` con un `enum` compartido por muchas ramas de `anyOf`.
+- [ ] F4.1b-CR-S4: `Automaton::stack_words` (`model.rs:181-189`) suma `scalar_slots` (hoy fijado a 0 en `model.rs:115`), que pasa a ser un campo de `Automaton`, para que `validate` no se quede corta cuando la zona escalar tenga tamaño.
+
 ## Tarea F4.5b: `uniqueItems` diferido y literales compuestos
 
 **Descripción:**
@@ -568,6 +578,9 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 - [ ] F4.1a-CR-S9: `Options::new(mode)` o `Default` antes de añadir `Limits` (`core.rs:30-33`).
 - [ ] F4.1a-CR-S7: los dos modos se comparan sabiendo que, en fallo temprano, un payload truncado tras una violación da `schema` y en total `syntax`.
 
+**Heredado de la revisión de F4.1b (17 nov, D38):**
+- [ ] F4.1b-CR-S3 (rendimiento): al cerrar cada número, `compare` e `is_multiple` cuestan O(|cota del esquema|) (hasta 16 MiB): en compilación, quitar los ceros a la izquierda del exponente, decidir al compilar la comprobación si |E| de la cota pasa del rango alcanzable por un lexema de 1 024 bytes, y guardar en `DivisorRef` el e_d ya saturado, para que cada número cueste O(`LEXEME_MAX`).
+- [ ] F4.1b-CR-S7: S-3 cuenta un nodo repetido una sola vez (`allOf:[{$ref:x},{$ref:x}]` con x violado da 1; `jsonschema` da 2): declararlo en `DIVERGENCIAS` junto a las de D47 cuando entre al corpus.
 
 ## Punto de control PC-E (tras F4.6 + F5.1)
 

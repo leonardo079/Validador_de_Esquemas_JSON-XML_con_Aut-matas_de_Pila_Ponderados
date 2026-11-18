@@ -8,5 +8,5 @@
   "registerBytes": 8,
   "maxFrameBytes": 16,
   "products": 0,
-  "pending": 0
+  "deferred": 0
 }

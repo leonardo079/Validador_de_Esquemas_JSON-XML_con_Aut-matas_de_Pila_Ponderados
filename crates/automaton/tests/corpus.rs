@@ -153,8 +153,8 @@ fn non_dpda_da_pending() {
     assert_eq!(n, 4);
 }
 
-/// Los casos que ya compilan dan el `valid`, `violations` y `offset` de
-/// `expected` (adelanto del criterio de F4.1b sobre lo que hay hoy).
+/// Criterio 5 de F4.1b: todos los casos JSON del corpus sin `Pending` dan el
+/// `valid`, `violations` y `offset` de `expected`.
 #[test]
 fn casos_que_compilan_dan_lo_esperado() {
     let mut n = 0;

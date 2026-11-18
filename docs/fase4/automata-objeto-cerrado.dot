@@ -81,7 +81,7 @@ digraph automata {
   q10 -> q9 [label=","];
   q11 -> escalar [label="\"$ / cierra"];
   q11 -> q11 [label="otro 'a'"];
-  q12 -> q12 [label="dígito"];
+  q12 -> q12 [label="byte num"];
   q12 -> escalar [label="num$ / cierra"];
   q13 -> desapila [label="} / desapila [required máscara c=2]"];
   q13 -> q15 [label="\""];
@@ -107,6 +107,6 @@ digraph automata {
   q21 -> q12 [label="num / abre ↩q22 [false ✗ c=1]"];
   q22 -> desapila [label="} / desapila [required máscara c=2]"];
   q22 -> q14 [label=","];
-  q23 -> q23 [label="dígito"];
+  q23 -> q23 [label="byte num"];
   q23 -> escalar [label="num$ / cierra [type entero c=1]"];
 }

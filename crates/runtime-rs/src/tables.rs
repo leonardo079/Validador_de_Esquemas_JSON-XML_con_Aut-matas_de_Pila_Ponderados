@@ -7,9 +7,11 @@
 //! `docs/fase4/automata.md` §3-§4.
 //!
 //! Campos reservados para los combinadores (F4.5a): `Check::slot` (siempre
-//! 0), `Frame::slots`/`Frame::gates` (vacíos) y `Trans::outs` (siempre
-//! [`OUT_IDENTITY`] en las transiciones que apilan). El núcleo de F4.1a no
-//! los lee.
+//! 0), `Frame::slots`/`Frame::gates` (vacíos), `Trans::outs` (siempre
+//! [`OUT_IDENTITY`] en las transiciones que apilan o abren un escalar) y
+//! `Tables::scalar_slots` (la zona global de salidas de la instancia escalar
+//! abierta, 0 palabras; `docs/fase4/automata.md` §3.6). El núcleo de F4.1b
+//! no los lee.
 
 /// Clases fijas de Σ: los eventos estructurales del lexer JSON. Las clases
 /// de carácter de cadena van a continuación ([`class::CHAR`] + la clase del
@@ -37,7 +39,8 @@ pub mod class {
 
     /// Nombres de las clases fijas (DOT y mensajes).
     pub const NAMES: [&str; CHAR as usize] = [
-        "{", "}", "[", "]", ":", ",", "true", "false", "null", "\"", "\"$", "num", "dígito", "num$",
+        "{", "}", "[", "]", ":", ",", "true", "false", "null", "\"", "\"$", "num", "byte num",
+        "num$",
     ];
 
     /// Clases que empiezan un valor.
@@ -103,6 +106,9 @@ pub struct Trans {
     /// Bit de la máscara del marco de la cima que se fija; si ya estaba,
     /// la clave está repetida ([`Fault::Duplicate`]). [`NO_BIT`] si no.
     pub bit: u32,
+    /// Suma 1 (saturado) al contador del marco de la cima (miembros de un
+    /// objeto o elementos de un arreglo) **antes** de apilar nada.
+    pub count: bool,
     /// Comprobaciones `checks[checks .. checks + n_checks]`, ordenadas por
     /// costo.
     pub checks: u32,
@@ -124,6 +130,30 @@ pub enum Test {
     /// Para cada `deps[arg .. arg + len]` cuyo bit está, la máscara
     /// contiene la suya.
     Dependent,
+    /// El contador del marco de la cima es ≥ [`Check::bound`]
+    /// (`minProperties`, `minItems`).
+    CountMin,
+    /// El contador del marco de la cima es ≤ [`Check::bound`]
+    /// (`maxProperties`, `maxItems`).
+    CountMax,
+    /// Los puntos de código de la cadena que se cierra son ≥
+    /// [`Check::bound`] (`minLength`).
+    LengthMin,
+    /// … ≤ [`Check::bound`] (`maxLength`).
+    LengthMax,
+    /// El número que se cierra es ≥ `nums[arg]` (`minimum`).
+    NumMin,
+    /// … > `nums[arg]` (`exclusiveMinimum`).
+    NumExMin,
+    /// … ≤ `nums[arg]` (`maximum`).
+    NumMax,
+    /// … < `nums[arg]` (`exclusiveMaximum`).
+    NumExMax,
+    /// … es igual por valor a uno de `nums[arg .. arg + len]`, ordenados
+    /// por valor y sin repetir (`enum`/`const` de números).
+    NumEnum,
+    /// … es múltiplo de `divisors[arg]` (`multipleOf`).
+    MultipleOf,
 }
 
 /// Una comprobación de una regla del esquema; si falla suma 1 al peso.
@@ -141,11 +171,30 @@ pub struct Check {
     pub len: u32,
 }
 
-/// Tipo de marco: disposición de sus registros en la pila.
+impl Check {
+    /// Cota de 64 bits de las pruebas de contador y longitud: `arg` es la
+    /// mitad baja y `len` la alta.
+    pub const fn bound(&self) -> u64 {
+        (self.arg as u64) | ((self.len as u64) << 32)
+    }
+
+    /// `(arg, len)` de la cota `n` ([`Check::bound`]).
+    pub const fn split(n: u64) -> (u32, u32) {
+        (n as u32, (n >> 32) as u32)
+    }
+}
+
+/// Tipo de marco: disposición de sus registros en la pila. Las palabras
+/// de registros son `[máscara (mask_words)] [contador (0 o 1)]`: la máscara
+/// de nombres va primero y el contador de miembros o de elementos, si lo
+/// hay, en la palabra `mask_words` (F4.1a-CR-S1: [`Test::Mask`] y
+/// [`Test::Dependent`] solo leen las `mask_words` primeras).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Frame {
-    /// Palabras `u64` de registros (la máscara).
+    /// Palabras `u64` de registros (máscara y contador).
     pub words: u32,
+    /// Palabras de la máscara (`words − mask_words` ≤ 1 es el contador).
+    pub mask_words: u32,
     /// Salidas (F4.5a); 0.
     pub slots: u32,
     /// Puertas `gates[gates .. gates + n_gates]` (F4.5a); vacías.
@@ -159,6 +208,21 @@ pub struct Frame {
 pub struct Dep {
     pub bit: u32,
     pub mask: u32,
+}
+
+/// Un lexema de RFC 8259 del esquema (cota, valor de `enum`/`const` o
+/// divisor) en `lexemes[off .. off + len]`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Lexeme {
+    pub off: u32,
+    pub len: u32,
+}
+
+/// Un divisor de `multipleOf`: su lexema (`nums[lexeme]`) y su análisis.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct DivisorRef {
+    pub lexeme: u32,
+    pub div: crate::num::Divisor,
 }
 
 /// Rango de puntos de código `[lo, hi]` de una clase de carácter.
@@ -198,6 +262,14 @@ pub struct Tables<'a> {
     pub frames: &'a [Frame],
     pub masks: &'a [u64],
     pub deps: &'a [Dep],
+    /// Lexemas numéricos del esquema, en `lexemes`.
+    pub nums: &'a [Lexeme],
+    pub lexemes: &'a [u8],
+    pub divisors: &'a [DivisorRef],
+    /// Palabras de la zona global de salidas de la instancia escalar
+    /// abierta, al principio de la memoria del llamador (F4.5a; 0 en
+    /// F4.1b). La pila de marcos empieza detrás.
+    pub scalar_slots: u32,
     /// Clase de carácter de cada punto de código ASCII (128 entradas).
     pub ascii: &'a [u32],
     /// Clases del resto de puntos de código, ordenadas y disjuntas; lo que
@@ -229,6 +301,13 @@ impl<'a> Tables<'a> {
             0 => 0,
             n => self.delta.len() / n as usize,
         }
+    }
+
+    /// El lexema `nums[i]`, o `None` si las tablas son incoherentes.
+    pub fn num(&self, i: u32) -> Option<&'a [u8]> {
+        let l = self.nums.get(i as usize)?;
+        let ini = l.off as usize;
+        self.lexemes.get(ini..ini.checked_add(l.len as usize)?)
     }
 
     /// Ubicación recortada de la regla `rule`, o `""`.

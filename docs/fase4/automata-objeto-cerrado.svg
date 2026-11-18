@@ -402,7 +402,7 @@
 <title>q12&#45;&gt;q12</title>
 <path fill="none" stroke="black" d="M2445.57,-446.45C2444.15,-458.72 2449.95,-469.23 2462.99,-469.23 2472.15,-469.23 2477.74,-464.04 2479.76,-456.69"/>
 <polygon fill="black" stroke="black" points="2483.27,-456.65 2480.4,-446.45 2476.28,-456.21 2483.27,-456.65"/>
-<text text-anchor="middle" x="2462.99" y="-472.03" font-family="Times,serif" font-size="9.00">dígito</text>
+<text text-anchor="middle" x="2462.99" y="-472.03" font-family="Times,serif" font-size="9.00">byte num</text>
 </g>
 <!-- q13&#45;&gt;desapila -->
 <g id="edge37" class="edge">
@@ -654,7 +654,7 @@
 <title>q23&#45;&gt;q23</title>
 <path fill="none" stroke="black" d="M1431.15,-65.1C1423.19,-79.34 1430.79,-93.7 1453.97,-93.7 1471.72,-93.7 1480.34,-85.28 1479.83,-74.95"/>
 <polygon fill="black" stroke="black" points="1483.08,-73.63 1476.79,-65.1 1476.39,-75.69 1483.08,-73.63"/>
-<text text-anchor="middle" x="1453.97" y="-96.5" font-family="Times,serif" font-size="9.00">dígito</text>
+<text text-anchor="middle" x="1453.97" y="-96.5" font-family="Times,serif" font-size="9.00">byte num</text>
 </g>
 </g>
 </svg>

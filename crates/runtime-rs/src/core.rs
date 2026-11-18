@@ -7,12 +7,14 @@
 //! pila es `mem`: cada marco son sus registros seguidos de una cabecera
 //! `(retorno << 32) | tipo`; la altura es la profundidad de anidamiento de
 //! objetos y arreglos, O(d). El escalar abierto (a lo sumo uno) no se apila:
-//! su estado de retorno y los registros del número son globales
-//! (`docs/fase4/automata.md` §3).
+//! su estado de retorno, los registros del número, el lexema del número
+//! (≤ [`LEXEME_MAX`] bytes) y el contador de puntos de código de la cadena
+//! son globales, de tamaño fijo (`docs/fase4/automata.md` §3).
 
-use lexer::json::{Event, NumPart};
+use lexer::json::Event;
 use lexer::{LexError, Pos, Sink, Span};
 
+use crate::num::{self, Number};
 use crate::tables::{class, Check, Fault, Op, Tables, Test, Trans, NO_BIT};
 use crate::weight::Weight;
 
@@ -67,71 +69,15 @@ pub struct Report {
     pub first: Option<ErrorAt>,
 }
 
+/// Longitud máxima del lexema de un número que se guarda
+/// (`docs/00-alcance.md` §4): las comprobaciones que lo leen (rangos,
+/// `multipleOf`, `enum`/`const` de números) dan `limit` si es más largo;
+/// `integer` no lo necesita.
+pub const LEXEME_MAX: usize = 1024;
+
 /// El núcleo se detuvo (error de peso ∞ o fallo temprano).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Stop;
-
-/// Registros del número abierto: bastan para decidir si es entero sin
-/// guardar el lexema (`docs/fase4/automata.md` §3.3).
-#[derive(Clone, Copy, Debug, Default)]
-struct Number {
-    /// Alguna cifra de la mantisa (parte entera y fracción) no es 0.
-    nonzero: bool,
-    /// Ceros finales de la mantisa, saturado.
-    zeros: u64,
-    /// Cifras de la fracción, saturado.
-    frac: u64,
-    /// Valor absoluto del exponente, saturado en [`EXP_CAP`].
-    exp: u64,
-    exp_neg: bool,
-}
-
-/// Tope del exponente: mayor que cualquier número de cifras alcanzable, así
-/// que saturar no cambia la respuesta de [`Number::is_integer`].
-const EXP_CAP: u64 = 1 << 62;
-
-impl Number {
-    fn byte(&mut self, part: NumPart, b: u8) {
-        let d = u64::from(b.wrapping_sub(b'0'));
-        match part {
-            NumPart::Int | NumPart::Frac => {
-                if part == NumPart::Frac {
-                    self.frac = self.frac.saturating_add(1);
-                }
-                if d == 0 {
-                    self.zeros = self.zeros.saturating_add(1);
-                } else {
-                    self.nonzero = true;
-                    self.zeros = 0;
-                }
-            }
-            NumPart::ExpSign => self.exp_neg = b == b'-',
-            NumPart::Exp => {
-                self.exp = if self.exp > EXP_CAP / 10 {
-                    EXP_CAP
-                } else {
-                    (self.exp * 10 + d).min(EXP_CAP)
-                }
-            }
-            NumPart::Minus | NumPart::Dot | NumPart::ExpMark => {}
-        }
-    }
-
-    /// Mantisa D (cifras de la parte entera y la fracción), valor
-    /// D · 10^(e − |fracción|): es entero si D = 0 o si e + ceros finales de
-    /// D ≥ |fracción|.
-    fn is_integer(&self) -> bool {
-        if !self.nonzero {
-            return true;
-        }
-        let e = if self.exp_neg {
-            -i128::from(self.exp)
-        } else {
-            i128::from(self.exp)
-        };
-        e + i128::from(self.zeros) >= i128::from(self.frac)
-    }
-}
 
 /// El ejecutor: estado de control, pila en `mem`, registros globales y
 /// peso acumulado.
@@ -139,7 +85,10 @@ impl Number {
 pub struct Core<'t, 'm> {
     t: Tables<'t>,
     mem: &'m mut [u64],
-    /// Palabras de `mem` ocupadas.
+    /// Palabras de `mem` de la zona global de salidas del escalar abierto
+    /// ([`Tables::scalar_slots`]); la pila empieza aquí.
+    base: usize,
+    /// Palabras de `mem` ocupadas (zona y pila).
     sp: usize,
     depth: usize,
     max_depth: usize,
@@ -147,6 +96,12 @@ pub struct Core<'t, 'm> {
     /// Estado de retorno del escalar abierto.
     scalar_ret: u32,
     num: Number,
+    /// Lexema del número abierto: sus primeros [`LEXEME_MAX`] bytes y su
+    /// longitud (saturada).
+    lex: [u8; LEXEME_MAX],
+    lex_len: usize,
+    /// Puntos de código de la cadena abierta (tras los escapes), saturado.
+    chars: u64,
     mode: Mode,
     weight: Weight,
     first: Option<ErrorAt>,
@@ -155,19 +110,25 @@ pub struct Core<'t, 'm> {
 }
 
 impl<'t, 'm> Core<'t, 'm> {
-    /// Ejecutor en q₀ con la pila vacía (Z₀). `mem` es la pila: cada marco
-    /// ocupa `1 + Frame::words` palabras; si no cabe uno, es un error de
-    /// límite.
+    /// Ejecutor en q₀ con la pila vacía (Z₀). `mem` es la zona global del
+    /// escalar ([`Tables::scalar_slots`] palabras) seguida de la pila: cada
+    /// marco ocupa `1 + Frame::words` palabras; si no cabe uno, es un error
+    /// de límite.
     pub fn new(t: Tables<'t>, opts: &Options, mem: &'m mut [u64]) -> Core<'t, 'm> {
+        let base = t.scalar_slots as usize;
         Core {
             state: t.start,
             t,
             mem,
-            sp: 0,
+            base,
+            sp: base,
             depth: 0,
             max_depth: 0,
             scalar_ret: 0,
             num: Number::default(),
+            lex: [0; LEXEME_MAX],
+            lex_len: 0,
+            chars: 0,
             mode: opts.mode,
             weight: Weight::ZERO,
             first: None,
@@ -201,15 +162,26 @@ impl<'t, 'm> Core<'t, 'm> {
             Event::True => class::TRUE,
             Event::False => class::FALSE,
             Event::Null => class::NULL,
-            Event::StringBegin => class::STRING_BEGIN,
-            Event::StringChar(c) => class::CHAR.saturating_add(self.t.char_class(c)),
+            Event::StringBegin => {
+                self.chars = 0;
+                class::STRING_BEGIN
+            }
+            Event::StringChar(c) => {
+                self.chars = self.chars.saturating_add(1);
+                class::CHAR.saturating_add(self.t.char_class(c))
+            }
             Event::StringEnd => class::STRING_END,
             Event::NumberBegin => {
                 self.num = Number::default();
+                self.lex_len = 0;
                 class::NUMBER_BEGIN
             }
             Event::Number(part, b) => {
                 self.num.byte(part, b);
+                if let Some(x) = self.lex.get_mut(self.lex_len) {
+                    *x = b;
+                }
+                self.lex_len = self.lex_len.saturating_add(1);
                 class::NUMBER_BYTE
             }
             Event::NumberEnd => class::NUMBER_END,
@@ -228,7 +200,7 @@ impl<'t, 'm> Core<'t, 'm> {
     /// en F con la pila vacía; si no, es un error de sintaxis (entrada
     /// incompleta) en `end`.
     pub fn finish(mut self, end: Pos) -> Report {
-        if !self.stopped && (self.state != self.t.accept || self.sp != 0) {
+        if !self.stopped && (self.state != self.t.accept || self.sp != self.base) {
             self.stop(ErrorKind::Syntax, end);
         }
         Report {
@@ -283,6 +255,9 @@ impl<'t, 'm> Core<'t, 'm> {
                 None => return self.fail(Fault::Internal, at),
             }
         }
+        if tr.count && self.count().is_none() {
+            return self.fail(Fault::Internal, at);
+        }
         self.run_checks(&tr, at)?;
         match tr.op {
             Op::Move => self.state = tr.next,
@@ -315,8 +290,8 @@ impl<'t, 'm> Core<'t, 'm> {
         };
         for c in checks {
             match self.holds(c) {
-                Some(true) => {}
-                Some(false) => {
+                Ok(true) => {}
+                Ok(false) => {
                     self.weight = self.weight.times(Weight::ONE);
                     if self.first.is_none() {
                         self.first = Some(error_at(at, Some(c.rule)));
@@ -326,41 +301,122 @@ impl<'t, 'm> Core<'t, 'm> {
                         return Err(Stop);
                     }
                 }
-                None => return self.fail(Fault::Internal, at),
+                Err(f) => return self.fail(f, at),
             }
         }
         Ok(())
     }
 
-    /// Si se cumple `c`; `None` si las tablas son incoherentes.
-    fn holds(&self, c: &Check) -> Option<bool> {
-        match c.test {
-            Test::Fails => Some(false),
-            Test::Integer => Some(self.num.is_integer()),
-            Test::Mask => self.contains(c.arg),
+    /// Si se cumple `c`: [`Fault::Internal`] si las tablas son
+    /// incoherentes y [`Fault::Limit`] si hace falta un lexema de más de
+    /// [`LEXEME_MAX`] bytes.
+    fn holds(&self, c: &Check) -> Result<bool, Fault> {
+        let internal = Fault::Internal;
+        Ok(match c.test {
+            Test::Fails => false,
+            Test::Integer => self.num.is_integer(),
+            Test::Mask => self.contains(c.arg).ok_or(internal)?,
             Test::Dependent => {
                 let ini = c.arg as usize;
-                let deps = self.t.deps.get(ini..ini.saturating_add(c.len as usize))?;
+                let deps = self
+                    .t
+                    .deps
+                    .get(ini..ini.saturating_add(c.len as usize))
+                    .ok_or(internal)?;
                 for d in deps {
-                    if self.bit(d.bit)? && !self.contains(d.mask)? {
-                        return Some(false);
+                    let b = self.bit(d.bit).ok_or(internal)?;
+                    if b && !self.contains(d.mask).ok_or(internal)? {
+                        return Ok(false);
                     }
                 }
-                Some(true)
+                true
             }
-        }
+            Test::CountMin => self.counter().ok_or(internal)? >= c.bound(),
+            Test::CountMax => self.counter().ok_or(internal)? <= c.bound(),
+            Test::LengthMin => self.chars >= c.bound(),
+            Test::LengthMax => self.chars <= c.bound(),
+            Test::NumMin | Test::NumExMin | Test::NumMax | Test::NumExMax => {
+                let o = num::compare(self.lexeme()?, self.t.num(c.arg).ok_or(internal)?);
+                match c.test {
+                    Test::NumMin => o.is_ge(),
+                    Test::NumExMin => o.is_gt(),
+                    Test::NumMax => o.is_le(),
+                    _ => o.is_lt(),
+                }
+            }
+            Test::NumEnum => {
+                let x = self.lexeme()?;
+                // Búsqueda binaria en los valores ordenados: O(log n) comparaciones.
+                let (mut lo, mut hi) = (c.arg, c.arg.checked_add(c.len).ok_or(internal)?);
+                let mut found = false;
+                while lo < hi {
+                    let mid = lo + (hi - lo) / 2;
+                    match num::compare(x, self.t.num(mid).ok_or(internal)?) {
+                        core::cmp::Ordering::Equal => {
+                            found = true;
+                            break;
+                        }
+                        core::cmp::Ordering::Less => hi = mid,
+                        core::cmp::Ordering::Greater => lo = mid + 1,
+                    }
+                }
+                found
+            }
+            Test::MultipleOf => {
+                let d = self.t.divisors.get(c.arg as usize).ok_or(internal)?;
+                let dl = self.t.num(d.lexeme).ok_or(internal)?;
+                num::is_multiple(self.lexeme()?, dl, &d.div)
+            }
+        })
     }
 
-    /// Registros del marco de la cima: `(inicio, palabras)` en `mem`.
-    fn top(&self) -> Option<(usize, usize)> {
-        let header = *self.mem.get(self.sp.checked_sub(1)?)?;
+    /// El lexema del número que se cierra, o [`Fault::Limit`] si no cupo.
+    fn lexeme(&self) -> Result<&[u8], Fault> {
+        self.lex.get(..self.lex_len).ok_or(Fault::Limit)
+    }
+
+    /// Registros del marco de la cima: `(inicio, palabras, palabras de la
+    /// máscara)` en `mem`; `None` con la pila vacía.
+    fn top(&self) -> Option<(usize, usize, usize)> {
+        if self.sp <= self.base {
+            return None;
+        }
+        let header = *self.mem.get(self.sp - 1)?;
         let frame = self.t.frames.get((header & 0xFFFF_FFFF) as usize)?;
         let words = frame.words as usize;
-        Some((self.sp.checked_sub(1 + words)?, words))
+        let mask = frame.mask_words as usize;
+        if mask > words {
+            return None;
+        }
+        let ini = self.sp.checked_sub(1 + words)?;
+        if ini < self.base {
+            return None;
+        }
+        Some((ini, words, mask))
+    }
+
+    /// El contador del marco de la cima (la palabra tras la máscara).
+    fn counter(&self) -> Option<u64> {
+        let (ini, words, mask) = self.top()?;
+        if words <= mask {
+            return None;
+        }
+        self.mem.get(ini + mask).copied()
+    }
+
+    /// Suma 1 al contador del marco de la cima (saturado).
+    fn count(&mut self) -> Option<()> {
+        let (ini, words, mask) = self.top()?;
+        if words <= mask {
+            return None;
+        }
+        let w = self.mem.get_mut(ini + mask)?;
+        *w = w.saturating_add(1);
+        Some(())
     }
 
     fn bit(&self, bit: u32) -> Option<bool> {
-        let (ini, words) = self.top()?;
+        let (ini, _, words) = self.top()?;
         let w = (bit / 64) as usize;
         if w >= words {
             return None;
@@ -370,7 +426,7 @@ impl<'t, 'm> Core<'t, 'm> {
 
     /// Fija `bit` en la máscara de la cima: `Some(false)` si ya estaba.
     fn set_bit(&mut self, bit: u32) -> Option<bool> {
-        let (ini, words) = self.top()?;
+        let (ini, _, words) = self.top()?;
         let w = (bit / 64) as usize;
         if w >= words {
             return None;
@@ -384,7 +440,7 @@ impl<'t, 'm> Core<'t, 'm> {
 
     /// Si la máscara de la cima contiene `masks[mask .. mask + palabras]`.
     fn contains(&self, mask: u32) -> Option<bool> {
-        let (ini, words) = self.top()?;
+        let (ini, _, words) = self.top()?;
         let m = mask as usize;
         let want = self.t.masks.get(m..m.checked_add(words)?)?;
         let have = self.mem.get(ini..ini + words)?;
@@ -409,7 +465,7 @@ impl<'t, 'm> Core<'t, 'm> {
 
     /// Desapila y devuelve el estado de retorno.
     fn pop(&mut self) -> Option<u32> {
-        let (ini, _) = self.top()?;
+        let (ini, _, _) = self.top()?;
         let header = self.mem[self.sp - 1];
         self.sp = ini;
         self.depth -= 1;
@@ -431,56 +487,5 @@ fn error_at(at: Pos, rule: Option<u32>) -> ErrorAt {
         line: at.line,
         column: at.column,
         rule,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn numero(lexema: &str) -> Number {
-        let mut n = Number::default();
-        let mut part = NumPart::Int;
-        for b in lexema.bytes() {
-            part = match (part, b) {
-                (_, b'-') if part == NumPart::Int && n.frac == 0 && !n.nonzero && n.zeros == 0 => {
-                    NumPart::Minus
-                }
-                (_, b'.') => NumPart::Dot,
-                (_, b'e' | b'E') => NumPart::ExpMark,
-                (NumPart::ExpMark, b'+' | b'-') => NumPart::ExpSign,
-                (NumPart::ExpMark | NumPart::ExpSign | NumPart::Exp, _) => NumPart::Exp,
-                (NumPart::Dot | NumPart::Frac, _) => NumPart::Frac,
-                _ => NumPart::Int,
-            };
-            n.byte(part, b);
-        }
-        n
-    }
-
-    /// Entero = mantisa nula o exponente + ceros finales ≥ cifras de la
-    /// fracción (`docs/fase4/automata.md` §3.3).
-    #[test]
-    fn entero_sin_lexema() {
-        for l in [
-            "0", "-0", "1.0", "1e2", "10e-1", "100e-2", "0.000e-9", "1.50e1",
-        ] {
-            assert!(numero(l).is_integer(), "{l}");
-        }
-        for l in ["1.5", "1e-1", "0.10", "100e-3", "-2.25e1", "1.01e1"] {
-            assert!(!numero(l).is_integer(), "{l}");
-        }
-    }
-
-    #[test]
-    fn exponente_satura() {
-        let mut n = numero("1.5e");
-        for _ in 0..100 {
-            n.byte(NumPart::Exp, b'9');
-        }
-        assert_eq!(n.exp, EXP_CAP);
-        assert!(n.is_integer());
-        n.exp_neg = true;
-        assert!(!n.is_integer());
     }
 }
