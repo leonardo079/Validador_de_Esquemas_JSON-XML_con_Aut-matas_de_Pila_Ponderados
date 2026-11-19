@@ -73,7 +73,17 @@ aquí solo se remite a ellas.
 - **Dónde:** `server/src/api.rs:68` (`Router`).
 - **Tarea:** F7.4, si hace falta.
 
-### 5. Lo que hereda la web de la Fase 3 (§9, §10 y §15 de `docs/fase3/pendientes.md`)
+### 5. Lo que hereda la web de la Fase 3 (§9, §10 y §15 de `docs/fase3/pendientes.md`) — RESUELTO en F7.4 salvo §9
+
+- **Resuelto en F7.4 (19 nov, D56):** la web muestra todo como texto (React, sin
+  `innerHTML` ni `dangerouslySetInnerHTML`), lo prueba
+  `web/src/Resultado.test.tsx` («un nombre de propiedad hostil en la IR se muestra como
+  texto») con `<img src=x onerror="alert(1)">` en la IR, el `summary`, el mensaje del
+  autómata y los errores del 422; la IR se muestra **cruda** (`irCruda`, `web/src/api.ts`),
+  sin `JSON.parse`, así que los contadores `u64::MAX` no se redondean (§10; prueba «la IR
+  se muestra cruda»). Los contadores del resumen del autómata sí pasan por `JSON.parse`,
+  pero son tamaños de tablas (≤ 2²⁰). Sigue abierto §9 (aviso de `allOf` +
+  `additionalProperties: false`): sin canal de avisos en el contrato.
 
 - **Estado:** la IR de la respuesta es el JSON v2 de `schemac ir`, tal cual:
   - §9: no hay aviso para «`allOf` + `additionalProperties: false`». El contrato de U1

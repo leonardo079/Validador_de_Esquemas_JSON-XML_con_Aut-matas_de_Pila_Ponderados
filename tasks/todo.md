@@ -634,3 +634,16 @@ Detalle, decisiones U1-U8 y B1-B9 en `tasks/plan.md` («F7.1: backend axum»).
 
 **Tamaño:** M (≈ 4-5 h). Recorte si se va de tiempo: el tope de la IR (B7) y `automaton` como F7.1b, con `automaton` siempre `null`.
 **Estado (19 nov):** APROBADA tras **3 rondas de corrección**: ronda 1 (Tester: 413 por `Content-Length` no inmediato; máximos de configuración), ronda 2 (code-reviewer: prueba del 504 dependiente del reloj; security-auditor: memoria de cuerpos sin acotar → presupuesto de 32 MiB y plazo de lectura de 10 s), ronda 3 (security-auditor: amplificación con `chunked` de 1 byte → lectura frame a frame en un búfer de lo reservado). Por decisión del usuario (proyecto académico; menos agentes), la ronda 3 la verificó el orquestador sin Tester ni Reviewers nuevos: `lint OK` y 612 pruebas del workspace en verde en Windows, `cargo test -p server --release` 11 + 26, `unsafe-check` limpio; la sonda de SEC2-H1 contra el binario quedó sin correr (Docker apagado; la cota la prueba `api::tests::frames_de_un_byte_en_un_solo_bufer`). Decisión D55. Observaciones en `docs/fase7/pendientes.md` §1-§12; contrato por confirmar con Leonardo (§9).
+
+# Tarea F7.4: frontend, editor de esquema (pista B, Bayron; 19 nov, D56)
+
+Hecha directamente por el orquestador, sin Planner/Tester/Reviewers (decisión del usuario del 19 nov: proyecto académico, menos agentes).
+
+- [x] `web/` con React 18 + TypeScript + Vite y Monaco servido desde el bundle (sin CDN); versiones fijadas en `package-lock.json`.
+- [x] Compila contra `POST /api/schemas` (D55) enviando el esquema crudo; formato detectado como el servidor (D22).
+- [x] 200: resumen, `id`, resumen del autómata (o `pending`/`limit` con su mensaje), IR v2 cruda (sin redondear `u64::MAX`, §10 de la Fase 3) o aviso de IR omitida.
+- [x] 422: errores (≤ 100 y total) marcados en el editor; pulsar uno lleva el cursor a su línea y columna. 413/408/503/504/500/red: mensaje y `Retry-After`.
+- [x] Todo como texto, sin `innerHTML`: prueba con `<img src=x onerror=…>` en la IR, el resumen y los errores (`web/src/Resultado.test.tsx`).
+- [x] `npm test` (18 pruebas), `tsc --noEmit` y `npm run build` en verde; probado de punta a punta con `cargo run -p server --release` + `npm run dev` (página, `/api/health`, XSD 200 y esquema con errores 422 por el proxy).
+
+**Estado (19 nov):** hecha. Pendiente para F7.6: vistas del autómata, árbol de derivación y métricas; para F7.5: descargar el código y validar payloads.
