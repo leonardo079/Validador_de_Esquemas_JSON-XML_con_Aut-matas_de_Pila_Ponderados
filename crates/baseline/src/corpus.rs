@@ -308,7 +308,9 @@ fn expected(x: &Value) -> Result<Expected, String> {
 }
 
 /// Ejecuta un caso con la línea base de su formato: compila el esquema
-/// (desde su texto original) y valida el payload.
+/// (desde su texto original) y valida el payload. Los casos JSON van con
+/// [`JsonBaseline`]; los XML, con `XmlBaseline` (feature `libxml2`), que se
+/// compila en el hilo de `stack`.
 ///
 /// `Err` si la línea base no puede dar un resultado: payload de un generador,
 /// caso XML sin la feature `libxml2`, caso con `limits` o esquema que no
@@ -318,12 +320,30 @@ pub fn run_case(case: &Case, stack: &Stack) -> Result<Outcome, Unavailable> {
         Payload::Bytes(b) => b,
         Payload::Generator { name, .. } => return Err(Unavailable::Generator(name.clone())),
     };
-    if case.format == Format::Xml {
-        return Err(Unavailable::XmlDisabled);
-    }
     if case.limits.is_some() {
         return Err(Unavailable::CaseLimits);
     }
-    let base = JsonBaseline::compile_text(&case.schema_text).map_err(Unavailable::Compile)?;
+    match case.format {
+        Format::Json => {
+            let base =
+                JsonBaseline::compile_text(&case.schema_text).map_err(Unavailable::Compile)?;
+            Ok(base.validate(stack, bytes))
+        }
+        Format::Xml => validar_xml(&case.schema_text, stack, bytes),
+    }
+}
+
+/// Un caso XML con libxml2 (F6.7b): el XSD se compila dentro del hilo del
+/// testigo, porque `XmlBaseline` no es `Send`.
+#[cfg(feature = "libxml2")]
+fn validar_xml(xsd: &[u8], stack: &Stack, bytes: &[u8]) -> Result<Outcome, Unavailable> {
+    let base = crate::XmlBaseline::compile(stack, xsd).map_err(Unavailable::Compile)?;
     Ok(base.validate(stack, bytes))
+}
+
+/// Sin la feature `libxml2`, un caso XML no está disponible (CR-S9: es la
+/// única comprobación; un caso XML con `limits` da antes `CaseLimits`).
+#[cfg(not(feature = "libxml2"))]
+fn validar_xml(_xsd: &[u8], _stack: &Stack, _bytes: &[u8]) -> Result<Outcome, Unavailable> {
+    Err(Unavailable::XmlDisabled)
 }

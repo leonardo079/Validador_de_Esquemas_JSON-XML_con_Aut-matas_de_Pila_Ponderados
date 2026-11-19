@@ -1,7 +1,7 @@
 # Tareas comunes del proyecto. En Windows sin `make`, usar scripts/lint.ps1.
 C_SOURCES := $(shell find crates/runtime-c -name '*.c' -o -name '*.h' 2>/dev/null)
 
-.PHONY: all build test fmt fmt-check clippy c-fmt-check unsafe-check lint coverage docs docs-check doradas clean
+.PHONY: all build test test-baseline-xml fmt fmt-check clippy c-fmt-check unsafe-check lint coverage docs docs-check doradas clean
 
 all: build
 
@@ -10,6 +10,24 @@ build:
 
 test:
 	cargo test --workspace
+
+# Línea base XML (feature `libxml2` de `crates/baseline`, F6.7b): libxml2,
+# pkg-config y libclang dentro de Docker, para no pedirlos en la máquina. La
+# imagen fija Rust por versión y digest; las dependencias se descargan con
+# red en un volumen de caché y las pruebas y clippy corren SIN red, con el
+# repositorio en solo lectura y el `target` en otro volumen
+# (`docs/fase6/linea-base.md` §7.3). El paso de pruebas corre además sin
+# capacidades ni escalada de privilegios. Mantener a la par con
+# `scripts/test-baseline-xml.ps1` (Windows sin make), flag por flag.
+BASELINE_XML_IMAGE := validador-baseline-xml:1
+BASELINE_XML_RUN = docker run --rm -v "$(CURDIR)":/src:ro \
+	-v validador-cargo-registry:/usr/local/cargo/registry \
+	-v validador-baseline-xml-target:/target -w /src
+test-baseline-xml:
+	docker build -t $(BASELINE_XML_IMAGE) crates/baseline/docker
+	$(BASELINE_XML_RUN) $(BASELINE_XML_IMAGE) cargo fetch --locked
+	$(BASELINE_XML_RUN) --network none --cap-drop ALL --security-opt no-new-privileges \
+		$(BASELINE_XML_IMAGE) sh scripts/test-baseline-xml.sh
 
 fmt:
 	cargo fmt --all

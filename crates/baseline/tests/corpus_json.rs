@@ -152,7 +152,9 @@ fn una_divergencia_que_ya_no_diverge_es_un_fallo() {
 }
 
 /// Sin la feature `libxml2`, los casos XML no se ejecutan: `run_case` lo
-/// dice con un error, nunca con un pánico.
+/// dice con un error, nunca con un pánico. Con la feature, los casos XML los
+/// prueba `tests/corpus_xml.rs`.
+#[cfg(not(feature = "libxml2"))]
 #[test]
 fn sin_libxml2_un_caso_xml_no_esta_disponible() {
     let casos = corpus::casos().unwrap_or_else(|e| panic!("{e}"));

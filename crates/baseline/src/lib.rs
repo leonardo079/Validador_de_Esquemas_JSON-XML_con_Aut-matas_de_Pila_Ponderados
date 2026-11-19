@@ -15,7 +15,11 @@
 //!
 //! La línea base JSON es `serde_json` (DOM) + `jsonschema` (Draft 2020-12,
 //! sin red, `format` como anotación y motor de `pattern` lineal). La de XML
-//! (libxml2) irá detrás de la feature `libxml2` (F6.7b).
+//! es libxml2 (DOM + XSD 1.0, sin red, sin DTD ni entidades declaradas, D8),
+//! detrás de la feature `libxml2`, apagada por defecto porque necesita
+//! libxml2, `pkg-config` y libclang (F6.7b; se prueba en Docker,
+//! `docs/fase6/linea-base.md` §7). `XmlBaseline` no es `Send`: se compila
+//! dentro del hilo de [`with_stack`] y su `compile` pide el testigo.
 //!
 //! **Pila (D7).** Parsear y validar el árbol es recursivo (profundidad ≤ 256,
 //! [`MAX_DEPTH_LIMIT`]). Por eso [`JsonBaseline::parse`],
@@ -33,9 +37,13 @@ use std::marker::PhantomData;
 
 pub mod corpus;
 mod json;
+#[cfg(feature = "libxml2")]
+mod xml;
 
 pub use corpus::run_case;
 pub use json::{JsonBaseline, JsonDom};
+#[cfg(feature = "libxml2")]
+pub use xml::{XmlBaseline, XmlDom};
 
 /// Pila del hilo de [`with_stack`] y del hilo que compila un esquema: 8 MiB,
 /// como `schemac` (`crates/cli/src/main.rs`). El hilo principal de Windows
@@ -150,8 +158,9 @@ impl Outcome {
 /// los valores por defecto: `Limits { max_depth: 16, ..Limits::default() }`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Limits {
-    /// Contenedores (`[`, `{`) abiertos a la vez, contando la raíz: con 256,
-    /// 256 `[` anidados se aceptan y 257 son [`Kind::Limit`]. Se recorta a
+    /// Contenedores abiertos a la vez, contando la raíz: `[` y `{` en JSON,
+    /// elementos en XML (CR-S8). Con 256, 256 `[` (o 256 elementos) anidados
+    /// se aceptan y el 257 es [`Kind::Limit`]. Se recorta a
     /// [`MAX_DEPTH_LIMIT`].
     pub max_depth: u32,
     /// Violaciones que se guardan en [`Outcome::violations`]: 100 por

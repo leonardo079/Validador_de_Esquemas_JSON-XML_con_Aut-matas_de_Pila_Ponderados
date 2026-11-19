@@ -376,8 +376,9 @@ fn recortar(s: &str) -> String {
 /// carácter, con `…` si se cortó). Se escribe en un búfer que deja de
 /// aceptar texto al llenarse, así que un `Display` que escribe por partes no
 /// llega a formatear el resto (SEC-M1, SEC-L1: los mensajes de `jsonschema`
-/// copian la instancia y el esquema).
-fn acotado(d: impl fmt::Display) -> String {
+/// copian la instancia y el esquema). También recorta los de libxml2
+/// (`xml.rs`).
+pub(crate) fn acotado(d: impl fmt::Display) -> String {
     struct Acotado(String);
 
     impl fmt::Write for Acotado {

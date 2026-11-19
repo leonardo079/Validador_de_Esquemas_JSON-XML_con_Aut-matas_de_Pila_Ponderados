@@ -395,13 +395,13 @@ La compilación del esquema, el parseo y la validación se pueden llamar por sep
 - Se ejecuta en Linux o Docker con un objetivo del `Makefile`.
 
 **Criterios de aceptación:**
-- [ ] Sin la feature, `cargo build --workspace --all-targets` y `cargo test --workspace` no piden libxml2 (verificado en la máquina Windows sin libxml2); sin la feature, `run_case` sobre un caso XML devuelve `Err(Unavailable)`, nunca un pánico.
-- [ ] Con la feature, `cargo test -p baseline --features libxml2` y `cargo clippy -p baseline --all-targets --features libxml2 -- -D warnings` pasan en Docker:
+- [x] Sin la feature, `cargo build --workspace --all-targets` y `cargo test --workspace` no piden libxml2 (verificado en la máquina Windows sin libxml2); sin la feature, `run_case` sobre un caso XML devuelve `Err(Unavailable)`, nunca un pánico.
+- [x] Con la feature, `cargo test -p baseline --features libxml2` y `cargo clippy -p baseline --all-targets --features libxml2 -- -D warnings` pasan en Docker:
   - `valid-xml-pedido-01` → válido; `malformed-xml-billion-laughs-01` → `Malformed`;
   - casos unitarios: etiqueta sin cerrar → `Malformed` con línea, columna y offset; falta `id` requerido → `Schema` con 1 violación; `<total>abc</total>` → `Schema`; entidad externa `SYSTEM "file:///etc/passwd"` → `Malformed`, sin que el contenido del archivo aparezca en la salida ni en los errores; anidamiento de 300 niveles → error controlado sin caída; XSD con `xs:import` → error de compilación sin red.
-- [ ] Objetivo `make test-baseline-xml`: `docker run` con una imagen `rust` fijada, `apt-get install libxml2-dev libclang-dev pkg-config`, `CARGO_TARGET_DIR` aparte, prueba + clippy con la feature. Bayron lo ejecuta en verde; el comando y su salida quedan en la documentación.
-- [ ] `docs/fase6/linea-base.md`, parte XML: configuración segura, D8, cómo ejecutarlo y divergencias (`encoding` distinto de UTF-8 aceptado por libxml2, offsets y XPath frente a `pointer`, recuento de errores de libxml2); pendientes nuevos en `pendientes.md`.
-- [ ] `make lint` y `make test` siguen en verde sin la feature.
+- [x] Objetivo `make test-baseline-xml`: `docker run` con una imagen `rust` fijada, `apt-get install libxml2-dev libclang-dev pkg-config`, `CARGO_TARGET_DIR` aparte, prueba + clippy con la feature. Bayron lo ejecuta en verde; el comando y su salida quedan en la documentación.
+- [x] `docs/fase6/linea-base.md`, parte XML: configuración segura, D8, cómo ejecutarlo y divergencias (`encoding` distinto de UTF-8 **rechazado** (B35, D54, coincide con `00-alcance.md` §1.2; antes se pensaba aceptarlo), offsets y XPath frente a `pointer`, recuento de errores de libxml2); pendientes nuevos en `pendientes.md`.
+- [x] `make lint` y `make test` siguen en verde sin la feature.
 
 **Verificación:** `make test-baseline-xml` (Docker); `cargo test --workspace` en Windows sin libxml2; `make lint`.
 
@@ -410,6 +410,8 @@ La compilación del esquema, el parseo y la validación se pueden llamar por sep
 **Archivos probables:** `crates/baseline/{Cargo.toml,src/xml.rs,src/lib.rs}`, `crates/baseline/tests/corpus_xml.rs`, `Makefile`, `docs/fase6/{linea-base.md,pendientes.md}`.
 
 **Tamaño:** M. Después de F6.7a.
+
+**Estado (18 nov):** APROBADA tras **1 ronda de corrección** (devuelta por el Tester y los Reviewers de la ronda 0: codificación no UTF-8 con falso `Limit` y segunda capa de D8 sin prueba —CR-I1/SEC-M1/O1, CR-I3/O2—, y `es_limite` sin «too big» —CR-I2—). Revisión de la ronda 1: code-reviewer APROBADO, security-auditor APROBADA (0 Critical/High/Medium; 3 Low documentados). Casillas verificadas por el Tester de la ronda 1. Pruebas: `crates/baseline/tests/xml.rs` (41), `tests/corpus_xml.rs` (2), 3 unitarias en `src/xml.rs` y 3 doc-tests `compile_fail`, en Docker con `scripts/test-baseline-xml.ps1`; sin la feature, 575 pruebas en Windows con las dos pistas mezcladas (tras `77f02c2`). El `make test-baseline-xml` en Linux queda para Leonardo (punto de control). Decisión D54. Observaciones abiertas en `docs/fase6/pendientes.md` §21-§27 (§14 y §21 bloqueantes para F7; §26 por confirmar con Leonardo; §27 UCS-4).
 
 ## Punto de control tras F6.7a y F6.7b
 

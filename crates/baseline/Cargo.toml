@@ -20,6 +20,17 @@ serde_json = { version = "1.0.154", features = ["float_roundtrip", "unbounded_de
 # falla (B5).
 jsonschema = { version = "0.61.2", default-features = false }
 base64 = "0.23.1"
+# Línea base XML (F6.7b, U4): libxml2 por FFI. Opcional porque su `build.rs`
+# exige libxml2, `pkg-config` y libclang (bindgen), que no hay en Windows:
+# sin la feature, `cargo build`/`cargo test` del workspace no los piden y los
+# casos XML dan `Unavailable::XmlDisabled`. Se prueba en Docker
+# (`make test-baseline-xml`, `docs/fase6/linea-base.md` §7).
+libxml = { version = "=0.3.23", optional = true }
+
+[features]
+default = []
+# Línea base XML con libxml2 (DOM + XSD).
+libxml2 = ["dep:libxml"]
 
 [lints]
 workspace = true
