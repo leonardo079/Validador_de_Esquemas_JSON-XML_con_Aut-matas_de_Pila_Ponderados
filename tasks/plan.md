@@ -228,3 +228,40 @@ Pista A: F4.1a → F4.1b → F4.1c → F4.6 → F5.1 → [PC-E] → F4.4b → F4
 
 Riesgos: calendario (≈ 11 M en 4 días; depende de U9 y de la ayuda de Bayron); F5.2 (portar el núcleo a C) va último (mantener el núcleo pequeño y basado en tablas; si el mié 18 a las 18 h F4.5a no está, F5.2 empieza igual); explosión de tipos de marco (tope por producto, presupuesto 2²⁰, `limit` con tamaño); corrección Unicode de las expresiones regulares (oráculo `matches`, proptest); colisiones de hash (clave secreta, cota documentada); F6.7 tarde (comparar con `expected`); decisiones compartidas sin aprobar (U11, U13, U14, U16, U18: provisionales; proponerlas a Bayron en un solo mensaje); corpus pequeño (casos nuevos en F4.4b-F4.6).
 Orden de recorte (ninguno deja de cumplir el PDF): (1) D29 (`pattern` en enumeraciones y `default`/`fixed`); (2) literales compuestos de `enum`/`const` rechazados con mensaje [compartida: §2.2]; (3) simulación paralela en marcos escalares → `limit` con el tamaño; (4) Hopcroft solo sobre los AFD de `pattern`; (5) resumen mínimo de `schemac automaton`. No se recortan: determinismo + Hopcroft, `pattern` → AFD con rechazo anti-ReDoS, producto acotado de `anyOf`/`allOf`, `not`/`oneOf` como puertas, `uniqueItems` diferido, el ejecutor sobre el corpus, los emisores Rust y C.
+
+---
+
+# F7.1: backend axum (pista B, Bayron; Planner del 18 nov, aprobado por Bayron el 18 nov)
+
+Criterios en `tasks/todo.md` («Tarea F7.1»).
+
+## Hallazgos del Planner
+- `server/` hoy solo imprime la versión y depende de `codegen` sin usarlo. `crates/cli/src/main.rs` es solo binario; su tubería usa API pública: `formato` (D22, ~10 líneas); `schema_parser::parse` → `semantic::analyze` → `semantic::lower`, o `xsd::parse` → `xsd::analyze` → `xsd::lower`; `ir::write_json(&VerifiedIr, &mut impl fmt::Write)`; `automaton::build(&ir)` → `write_summary_json`. Los mensajes de `cli` son `String`; `ParseError`, `SemanticError` y `XsdError` tienen `line()`, `column()`, `code()` y su `Display` empieza por `"línea {l}, columna {c}: "`.
+- `automaton::build` hoy solo JSON; XSD da `BuildError::Pending` hasta F4.1c, y algunas reglas JSON también (F4-U5). El resumen F4-U7 escribe `"format": "json"` fijo.
+- Memoria ≈ 158× la entrada hasta la IR (≈ 83× hasta la Fase 3); reservar ≈ 165× el tope de subida + proceso base; salida de la IR hasta ≈ 93× la entrada; peor XSD de 16 MiB ≈ 7-28 s (§38).
+- Versiones: axum 0.8.9 (MSRV 1.80), tokio 1.54.1 (MSRV 1.85), tower 0.5.3, http-body-util 0.1.5, sha2 0.11.1; prototipo en Docker con `axum` `default-features = false, features = ["http1","tokio","json"]`: 413 para 1 MiB + 1 y 200 para `{}`; 54 crates, sin openssl, `-sys` ni `cc`. En Windows, Smart App Control bloqueó en debug el DLL de `serde_derive` y el binario de pruebas; `--release` pasó. No hace falta tower-http.
+- Prototipo fuera del repo: `C:\Users\bayro\AppData\Local\Temp\claude\bcc3d1797eb97101\10873621-16eb-4921-aa19-8a45143ad21d\scratchpad\proto`.
+
+## Decisiones del usuario (aprobadas el 18 nov con la opción recomendada)
+- **U1 — Contrato de la API (interfaz compartida, D42: visto bueno de Leonardo).** Entrada: cuerpo crudo, formato por contenido (D22). Respuestas: 200 `{apiVersion, id, format, summary, ir|null, irBytes, irOmitted, automaton}`; 422 `{error:"schema", format, errors[], total, truncated}`; 413, 500, 503 (con `Retry-After`) y 504, todas en JSON con un campo `error`; sin 400; 200 y no 201 (no hay `GET` del recurso).
+- **U2 — Sin tocar `crates/cli`.** El servidor llama a las bibliotecas y copia `formato` con prueba de paridad; pendiente: unificar en un crate `pipeline`.
+- **U3 — Tope de subida 1 MiB, configurable.** Se propone a Leonardo una fila en `00-alcance.md` §4 («subida máxima del servidor: 1 MiB»); hasta su OK, solo en `docs/fase7/servidor.md`.
+- **U4 — Memoria:** hilo + semáforo de 2 + subida de 1 MiB + tope de IR (pico ≈ 350 MiB + proceso base); tope duro con `mem_limit` (p. ej. 1 GiB) y `restart: unless-stopped` en Compose (F7.7). No cubre el aborto por fallo de asignación o desbordamiento de pila (tumba el proceso; el contenedor se reinicia): riesgo residual declarado y pendiente para F7.3 (proceso hijo con `RLIMIT_AS`, que sin `unsafe` exige `sh -c 'ulimit -v N; exec …'`, archivos temporales y solo Linux).
+- **U5 — `id` = SHA-256 hexadecimal del contenido** (`sha2` 0.11.1, Rust puro); determinista y sin estado; F7.2 lo usa como `_id` (visto bueno de Leonardo).
+- **U6 — `automaton` como objeto con `status` `ok`/`pending`/`limit`;** un esquema válido con autómata no construible sigue siendo 200; `BuildError::Internal` → 500 (D15); el resumen de `write_summary_json` se incrusta tal cual.
+- **U7 — Dockerfile en F7.7;** F7.1 deja la configuración por variables de entorno (`SERVER_ADDR=0.0.0.0:8080` en el contenedor).
+- **U8 — IR en la respuesta si cabe en 4 MiB;** si no, `ir: null` e `irOmitted: true`.
+
+## Decisiones que puede tomar el Builder
+- B1. `AppState` con un `Arc<dyn Fn(&[u8]) -> Compilado + Send + Sync>` para inyectar compilaciones que hacen pánico o se bloquean en las pruebas.
+- B2. `message` sin el prefijo de posición con `strip_prefix(&format!("línea {}, columna {}: ", e.line(), e.column()))`, texto completo si no coincide.
+- B3. Pruebas con `#[tokio::test]` (feature `macros`) o runtime a mano.
+- B4. Nombres de módulos y estructuras de respuesta; serializar con `serde_json` o armar el JSON a mano para incrustar la IR y el resumen sin volver a parsearlos.
+- B5. Log con `writeln!` a stderr ignorando el error; sin `tracing`.
+- B6. Apagado con `axum::serve(...).with_graceful_shutdown(ctrl_c)`.
+- B7. `fmt::Write` con tope para la IR y el resumen.
+- B8. `Retry-After: 5`; mensajes de 413, 503 y 504 en español.
+- B9. Sin CORS (Caddy sirve web y API en el mismo origen, F7.7); proxy de Vite si F7.4 lo necesita.
+
+## Riesgos
+Smart App Control (Windows: `--release` o Docker); `Cargo.lock` sube de 136 a ~175 paquetes (zona de choque con Leonardo: pull antes); el servidor es el segundo llamador de `semantic::lower` (§13, `AnalyzedTable`): llamar siempre a `analyze` antes y comentarlo; revisión con `code-reviewer` y `security-auditor` (D35).

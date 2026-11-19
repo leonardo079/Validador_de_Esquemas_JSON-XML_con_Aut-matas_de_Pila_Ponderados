@@ -85,7 +85,21 @@ decisiones» del plan (D1–D31); aquí solo se remite a ellas.
   menos 2 MiB (o usar la pila explícita), nunca directamente en el hilo principal ni en un
   hilo de tamaño desconocido** (regla D7 del plan).
 
-### 6. Límite de tamaño del esquema
+### 6. Límite de tamaño del esquema — RESUELTO en el servidor (F7.1)
+
+- **Resuelto en F7.1** ([../fase7/servidor.md](../fase7/servidor.md) §3): `POST /api/schemas`
+  admite como mucho **1 MiB** (`MAX_UPLOAD_BYTES`, configurable hasta 16 MiB) y responde 413
+  en JSON:
+  - si un `Content-Length` anuncia más, **al instante y sin leer el cuerpo**, también con
+    `Expect: 100-continue`, que no recibe `100 Continue`
+    (`content_length_de_mas_da_413_sin_leer_el_cuerpo`; ronda 1 de F7.1);
+  - sin `Content-Length` (`chunked`) o con uno que miente, tras leer como mucho tope + 1
+    bytes (`cuerpo_de_tope_mas_uno_da_413`, `content_length_raro_o_que_miente`).
+
+  El tope se fijó junto con la memoria (≈ 165 × subida) y la concurrencia (2). La fila del
+  alcance (`00-alcance.md` §4) está propuesta a las dos personas (D42,
+  [../fase7/pendientes.md](../fase7/pendientes.md) §9). El `RLIMIT_AS` sigue abierto (§1 de
+  allí).
 
 - **Estado:** cada clave se copia a la tabla de claves vistas, y el parser no tiene límite
   de tamaño del esquema ni de claves por objeto. **`schemac` sí tiene un tope** desde la
@@ -217,7 +231,15 @@ decisiones» del plan (D1–D31); aquí solo se remite a ellas.
   **Tarea 5.2:** llamarlo una sola vez por atributo y guardar el `Name`; llamadas repetidas
   sobre un valor de 16 MiB serían cuadráticas.
 
-### 12. El frontal XSD no tiene límites de memoria propios (Fase 7 y 5.7; 5.1-SEC3-L2, 5.2-SEC-M1 y 5.2-SEC-M2) — resuelta solo la profundidad
+### 12. El frontal XSD no tiene límites de memoria propios (Fase 7 y 5.7; 5.1-SEC3-L2, 5.2-SEC-M1 y 5.2-SEC-M2) — resueltas la profundidad y, en el servidor, la subida y la concurrencia
+
+- **F7.1** ([../fase7/servidor.md](../fase7/servidor.md) §3): el servidor pone la alternativa
+  que admite esta sección, «tope de subida y tope de concurrencia» en lugar de límites en el lector.
+  Son 1 MiB por esquema y 2 compilaciones a la vez, así que el peor XSD (≈ 59×) queda en ≈ 60 MiB
+  por compilación, por debajo del JSON Schema que dimensiona el servidor (≈ 165×). **Siguen
+  abiertos** el `RLIMIT_AS` por compilación ([../fase7/pendientes.md](../fase7/pendientes.md)
+  §1, F7.3/F7.7) y los topes propios del lector (atributos por etiqueta, declaraciones `xmlns`),
+  que el servidor ya no necesita con 1 MiB.
 
 - **Seguimiento:** la auditoría final de la 5.1 lo dejó abierto como **5.1-SEC3-L2** (igual
   que SEC-M1 de la ronda 2): amplificación de memoria de 29× a 33× sin tope en

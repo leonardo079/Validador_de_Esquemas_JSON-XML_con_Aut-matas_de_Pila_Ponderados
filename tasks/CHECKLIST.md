@@ -88,7 +88,7 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 
 ## Fase 7 — aplicación web (`server/`, `web/`, `sandbox/`, `infra/`)
 
-- [ ] **F7.1** · Backend axum: `POST /api/schemas` con `check`/`ir` en hilo propio con `stack_size` (D7), topes de subida, CPU y memoria (`docs/fase3/pendientes.md` §1-§2) — *Pista:* B · *Depende:* — · *Resp.:* Bayron · *Estado:* en curso (18 nov)
+- [x] **F7.1** · Backend axum: `POST /api/schemas` con `check`/`ir` en hilo propio con `stack_size` (D7), topes de subida, CPU y memoria (`docs/fase3/pendientes.md` §1-§2) — *Pista:* B · *Depende:* — · *Resp.:* Bayron · *Estado:* hecha (19 nov) · 3 rondas (D55) · observaciones en `docs/fase7/pendientes.md` §1-§12 (tope duro de memoria → F7.3/F7.7; Caddy → F7.7); contrato por confirmar con Leonardo (§9)
 - [ ] **F7.2** · Persistencia en MongoDB Atlas y carga de `tests/cases/` con script local (D32) — *Pista:* B · *Depende:* S0, F7.1 · *Resp.:* — · *Estado:* libre
 - [ ] **F7.3** · Sandbox Docker (`--network none`, límites, no root, FS de solo lectura) para compilar y ejecutar el código generado — *Pista:* B · *Depende:* — · *Resp.:* — · *Estado:* libre
 - [ ] **F7.4** · Frontend: editor Monaco, compilar, ver la IR (JSON v2, D17; tratar como no confiable) — *Pista:* B · *Depende:* F7.1 · *Resp.:* — · *Estado:* libre

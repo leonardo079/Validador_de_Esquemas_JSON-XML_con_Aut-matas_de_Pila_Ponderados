@@ -7,8 +7,33 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+# F7.1 (`docs/fase7/servidor.md`): las Fases 2 y 3, la bajada a la IR y el
+# resumen del autómata, como `schemac`, pero sobre los bytes de la petición.
+# axum sin features por defecto: solo HTTP/1, el servidor de tokio y JSON; sin
+# TLS (lo pone Caddy delante, F7.7), así que ni openssl ni crates `-sys`.
+# serde_json sin features nuevas (D49: se unifican en todo el workspace).
 [dependencies]
-codegen.workspace = true
+schema-parser.workspace = true
+semantic.workspace = true
+xsd.workspace = true
+ir.workspace = true
+automaton.workspace = true
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "net", "sync", "time", "signal"] }
+serde_json = "1.0.154"
+# `id` del esquema: SHA-256 del contenido (U5), en Rust puro.
+sha2 = "0.11.1"
+# `BodyExt::frame` y `LengthLimitError`, para leer el cuerpo frame a frame a
+# un búfer contiguo (SEC2-H1). Ya está en el árbol de axum: no añade crates.
+http-body-util = "0.1.5"
+
+# Las pruebas llaman al `Router` con `oneshot`, sin red ni puertos.
+[dev-dependencies]
+tokio = { version = "1.54.1", features = ["macros"] }
+tower = { version = "0.5.3", default-features = false, features = ["util"] }
+# `Frame`, para un cuerpo de prueba que cuenta lo que se lee (ya está en el
+# árbol de axum: no añade crates).
+http-body = "1.1.0"
 
 [lints]
 workspace = true

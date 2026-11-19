@@ -8,7 +8,17 @@ y que se resuelven en otra fase. Las decisiones de diseño viven en el
 
 ## Vigilar más adelante
 
-### 1. Truncar la lista de errores mostrada
+### 1. Truncar la lista de errores mostrada — RESUELTO en el servidor (F7.1); sigue abierta la IR en streaming
+
+- **Resuelto en F7.1** ([../fase7/servidor.md](../fase7/servidor.md) §2-§3): `POST /api/schemas`
+  devuelve los **100 primeros** errores de la primera etapa que falla, con `total` y `truncated`,
+  y solo esos 100 se pasan a texto, así que el 422 queda en ≲ 100 KB sea cual sea la subida
+  (`esquema_invalido_da_422_con_los_100_primeros`, `respuesta_422_acotada_sea_cual_sea_el_total`).
+  Las otras dos cosas del criterio de «Cuándo actuar» también están: subida de 1 MiB (413) y
+  tope de tiempo de 10 s (504). El camino de éxito tiene un tope de 4 MiB para el JSON de la IR
+  (`ir: null`, `irOmitted: true`). Queda abierto: escribir la IR en streaming (opción de abajo,
+  [../fase7/pendientes.md](../fase7/pendientes.md) §3) y la variante opcional
+  `check_cycles_limited`, que no hace falta con 1 MiB. `schemac` sigue informándolos todos.
 
 - **Estado:** la Fase 3 informa todos sus errores, sin tope, ordenados por posición
   ([ciclos.md](ciclos.md) §5, «Número de errores: sin tope»). Lo guardado es O(n), pero
@@ -255,7 +265,16 @@ y que se resuelven en otra fase. Las decisiones de diseño viven en el
   Opcional: una variante `check_cycles_limited(table, n)` que deje de construir errores
   tras los primeros n, para no pagar su costo cuando no se van a mostrar.
 
-### 2. `debug_assert!` en código que llamará el servidor
+### 2. `debug_assert!` en código que llamará el servidor — RESUELTO salvo el requisito 4 (F7.1)
+
+- **Resuelto en F7.1** ([../fase7/servidor.md](../fase7/servidor.md) §4): los requisitos 1 y 2.
+  Cada compilación corre en un hilo de 8 MiB, nunca en uno de tokio. Un pánico da 500 en **esa**
+  petición y el servidor sigue (`panico_da_500_y_el_servidor_sigue`). Ningún perfil usa
+  `panic = "abort"`. El requisito 3 se cumple con el tope del parser (D7), y en el requisito 4
+  está el límite de bytes de salida (IR ≤ 4 MiB) más un tope de concurrencia de 2
+  compilaciones con 1 MiB de subida (≈ 350 MiB de pico) más un presupuesto de 32 MiB para los cuerpos que se están leyendo (SEC-H1, ronda 2 de F7.1; ≈ 380 MiB en total). **Sigue abierto** el tope de memoria
+  por compilación (`RLIMIT_AS` en un proceso hijo o cgroup): F7.7 pone `mem_limit` al
+  contenedor y F7.3 el proceso hijo ([../fase7/pendientes.md](../fase7/pendientes.md) §1).
 
 - **Estado:** `path_in` (`crates/semantic/src/cycles.rs`) afirma con `debug_assert!` dos
   invariantes de la búsqueda del camino de un ciclo. En release no hacen nada: la
@@ -1329,7 +1348,12 @@ Critical y 0 Important; tres Suggestions).
   Es 5.6-P2 (§37), ahora en `docs/00-alcance.md` §3.4 como omisión conocida: con el AFD de cada
   `pattern`, comprobar cada `xs:enumeration`, `default` y `fixed` contra las `pattern` de toda la
   cadena de bases, con la posición del valor.
-- **5.7-P3 (costo de la UPA en el servidor) → Fases 6 y 7.**
+- **5.7-P3 (costo de la UPA en el servidor) → Fases 6 y 7.** La parte de la Fase 7 está
+  **resuelta en F7.1**: la compilación tiene un tope de tiempo configurable (10 s por defecto,
+  `COMPILE_TIMEOUT_MS`, 504 al pasarlo) y la subida máxima es de 1 MiB, con la que el peor caso
+  baja a ≲ 2 s ([../fase7/servidor.md](../fase7/servidor.md) §3). El hilo que se pasa del tope
+  no se puede matar: sigue hasta terminar y conserva su permiso del semáforo. Lo cortaría el
+  proceso hijo de F7.3. Queda la medición del arnés (Fase 6).
   - **Dónde:** `crates/xsd/src/upa.rs`; [xsd.md](xsd.md) §11.4.
   - **Estado:** la UPA es O(*n*·*m*) por modelo, acotada por D26: ≤ 3·4 096·*N* pasos con *N* las
     partículas del esquema. Con el tope de 16 MiB de `schemac`, el peor esquema (100 modelos de

@@ -588,3 +588,49 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 
 - [ ] Un esquema JSON y el pedido XSD pasan por esquema → M → validador Rust generado, y el corpus pasa.
 - [ ] La Fase 4 queda cerrada al terminar F4.5b (sin ningún `Pending`).
+
+# Tarea F7.1: backend axum (pista B, Bayron; plan del Planner del 18 nov, aprobado el 18 nov con U1-U8)
+
+Detalle, decisiones U1-U8 y B1-B9 en `tasks/plan.md` («F7.1: backend axum»).
+
+## F7.1: `POST /api/schemas` y `GET /api/health` (axum)
+
+**Descripción:**
+- Crate `server` (biblioteca `src/lib.rs` con `router(Config)` y binario `src/main.rs`).
+- `POST /api/schemas` recibe el esquema crudo en el cuerpo y detecta el formato por el contenido (D22).
+- Las Fases 2 y 3, la bajada a `VerifiedIr`, la exportación JSON v2 (D17) y el resumen del autómata (F4-U7) corren en un hilo propio con `stack_size` de 8 MiB (D7).
+- Topes: subida 1 MiB; tiempo 10 s → 504; concurrencia 2 compilaciones → 503 sin cola; errores devueltos: los 100 primeros más el total; IR: 4 MiB, por encima se omite.
+- El tope de memoria por proceso queda para F7.7 (cgroup de Docker) y F7.3 (proceso hijo); el riesgo se declara (U4).
+- `crates/cli` no se toca (U2). Nada de Mongo (F7.2), sandbox (F7.3), validate/WS (F7.5) ni Dockerfile (U7).
+
+**Criterios de aceptación:**
+- [x] `server/Cargo.toml`: axum 0.8.9 sin features por defecto (`http1`, `tokio`, `json`), tokio 1.54.1 con `rt-multi-thread`, `net`, `sync`, `time`, `signal` (más `macros` si se usa `#[tokio::test]`), serde_json 1.0.154 sin features nuevas (D49) y `schema-parser`, `semantic`, `xsd`, `ir`, `automaton` del workspace; `tower` 0.5.3 con `util` solo en `[dev-dependencies]`; se quita `codegen`, que no se usa; sin openssl ni TLS; `Cargo.lock` regenerado con `cargo build`; ningún perfil con `panic = "abort"` (§2.2).
+- [x] `POST /api/schemas` con un JSON Schema válido → 200 (sin `Content-Type` obligatorio) con `apiVersion: 1`, `id`, `format: "json"|"xml"`, `summary` (el mismo texto que `schemac check`), `ir` (objeto IR v2 byte a byte igual al de `ir::write_json`, comprobado contra una dorada de `tests/ir/`), `irBytes` y `automaton` con `{status:"ok", summary:{…F4-U7…}}` o `{status:"pending"|"limit", message}`.
+- [x] Un XSD válido (p. ej. `tests/schemas/xsd/parse-ok/pedido.xsd`) da 200 con `format: "xml"`, la IR y `automaton.status = "pending"` hasta F4.1c. No es un error del esquema.
+- [x] Un esquema inválido da 422 con `{error:"schema", format, errors:[{code,line,column,message}], total, truncated}`: errores de la primera etapa que falla, como en `check`; `message` sin el prefijo de posición; con más de 100 errores, los 100 primeros y `total` cuenta todos (prueba con ≥ 150 errores, p. ej. `type` con 150 `""`); tamaño de la respuesta acotado (§1).
+- [x] Cuerpo vacío o sin UTF-8 → tratado como JSON con su error léxico o de parser → 422; sin pánico ni 400.
+- [x] Cuerpo de tope + 1 bytes → 413 con `{error:"too-large", limit}` en JSON (no el texto de axum); también cuando `Content-Length` lo anuncia.
+- [x] Hilo: la compilación corre en `std::thread::Builder::new().stack_size(8 << 20)`; AST, `Analysis`/`SymbolTable` e IR se crean y liberan dentro del hilo, que solo devuelve `String`s y estructuras propias (D7, D36); el resultado vuelve por `tokio::sync::oneshot`; nunca se compila en un hilo de tokio.
+- [x] Pánico → 500 con mensaje fijo, y la petición siguiente al mismo `Router` da 200 (§2.1); prueba con una compilación inyectada que hace pánico.
+- [x] Error interno de `verify` o del constructor (`BuildError::Internal`) → 500 con un único mensaje fijo (D15); el detalle acotado (`InternalError::detail(8)`) va al log en stderr, sin `eprintln!` que pueda hacer pánico (§14).
+- [x] Tope de tiempo configurable; prueba con tope de 50 ms y una compilación inyectada bloqueada en un canal hasta que la prueba la suelta → 504 `{error:"timeout"}`; la aserción no mide tiempo de pared (D1); el permiso del semáforo se mueve al hilo y solo se libera cuando el hilo termina (tras el 504, mientras siga bloqueado, otra petición con concurrencia 1 da 503; al soltarlo, 200).
+- [x] Concurrencia: semáforo con `try_acquire_owned`; lleno → 503 `{error:"busy"}` con `Retry-After`; prueba determinista con concurrencia 1 (la primera petición se bloquea y avisa por canal; la segunda da 503).
+- [x] No poder crear el hilo → 503, y el permiso se libera.
+- [x] IR escrita en un `fmt::Write` con tope (4 MiB por defecto) que falla al pasarlo; si lo pasa, `ir: null`, `irOmitted: true` y 200 (§2.4); prueba con un tope bajo.
+- [x] `GET /api/health` → 200 `{status:"ok", version}`.
+- [x] Configuración por variables de entorno con valores por defecto: `SERVER_ADDR` (127.0.0.1:8080), `MAX_UPLOAD_BYTES`, `COMPILE_TIMEOUT_MS`, `MAX_CONCURRENT_COMPILES`, `MAX_IR_BYTES`; un valor inválido hace fallar el arranque con un mensaje; apagado ordenado con Ctrl-C.
+- [x] Pruebas con `tower::ServiceExt::oneshot`, sin red ni puertos; ninguna depende del tiempo de pared (D1); `cargo test -p server` en verde en Windows (con `--release` si Smart App Control bloquea) y en Docker.
+- [x] Una prueba comprueba que el `formato` del servidor coincide con D22, con la misma tabla de casos que `crates/cli` (`formato_por_el_primer_byte_significativo`).
+- [x] `docs/fase7/servidor.md`: contrato de la API; topes y por qué (≈ 165 × subida, 2 compilaciones ≈ 350 MiB, 1 MiB de XSD ≲ 2 s); qué cubre el aislamiento por hilo y qué no (un aborto por falta de memoria o desbordamiento de pila tumba el proceso); cómo arrancarlo.
+- [x] `docs/fase7/pendientes.md`: memoria por proceso (→ F7.3/F7.7), `id` persistente (→ F7.2), IR en streaming (opción de §1), CORS (→ F7.4 si hace falta), §9, §10 y §15 de la Fase 3 (→ F7.4), unificar la tubería en un crate `pipeline` (U2), segundo llamador de `semantic::lower` (§13).
+- [x] Al cerrar, se actualizan `docs/fase3/pendientes.md` §1, §2, §38 y `docs/fase2/pendientes.md` §6, §12: lo cerrado (truncado, subida, CPU, hilo, pánico) se marca resuelto y se deja abierto lo que sigue (`RLIMIT_AS`/cgroup).
+- [x] `make lint` (`scripts/lint.ps1` + `unsafe-check`, sin `unsafe` nuevo) y `make test` (`cargo test --workspace`) en verde; las doradas y las pruebas de `crates/cli` no cambian.
+
+**Verificación:** `cargo test -p server` (o `--release`); `cargo test --workspace`; `scripts/lint.ps1`; clippy en Docker (`cargo fetch --locked` primero); arranque manual `cargo run -p server --release` y `curl --data-binary @tests/schemas/xsd/parse-ok/pedido.xsd http://127.0.0.1:8080/api/schemas`; `git diff --stat` para ver que `crates/cli` no se tocó.
+
+**Dependencias:** ninguna de código. Visto bueno de Leonardo al contrato (U1), al tope (U3, si va a `00-alcance.md`) y al `id` (U5) antes de cerrar (D42).
+
+**Archivos probables:** `server/{Cargo.toml,src/main.rs,src/lib.rs,src/compilar.rs,src/api.rs,tests/api.rs}`, `Cargo.lock`, `docs/fase7/{servidor.md,pendientes.md}`, `docs/fase3/pendientes.md`, `docs/fase2/pendientes.md`.
+
+**Tamaño:** M (≈ 4-5 h). Recorte si se va de tiempo: el tope de la IR (B7) y `automaton` como F7.1b, con `automaton` siempre `null`.
+**Estado (19 nov):** APROBADA tras **3 rondas de corrección**: ronda 1 (Tester: 413 por `Content-Length` no inmediato; máximos de configuración), ronda 2 (code-reviewer: prueba del 504 dependiente del reloj; security-auditor: memoria de cuerpos sin acotar → presupuesto de 32 MiB y plazo de lectura de 10 s), ronda 3 (security-auditor: amplificación con `chunked` de 1 byte → lectura frame a frame en un búfer de lo reservado). Por decisión del usuario (proyecto académico; menos agentes), la ronda 3 la verificó el orquestador sin Tester ni Reviewers nuevos: `lint OK` y 612 pruebas del workspace en verde en Windows, `cargo test -p server --release` 11 + 26, `unsafe-check` limpio; la sonda de SEC2-H1 contra el binario quedó sin correr (Docker apagado; la cota la prueba `api::tests::frames_de_un_byte_en_un_solo_bufer`). Decisión D55. Observaciones en `docs/fase7/pendientes.md` §1-§12; contrato por confirmar con Leonardo (§9).
