@@ -20,8 +20,9 @@ hay `innerHTML` ni `dangerouslySetInnerHTML`): la IR y los mensajes traen texto 
 usuario sin escapar (`docs/fase7/pendientes.md` §5). Lo comprueba
 `src/Resultado.test.tsx` con `<img src=x onerror=…>` como nombre de propiedad.
 
-Las vistas del autómata (Cytoscape), del árbol de derivación (d3) y el panel de métricas
-son de F7.6.
+Desde F7.6 (D70) hay otras tres pestañas: **autómata** (Cytoscape, `POST /api/automaton`),
+**árbol de derivación** (d3-hierarchy, `POST /api/derivation`) y **comparación** DPDA / línea
+base (`POST /api/compare`). Detalle en `docs/fase7/vistas.md`.
 
 ## Uso
 
@@ -30,7 +31,7 @@ Requiere Node ≥ 20. Desde `web/`:
 ```sh
 npm install          # una vez (package-lock.json fija las versiones)
 npm run dev          # http://localhost:5173 ; /api se reenvía a 127.0.0.1:8080
-npm test             # vitest: interpretación de respuestas y panel (18 pruebas)
+npm test             # vitest: respuestas, panel y vistas de F7.6 (32 pruebas)
 npm run build        # tsc + vite build → dist/ (lo sirve Caddy en F7.7)
 ```
 
@@ -46,3 +47,7 @@ Para apuntar el proxy a otro servidor: `VITE_API_TARGET=http://host:puerto npm r
 | `src/App.tsx` | Barra (ejemplos, abrir archivo, compilar con Ctrl+Enter) y editor Monaco con los errores marcados. |
 | `src/monaco.ts` | Monaco local con sus *workers* de Vite; sin esquemas remotos. |
 | `src/ejemplos.ts` | Esquemas de ejemplo para la demo. |
+| `src/vistas.ts` | F7.6: clientes de `/api/automaton`, `/api/derivation` y `/api/compare` (intérpretes puros). |
+| `src/Automata.tsx` | F7.6: grafo de M con Cytoscape. |
+| `src/Arbol.tsx` | F7.6: árbol de derivación con d3-hierarchy en SVG. |
+| `src/Comparacion.tsx` | F7.6: tabla y barras DPDA frente a línea base. |

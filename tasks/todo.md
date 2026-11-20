@@ -735,3 +735,15 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [x] 11 pruebas en `crates/derivation/tests/arbol.rs`: gramática, frontera, punteros, rangos, errores con offset, topes, JSON para d3, DOT, recorte y todo el corpus `valid`. Doc en `docs/fase5/arbol-derivacion.md`; `lint OK`.
 
 **Estado (20 nov):** hecha. Pendiente: endpoint y vista con d3 (F7.6, con el visto bueno de Leonardo para la API, D42); los `.svg` de los ejemplos, con `make docs` donde haya Graphviz.
+
+# Tarea F7.6: vistas del autómata, del árbol de derivación y comparación (pista B, Bayron; 20 nov, D70)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario).
+
+- [x] Servidor: `POST /api/automaton` (grafo de M para Cytoscape, recortado a 400 nodos y 1 500 aristas), `POST /api/derivation` (árbol de F5.5) y `POST /api/compare` (DPDA frente a la línea base DOM).
+- [x] Los tres usan `api::procesar`, extraído de `POST /api/schemas`. Las 26 pruebas de la API de F7.1 siguen verdes y hay 10 nuevas en `server/tests/vistas.rs`.
+- [x] Web: pestañas Autómata (Cytoscape 3.30.2), Árbol de derivación (d3-hierarchy 3.1.2, SVG con React) y Comparación (tabla y barras). Todo se muestra como texto; el XSS está probado. Hay 18 pruebas nuevas de vitest (32 en total) y `npm run build` pasa.
+- [x] Prueba de humo con el servidor real y `curl` en las tres rutas.
+- [x] Doc en `docs/fase7/vistas.md`, más `servidor.md`, `web/README.md` y `pendientes.md` §15; `lint OK`; 757 pruebas del workspace en verde.
+
+**Estado (20 nov):** hecha. Pendiente: visto bueno de Leonardo a los tres endpoints (D42); F7.6-P2, la CPU de `jsonschema` en `/api/compare` (`pendientes.md` §15).

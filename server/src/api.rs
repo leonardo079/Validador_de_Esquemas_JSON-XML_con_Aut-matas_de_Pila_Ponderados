@@ -68,6 +68,9 @@ pub fn router_con(cfg: Config, compilar: Compilador) -> Router {
     Router::new()
         .route("/api/health", get(health))
         .route("/api/schemas", post(esquemas))
+        .route("/api/automaton", post(automata))
+        .route("/api/derivation", post(derivacion))
+        .route("/api/compare", post(comparar))
         .fallback(no_encontrado)
         .method_not_allowed_fallback(metodo_no_permitido)
         .layer(DefaultBodyLimit::max(limite))
@@ -242,6 +245,62 @@ fn bloques(bytes: usize) -> u32 {
 /// compilación: desde ahí, los bytes del cuerpo los acota la concurrencia
 /// de las compilaciones (o se sueltan con el 503).
 async fn esquemas(State(app): State<Arc<App>>, req: Request) -> Response {
+    let compilar = app.compilar.clone();
+    let max_ir = app.cfg.max_ir_bytes;
+    procesar(&app, req, move |bytes| {
+        let id = hex(&Sha256::digest(&bytes));
+        let resultado = compilar(&bytes, max_ir);
+        drop(bytes);
+        respuesta(&id, resultado)
+    })
+    .await
+}
+
+/// `POST /api/automaton` (F7.6, D70): el grafo de M del esquema del cuerpo,
+/// para Cytoscape.
+async fn automata(State(app): State<Arc<App>>, req: Request) -> Response {
+    procesar(&app, req, |bytes| vista(crate::vistas::grafo(&bytes))).await
+}
+
+/// `POST /api/derivation` (F7.6, D70): el árbol de derivación del payload del
+/// cuerpo (F5.5), para d3-hierarchy. No necesita el esquema.
+async fn derivacion(State(app): State<Arc<App>>, req: Request) -> Response {
+    procesar(&app, req, |bytes| vista(crate::vistas::arbol(&bytes))).await
+}
+
+/// `POST /api/compare` (F7.6, D70): `{"schema": "…", "payload": "…"}`; valida
+/// el payload con el DPDA y con la línea base DOM y devuelve los dos
+/// veredictos con sus tiempos.
+async fn comparar(State(app): State<Arc<App>>, req: Request) -> Response {
+    procesar(&app, req, |bytes| vista(crate::vistas::comparar(&bytes))).await
+}
+
+/// La respuesta de una vista: 200 con su JSON, o el error que toque.
+fn vista(r: Result<String, crate::vistas::Fallo>) -> Response {
+    use crate::vistas::Fallo;
+    match r {
+        Ok(cuerpo) => responder(StatusCode::OK, cuerpo),
+        Err(Fallo::Compilacion(c)) => respuesta("", c),
+        Err(Fallo::Peticion(m)) => responder(
+            StatusCode::BAD_REQUEST,
+            json!({"error": "request", "message": m}).to_string(),
+        ),
+        Err(Fallo::SinAutomata { status, message }) => responder(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            json!({"error": "automaton", "status": status, "message": message}).to_string(),
+        ),
+        Err(Fallo::Payload(v)) => responder(StatusCode::UNPROCESSABLE_ENTITY, v.to_string()),
+    }
+}
+
+/// Lo común de todos los `POST`: lee el cuerpo con el tope, el presupuesto y
+/// el plazo de [`esquemas`]; toma un permiso de concurrencia (sin cola) y
+/// corre `trabajo` en un hilo propio con pila explícita (D7) y tope de
+/// tiempo. Un pánico del trabajo da 500; pasarse de tiempo, 504.
+async fn procesar<F>(app: &App, req: Request, trabajo: F) -> Response
+where
+    F: FnOnce(Vec<u8>) -> Response + Send + 'static,
+{
     let limit = app.cfg.max_upload_bytes;
     let anuncia = anunciado(req.headers());
     if anuncia.is_some_and(|n| n > limit as u64) {
@@ -289,8 +348,6 @@ async fn esquemas(State(app): State<Arc<App>>, req: Request) -> Response {
         );
     };
     let (tx, rx) = oneshot::channel();
-    let compilar = app.compilar.clone();
-    let max_ir = app.cfg.max_ir_bytes;
     // Nunca se compila en un hilo de tokio: hilo propio con pila explícita
     // (D7). El permiso viaja con el hilo y se libera cuando la compilación
     // termina (también tras un 504 o un pánico), así que una compilación que
@@ -306,11 +363,9 @@ async fn esquemas(State(app): State<Arc<App>>, req: Request) -> Response {
             // encuentra el permiso libre. En el camino normal, igual.
             let tx = tx;
             let permiso = permiso;
-            let id = hex(&Sha256::digest(&bytes));
-            let resultado = compilar(&bytes, max_ir);
-            drop(bytes);
+            let r = trabajo(bytes);
             drop(permiso);
-            let _ = tx.send((id, resultado));
+            let _ = tx.send(r);
         });
     if let Err(e) = hilo {
         // El cierre (y con él el permiso) ya se soltó.
@@ -333,7 +388,7 @@ async fn esquemas(State(app): State<Arc<App>>, req: Request) -> Response {
             registrar("la compilación terminó con un pánico");
             interno()
         }
-        Ok(Ok((id, c))) => respuesta(&id, c),
+        Ok(Ok(r)) => r,
     }
 }
 

@@ -18,6 +18,10 @@ semantic.workspace = true
 xsd.workspace = true
 ir.workspace = true
 automaton.workspace = true
+# F7.6 (D70): el árbol de derivación (F5.5) y la línea base DOM (D48) para
+# `POST /api/derivation` y `POST /api/compare`.
+derivation.workspace = true
+baseline.workspace = true
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json"] }
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "net", "sync", "time", "signal"] }
 serde_json = "1.0.154"

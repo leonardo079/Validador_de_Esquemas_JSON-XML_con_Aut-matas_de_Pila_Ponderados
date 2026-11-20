@@ -201,6 +201,21 @@ pub fn compilar(bytes: &[u8], max_ir: usize) -> Compilado {
 }
 
 fn compilar_o_fallar(bytes: &[u8], max_ir: usize) -> Result<Compilado, Compilado> {
+    let (f, resumen, ir) = ir_de(bytes)?;
+    let mut tope = Tope::new(max_ir);
+    let texto_ir = ir::write_json(&ir, &mut tope).ok().map(|()| tope.texto);
+    Ok(Compilado::Valido {
+        formato: f,
+        resumen,
+        ir: texto_ir,
+        automata: automata(&ir)?,
+    })
+}
+
+/// Las Fases 2 y 3 y la bajada (F7.6 la reutiliza para el grafo y la
+/// comparación): el formato, el resumen de `schemac check` y la IR
+/// verificada, o el [`Compilado`] de error (422 o 500).
+pub fn ir_de(bytes: &[u8]) -> Result<(Formato, String, VerifiedIr), Compilado> {
     let f = formato(bytes);
     let (resumen, ir) = match f {
         Formato::Json => {
@@ -229,14 +244,7 @@ fn compilar_o_fallar(bytes: &[u8], max_ir: usize) -> Result<Compilado, Compilado
             (resumen, xsd::lower(&a).map_err(|e| interno(&e))?)
         }
     };
-    let mut tope = Tope::new(max_ir);
-    let texto_ir = ir::write_json(&ir, &mut tope).ok().map(|()| tope.texto);
-    Ok(Compilado::Valido {
-        formato: f,
-        resumen,
-        ir: texto_ir,
-        automata: automata(&ir)?,
-    })
+    Ok((f, resumen, ir))
 }
 
 /// El autómata de la IR (U6): su resumen, o por qué no se construye. Un

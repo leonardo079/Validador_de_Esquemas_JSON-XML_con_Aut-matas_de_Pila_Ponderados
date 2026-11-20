@@ -56,3 +56,30 @@ pre.ir { max-height: 50vh; overflow: auto; background: var(--fondo); border: 1px
 @media (max-width: 800px) {
   .paneles { grid-template-columns: 1fr; grid-template-rows: 50vh auto; }
 }
+/* F7.6: pestañas y vistas del autómata, el árbol y la comparación. */
+.pestanas { display: flex; gap: 4px; border-bottom: 1px solid var(--borde); }
+.pestanas button { border-radius: 6px 6px 0 0; border-bottom: none; }
+.pestanas button[aria-selected="true"] { background: var(--acento); border-color: var(--acento); color: #fff; }
+.oculto { display: none !important; }
+.vista { flex: 1; display: flex; flex-direction: column; gap: 10px; min-height: 0; background: var(--panel); border: 1px solid var(--borde); border-radius: 8px; padding: 12px 16px; overflow: auto; }
+.vista .barra button.principal { margin-left: 0; }
+.lienzo { flex: 1; min-height: 360px; border: 1px solid var(--borde); border-radius: 6px; background: #fff; }
+.lienzo.arbol { overflow: auto; }
+.payload { display: flex; flex-direction: column; gap: 4px; }
+.payload textarea { font-family: ui-monospace, Consolas, monospace; font-size: 13px; padding: 6px; border: 1px solid var(--borde); border-radius: 6px; background: var(--fondo); color: var(--texto); }
+p.error { color: var(--error); margin: 0; }
+.detalle { margin: 0; font-family: ui-monospace, Consolas, monospace; font-size: 12px; word-break: break-all; }
+svg .enlace { stroke: #94a3b8; stroke-width: 1; }
+svg .nodo { cursor: pointer; font-size: 11px; }
+svg .nodo ellipse { fill: #dbeafe; stroke: #475569; }
+svg .nodo rect { fill: #dcfce7; stroke: #475569; }
+svg .nodo text { fill: #1d1d1f; }
+svg .nodo.eps text { fill: #888888; font-style: italic; }
+svg .nodo .lexema { font-family: ui-monospace, Consolas, monospace; font-size: 10px; fill: #334155; }
+table.comparacion { border-collapse: collapse; }
+table.comparacion th, table.comparacion td { border: 1px solid var(--borde); padding: 4px 10px; text-align: left; vertical-align: top; }
+table.comparacion td { font-variant-numeric: tabular-nums; }
+.barras { display: flex; flex-direction: column; gap: 6px; max-width: 640px; }
+.fila-barra { display: grid; grid-template-columns: 90px 1fr 90px; gap: 8px; align-items: center; }
+.barra-fondo { background: var(--fondo); border: 1px solid var(--borde); border-radius: 4px; height: 14px; }
+.barra-valor { background: var(--acento); height: 100%; border-radius: 3px; min-width: 2px; }

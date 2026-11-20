@@ -93,7 +93,7 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 - [x] **F7.3** · Sandbox Docker (`--network none`, límites, no root, FS de solo lectura) para compilar y ejecutar el código generado — *Pista:* B · *Depende:* — · *Resp.:* Bayron · *Estado:* hecha (20 nov) · D68 · sin rondas (sin agentes) · doc en `docs/fase7/sandbox.md`; pruebas con Docker `scripts/test-sandbox.ps1`; F7.3-P1/P2 en `docs/fase7/pendientes.md` §13-§14
 - [x] **F7.4** · Frontend: editor Monaco, compilar, ver la IR (JSON v2, D17; tratar como no confiable) — *Pista:* B · *Depende:* F7.1 · *Resp.:* Bayron · *Estado:* hecha (19 nov) · D56 · `web/README.md`; `docs/fase7/pendientes.md` §5 resuelto salvo §9 de la Fase 3
 - [ ] **F7.5** · Descarga del código, `POST /api/validate` y WebSocket de validación por bloques — *Pista:* B · *Depende:* F5.3, F7.3 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
-- [ ] **F7.6** · Vistas del autómata (Cytoscape), árbol de derivación y panel de métricas DPDA vs línea base — *Pista:* B · *Depende:* F7.4, F5.5, F6.5 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
+- [x] **F7.6** · Vistas del autómata (Cytoscape), árbol de derivación y panel de métricas DPDA vs línea base — *Pista:* B · *Depende:* F7.4, F5.5, F6.5 · *Resp.:* Bayron · *Estado:* hecha (20 nov) · D70 · sin rondas (sin agentes) · doc en `docs/fase7/vistas.md`; endpoints `/api/automaton`, `/api/derivation` y `/api/compare` pendientes del visto bueno de Leonardo (D42); F7.6-P2 en `docs/fase7/pendientes.md` §15
 - [ ] **F7.7** · Despliegue en EC2 con Docker Compose y Caddy (primera versión lo antes posible) — *Pista:* B · *Depende:* S0, F7.1 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
 
 ## Entrega (semana 5)

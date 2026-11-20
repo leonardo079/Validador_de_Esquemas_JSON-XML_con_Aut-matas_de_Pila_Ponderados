@@ -287,3 +287,13 @@ aquí solo se remite a ellas.
   - o que el emisor incluya el núcleo en el mismo archivo.
 - **Dónde:** `sandbox/Dockerfile`, `sandbox/sandbox-run.sh`.
 - **Tarea:** F5.1 (decide la forma, pista A) y F7.5.
+
+### 15. `/api/compare` sin tope de CPU propio para la línea base (F7.6-P2)
+
+- **Estado:** `POST /api/compare` (F7.6) valida con `jsonschema` dentro del hilo de la petición. Un esquema
+  hostil (`docs/fase6/pendientes.md` §14) se pasa del tope de tiempo: el cliente recibe 504, pero el hilo sigue y
+  conserva su permiso (como §12). Lo acotan el tope de subida (1 MiB) y la concurrencia (2).
+- **Arreglo propuesto:** el de §1, un proceso aparte con límite de CPU (o el sandbox de F7.3), o apagar la línea
+  base para esquemas grandes.
+- **Dónde:** `server/src/vistas.rs` (`comparar`).
+- **Tarea:** F7.7, o se acepta para la entrega académica.

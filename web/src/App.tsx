@@ -4,14 +4,31 @@ import type { editor } from "monaco-editor";
 import { compilar, formatoProbable, type ErrorEsquema, type Resultado as R } from "./api";
 import { EJEMPLOS } from "./ejemplos";
 import { Resultado } from "./Resultado";
+import { Automata } from "./Automata";
+import { Arbol } from "./Arbol";
+import { Comparacion } from "./Comparacion";
 
-// Vista «editor de esquema» (F7.4): editar, compilar contra POST /api/schemas
-// (F7.1) y ver el resultado. Las vistas del autómata, del árbol de derivación y
-// el panel de métricas son de F7.6.
+// Cuatro vistas: «editor de esquema» (F7.4: editar, compilar contra
+// POST /api/schemas y ver el resultado) y, desde F7.6, «autómata» (Cytoscape),
+// «árbol de derivación» (d3-hierarchy) y «comparación» DPDA frente a la línea
+// base. El editor queda montado al cambiar de pestaña (solo se oculta), así
+// Monaco conserva el texto y el cursor.
 
 type Monaco = Parameters<OnMount>[1];
 
+const VISTAS = [
+  ["editor", "Editor de esquema"],
+  ["automata", "Autómata"],
+  ["arbol", "Árbol de derivación"],
+  ["comparacion", "Comparación DPDA / línea base"],
+] as const;
+type Vista = (typeof VISTAS)[number][0];
+
+const PAYLOAD_INICIAL = '{"id": 7, "nombre": "Ana", "activo": true}';
+
 export function App() {
+  const [vista, setVista] = useState<Vista>("editor");
+  const [payload, setPayload] = useState(PAYLOAD_INICIAL);
   const [texto, setTexto] = useState(EJEMPLOS[0].texto);
   const [resultado, setResultado] = useState<R | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -77,7 +94,19 @@ export function App() {
         </p>
       </header>
 
-      <div className="barra">
+      <nav className="pestanas" role="tablist" aria-label="Vistas">
+        {VISTAS.map(([id, nombre]) => (
+          <button key={id} type="button" role="tab" aria-selected={vista === id} onClick={() => setVista(id)}>
+            {nombre}
+          </button>
+        ))}
+      </nav>
+
+      {vista === "automata" && <Automata esquema={texto} />}
+      {vista === "arbol" && <Arbol payload={payload} alCambiarPayload={setPayload} />}
+      {vista === "comparacion" && <Comparacion esquema={texto} payload={payload} alCambiarPayload={setPayload} />}
+
+      <div className={vista === "editor" ? "barra" : "barra oculto"}>
         <label>
           Ejemplo:{" "}
           <select
@@ -109,7 +138,7 @@ export function App() {
         </button>
       </div>
 
-      <main className="paneles">
+      <main className={vista === "editor" ? "paneles" : "paneles oculto"}>
         <section className="editor" aria-label="Editor del esquema">
           <Editor
             height="100%"
@@ -117,7 +146,14 @@ export function App() {
             value={texto}
             onChange={(v) => setTexto(v ?? "")}
             onMount={alMontar}
-            options={{ minimap: { enabled: false }, fontSize: 14, scrollBeyondLastLine: false, tabSize: 2 }}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 14,
+              scrollBeyondLastLine: false,
+              tabSize: 2,
+              // Al volver a la pestaña del editor, Monaco recalcula su tamaño.
+              automaticLayout: true,
+            }}
           />
         </section>
         <section className="resultado" aria-live="polite">

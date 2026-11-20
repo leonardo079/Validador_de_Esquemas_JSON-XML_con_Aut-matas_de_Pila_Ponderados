@@ -33,6 +33,7 @@ automaton = { path = "crates/automaton" }
 codegen = { path = "crates/codegen" }
 runtime-rs = { path = "crates/runtime-rs" }
 baseline = { path = "crates/baseline" }
+derivation = { path = "crates/derivation" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

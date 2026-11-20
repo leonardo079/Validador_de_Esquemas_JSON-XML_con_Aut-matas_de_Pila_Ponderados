@@ -45,6 +45,10 @@ los 100 primeros se pasan a texto.
 
 ## 2. Contrato de la API (U1)
 
+> Desde F7.6 (D70) hay tres rutas más, con el mismo camino de lectura, permisos, hilo y
+> topes: `POST /api/automaton`, `POST /api/derivation` y `POST /api/compare`. Su
+> contrato está en [vistas.md](vistas.md) §1.
+
 Todas las respuestas del `Router` son `application/json` y llevan
 `X-Content-Type-Options: nosniff` (SEC-L2). Las de error llevan un campo `error` con un
 código estable y un `message` en español. El servidor **nunca responde 400 por el
