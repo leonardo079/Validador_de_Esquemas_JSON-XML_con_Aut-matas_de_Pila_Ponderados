@@ -1,0 +1,24 @@
+{
+  "_id": "invalid-mut-gen-dependencias-01",
+  "category": "invalid",
+  "format": "json",
+  "description": "Mutación «tipo» de valid-gen-dependencias-01 con la semilla 12001 (F6.3): 1 violación(es) (type); el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "tarjeta": { "type": "string", "pattern": "^[0-9]{4}$" },
+      "titular": { "type": "string", "minLength": 1 },
+      "cvv": { "type": "integer", "minimum": 100, "maximum": 999 }
+    },
+    "dependentRequired": { "tarjeta": ["titular", "cvv"] },
+    "minProperties": 1
+  },
+  "payload": "{\"cvv\":{}}",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 7
+  }
+}

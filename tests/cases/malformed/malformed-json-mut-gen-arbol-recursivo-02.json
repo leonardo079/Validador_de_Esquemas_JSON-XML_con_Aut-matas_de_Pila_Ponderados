@@ -1,0 +1,29 @@
+{
+  "_id": "malformed-json-mut-gen-arbol-recursivo-02",
+  "category": "malformed",
+  "format": "json",
+  "description": "Mutación «truncado» de valid-gen-arbol-recursivo-02 con la semilla 5001 (F6.3): error sintáctico en el byte 36; el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+      "node": {
+        "$anchor": "nodo",
+        "type": "object",
+        "properties": {
+          "value": { "type": "integer" },
+          "children": { "type": "array", "items": { "$ref": "#/$defs/node" } }
+        },
+        "required": ["value"],
+        "additionalProperties": false
+      }
+    },
+    "$ref": "#/$defs/node"
+  },
+  "payload": "{\"value\":-1,\"children\":[{\"value\":56}",
+  "expected": {
+    "valid": false,
+    "errorKind": "syntax",
+    "offset": 36
+  }
+}

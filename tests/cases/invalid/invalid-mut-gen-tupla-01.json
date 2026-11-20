@@ -1,0 +1,19 @@
+{
+  "_id": "invalid-mut-gen-tupla-01",
+  "category": "invalid",
+  "format": "json",
+  "description": "Mutación «elementos» de valid-gen-tupla-01 con la semilla 18002 (F6.3): 1 violación(es) (type); el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {
+    "type": "array",
+    "prefixItems": [ { "type": "string" }, { "type": "integer", "minimum": 0, "maximum": 120 }, { "type": "boolean" } ],
+    "items": false
+  },
+  "payload": "[\"nbskoz\",\"nbskoz\"]",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 10
+  }
+}

@@ -701,3 +701,15 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [x] Doc en `docs/fase5/generador.md`; `lint OK`; 727 pruebas del workspace en verde.
 
 **Estado (20 nov):** hecha. Pendiente: generador XML (F5.4-P1, opcional en F6.3); F6.3 parte de estos válidos para mutarlos.
+
+# Tarea F6.3: payloads inválidos y malformados por mutación (pista B, Bayron; 20 nov, D67)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario).
+
+- [x] `crates/bench/src/mutar.rs`: `tramos` iterativo; 6 mutaciones semánticas y 7 sintácticas o léxicas, deterministas con la semilla de F5.4.
+- [x] `clasificar`, el oráculo doble: `expected` sale del DPDA (modo total). El caso solo se acepta si la línea base da la misma clase y el mismo recuento u offset, si el DPDA da lo mismo en bloques de 1, 7 y 4096 bytes y en fallo temprano, y, si es malformado, también con el esquema `true`.
+- [x] CLI `cargo run -p bench --release --bin mutar [-- --escribir]`: 20 `invalid-mut-*` y 10 `malformed-json-mut-*` (`phase: 6`), regenerables byte a byte; `payloadBase64` si el payload no es UTF-8.
+- [x] 6 pruebas en `crates/bench/tests/mutar.rs`: tramos; las semánticas dejan JSON válido y las sintácticas no; la misma semilla da la misma mutación; base64 con los vectores de RFC 4648; `clasificar` con casos conocidos.
+- [x] Doc en `docs/fase6/mutaciones.md`; hallazgo F6.3-P1 en `docs/fase6/pendientes.md` §28 (decide la pista A); `lint OK`; 733 pruebas del workspace en verde.
+
+**Estado (20 nov):** hecha. Pendiente: F6.3-P1, para Leonardo; generador XML (F5.4-P1), opcional.

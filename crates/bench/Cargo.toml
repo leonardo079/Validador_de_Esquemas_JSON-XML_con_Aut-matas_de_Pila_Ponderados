@@ -22,6 +22,8 @@ dhat = "=0.3.3"
 [dev-dependencies]
 # Sin `plotters` ni `rayon`: solo el arnés de `cargo bench` (F6.6, D1).
 criterion = { version = "=0.5.1", default-features = false, features = ["cargo_bench_support"] }
+# F6.3: comprobar en las pruebas que una mutación deja (o no) JSON bien formado.
+serde_json = "1.0.154"
 
 # F6.6: detector de una regresión cuadrática en las claves repetidas del parser
 # de esquemas (sustituye a la prueba ignorada `muchas_claves_en_tiempo_lineal`,
@@ -44,3 +46,9 @@ workspace = true
 [[bin]]
 name = "generar"
 path = "src/bin/generar.rs"
+
+# F6.3: payloads inválidos y malformados por mutación de los válidos del
+# corpus. `cargo run -p bench --release --bin mutar -- --escribir`.
+[[bin]]
+name = "mutar"
+path = "src/bin/mutar.rs"

@@ -1,0 +1,20 @@
+{
+  "_id": "malformed-json-mut-gen-combinados-02",
+  "category": "malformed",
+  "format": "json",
+  "description": "Mutación «cero-inicial» de valid-gen-combinados-02 con la semilla 7001 (F6.3): error léxico en el byte 9; el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {
+    "allOf": [
+      { "type": "object", "required": ["nombre"] },
+      { "properties": { "nombre": { "type": "string", "minLength": 3 }, "edad": { "type": "integer", "minimum": 18 } } }
+    ],
+    "anyOf": [ { "required": ["edad"] }, { "properties": { "menor": { "const": false } }, "required": ["menor"] } ]
+  },
+  "payload": "{\"edad\":012,\"nombre\":\"wbbrgj\"}",
+  "expected": {
+    "valid": false,
+    "errorKind": "lexical",
+    "offset": 9
+  }
+}

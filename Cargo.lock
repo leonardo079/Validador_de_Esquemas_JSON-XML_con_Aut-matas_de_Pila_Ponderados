@@ -178,6 +178,7 @@ dependencies = [
  "runtime-rs",
  "schema-parser",
  "semantic",
+ "serde_json",
  "xsd",
 ]
 

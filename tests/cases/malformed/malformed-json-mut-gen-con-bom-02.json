@@ -1,0 +1,14 @@
+{
+  "_id": "malformed-json-mut-gen-con-bom-02",
+  "category": "malformed",
+  "format": "json",
+  "description": "Mutación «literal» de valid-gen-con-bom-02 con la semilla 9003 (F6.3): error léxico en el byte 1; el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {"type": "string"},
+  "payload": "ture",
+  "expected": {
+    "valid": false,
+    "errorKind": "lexical",
+    "offset": 1
+  }
+}

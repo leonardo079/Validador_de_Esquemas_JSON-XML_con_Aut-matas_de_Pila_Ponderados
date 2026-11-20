@@ -662,3 +662,24 @@ remite a ellas.
 - **Dónde:** `crates/baseline/src/xml.rs:70` (`NO_UTF8`),
   `crates/baseline/tests/xml.rs` (`entradas_no_utf8`).
 - **Tarea:** la próxima que toque `xml.rs` (F6.5 o F4.6).
+
+### 28. Fallo temprano frente a un error léxico posterior (F6.3-P1)
+
+- **Estado:** las mutaciones de F6.3 encontraron un payload en el que los dos modos del DPDA dan
+  clases distintas. Con `{"type": "string"}` y el payload `1.`:
+  - en modo total, `lexical` en el offset 2, igual que la línea base;
+  - en fallo temprano (`Mode::EarlyFail`), `schema`, porque el DPDA se detiene en la violación de
+    `type` al ver que empieza un número y nunca llega al error léxico.
+
+  `crates/automaton/tests/corpus.rs` (`todo_el_corpus_da_lo_esperado`, criterio 6 de F4.6) exige la
+  misma clase en los dos modos, así que el caso no puede entrar al corpus tal cual. Hoy
+  `bench::mutar::clasificar` descarta esos payloads.
+- **Lectura:** no es un error del validador. Fallo temprano significa «detenerse en el primer error»,
+  y la violación llega antes que el byte malformado. La que se queda corta es la redacción del
+  criterio 6.
+- **Arreglo propuesto (decide Leonardo, pista A):**
+  - opción a: precisar el criterio 6, de modo que en fallo temprano un payload malformado puede dar
+    `schema` si la primera violación está antes del error léxico o sintáctico;
+  - opción b: no tocar nada y dejar el filtro de `clasificar` como está.
+- **Dónde:** `crates/automaton/tests/corpus.rs:225-235`, `crates/bench/src/mutar.rs` (`clasificar`).
+- **Tarea:** F5.x o E3 (pista A); sin bloqueo.

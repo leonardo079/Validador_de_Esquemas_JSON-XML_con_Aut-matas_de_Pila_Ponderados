@@ -1,0 +1,19 @@
+{
+  "_id": "invalid-mut-gen-alternativas-02",
+  "category": "invalid",
+  "format": "json",
+  "description": "Mutación «rango» de valid-gen-alternativas-02 con la semilla 1002 (F6.3): 1 violación(es) (oneOf); el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {
+    "type": "array",
+    "minItems": 2,
+    "items": { "oneOf": [ { "type": "string", "maxLength": 3 }, { "type": "integer", "exclusiveMinimum": 0 } ] }
+  },
+  "payload": "[\"kdt\",\"rgj\",-1,\"l\",90]",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 13
+  }
+}

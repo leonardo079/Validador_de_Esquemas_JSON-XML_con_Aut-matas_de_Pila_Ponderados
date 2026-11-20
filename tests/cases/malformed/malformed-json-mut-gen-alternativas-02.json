@@ -1,0 +1,18 @@
+{
+  "_id": "malformed-json-mut-gen-alternativas-02",
+  "category": "malformed",
+  "format": "json",
+  "description": "Mutación «coma» de valid-gen-alternativas-02 con la semilla 1001 (F6.3): error sintáctico en el byte 22; el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {
+    "type": "array",
+    "minItems": 2,
+    "items": { "oneOf": [ { "type": "string", "maxLength": 3 }, { "type": "integer", "exclusiveMinimum": 0 } ] }
+  },
+  "payload": "[\"kdt\",\"rgj\",4,\"l\",90,]",
+  "expected": {
+    "valid": false,
+    "errorKind": "syntax",
+    "offset": 22
+  }
+}

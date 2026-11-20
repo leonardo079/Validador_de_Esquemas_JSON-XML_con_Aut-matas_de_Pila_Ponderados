@@ -1,0 +1,21 @@
+{
+  "_id": "invalid-mut-gen-conjunto-01",
+  "category": "invalid",
+  "format": "json",
+  "description": "Mutación «rango» de valid-gen-conjunto-01 con la semilla 10001 (F6.3): 1 violación(es) (maximum); el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {
+    "type": "array",
+    "minItems": 3,
+    "maxItems": 6,
+    "uniqueItems": true,
+    "items": { "type": "integer", "minimum": 0, "maximum": 100 }
+  },
+  "payload": "[52,89,19,1000000]",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 10
+  }
+}

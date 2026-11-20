@@ -1,0 +1,30 @@
+{
+  "_id": "invalid-mut-gen-arbol-recursivo-01",
+  "category": "invalid",
+  "format": "json",
+  "description": "Mutación «rango» de valid-gen-arbol-recursivo-01 con la semilla 4001 (F6.3): 1 violación(es) (type); el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+      "node": {
+        "$anchor": "nodo",
+        "type": "object",
+        "properties": {
+          "value": { "type": "integer" },
+          "children": { "type": "array", "items": { "$ref": "#/$defs/node" } }
+        },
+        "required": ["value"],
+        "additionalProperties": false
+      }
+    },
+    "$ref": "#/$defs/node"
+  },
+  "payload": "{\"value\":7.001,\"children\":[]}",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 9
+  }
+}

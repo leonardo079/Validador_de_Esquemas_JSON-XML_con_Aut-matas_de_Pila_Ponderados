@@ -1,0 +1,20 @@
+{
+  "_id": "malformed-json-mut-gen-combinados-01",
+  "category": "malformed",
+  "format": "json",
+  "description": "Mutación «coma» de valid-gen-combinados-01 con la semilla 6001 (F6.3): error sintáctico en el byte 32; el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {
+    "allOf": [
+      { "type": "object", "required": ["nombre"] },
+      { "properties": { "nombre": { "type": "string", "minLength": 3 }, "edad": { "type": "integer", "minimum": 18 } } }
+    ],
+    "anyOf": [ { "required": ["edad"] }, { "properties": { "menor": { "const": false } }, "required": ["menor"] } ]
+  },
+  "payload": "{\"menor\":false,\"nombre\":\"kozln\",}",
+  "expected": {
+    "valid": false,
+    "errorKind": "syntax",
+    "offset": 32
+  }
+}

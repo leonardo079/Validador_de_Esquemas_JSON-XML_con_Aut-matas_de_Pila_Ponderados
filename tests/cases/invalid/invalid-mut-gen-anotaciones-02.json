@@ -1,0 +1,30 @@
+{
+  "_id": "invalid-mut-gen-anotaciones-02",
+  "category": "invalid",
+  "format": "json",
+  "description": "Mutación «tipo» de valid-gen-anotaciones-02 con la semilla 3002 (F6.3): 1 violación(es) (type); el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {
+    "$comment": "Todas las anotaciones de la lista blanca (docs/00-alcance.md §2.1).",
+    "title": "Producto",
+    "description": "Un producto del catálogo",
+    "default": { "nombre": "sin nombre" },
+    "examples": [{ "nombre": "Café" }, "cualquier cosa", 3],
+    "deprecated": false,
+    "readOnly": true,
+    "writeOnly": false,
+    "definitions": {
+      "nombre": { "type": "string", "$comment": "alias de $defs" }
+    },
+    "properties": {
+      "nombre": { "$ref": "#/definitions/nombre" }
+    }
+  },
+  "payload": "{\"nombre\":[]}",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 10
+  }
+}

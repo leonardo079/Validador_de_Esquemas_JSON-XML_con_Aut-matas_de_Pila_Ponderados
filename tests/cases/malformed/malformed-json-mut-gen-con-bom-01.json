@@ -1,0 +1,14 @@
+{
+  "_id": "malformed-json-mut-gen-con-bom-01",
+  "category": "malformed",
+  "format": "json",
+  "description": "Mutación «escape» de valid-gen-con-bom-01 con la semilla 8001 (F6.3): error léxico en el byte 2; el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {"type": "string"},
+  "payload": "\"\\qugnb\"",
+  "expected": {
+    "valid": false,
+    "errorKind": "lexical",
+    "offset": 2
+  }
+}

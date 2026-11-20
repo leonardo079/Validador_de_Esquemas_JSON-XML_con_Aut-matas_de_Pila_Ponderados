@@ -1,0 +1,19 @@
+{
+  "_id": "invalid-mut-gen-alternativas-01",
+  "category": "invalid",
+  "format": "json",
+  "description": "Mutación «tipo» de valid-gen-alternativas-01 con la semilla 1 (F6.3): 1 violación(es) (oneOf); el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {
+    "type": "array",
+    "minItems": 2,
+    "items": { "oneOf": [ { "type": "string", "maxLength": 3 }, { "type": "integer", "exclusiveMinimum": 0 } ] }
+  },
+  "payload": "[true,\"nud\",\"xl\"]",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 1
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "_id": "malformed-json-mut-gen-anotaciones-02",
+  "category": "malformed",
+  "format": "json",
+  "description": "Mutación «literal» de valid-gen-anotaciones-02 con la semilla 3001 (F6.3): error léxico en el byte 13; el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {
+    "$comment": "Todas las anotaciones de la lista blanca (docs/00-alcance.md §2.1).",
+    "title": "Producto",
+    "description": "Un producto del catálogo",
+    "default": { "nombre": "sin nombre" },
+    "examples": [{ "nombre": "Café" }, "cualquier cosa", 3],
+    "deprecated": false,
+    "readOnly": true,
+    "writeOnly": false,
+    "definitions": {
+      "nombre": { "type": "string", "$comment": "alias de $defs" }
+    },
+    "properties": {
+      "nombre": { "$ref": "#/definitions/nombre" }
+    }
+  },
+  "payload": "{\"nombre\":nul}",
+  "expected": {
+    "valid": false,
+    "errorKind": "lexical",
+    "offset": 13
+  }
+}

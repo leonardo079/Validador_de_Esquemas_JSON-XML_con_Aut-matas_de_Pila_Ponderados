@@ -1,0 +1,15 @@
+{
+  "_id": "invalid-mut-gen-objeto-cerrado-02",
+  "category": "invalid",
+  "format": "json",
+  "description": "Mutación «miembro-extra» de valid-gen-objeto-cerrado-02 con la semilla 15001 (F6.3): 1 violación(es) (additionalProperties); el DPDA y la línea base coinciden.",
+  "phase": 6,
+  "schema": {"type":"object","properties":{"a":{"type":"integer"}},"required":["a"],"additionalProperties":false},
+  "payload": "{\"zz_extra\":1,\"a\":-7}",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 12
+  }
+}

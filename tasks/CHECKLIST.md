@@ -80,7 +80,7 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 
 - [ ] **F6.1** · Reporte de error con puntero JSON, offset y línea/columna desde la pila — *Pista:* A · *Depende:* F5.1 · *Resp.:* — · *Estado:* libre
 - [ ] **F6.2** · Límites configurables: profundidad, tamaño, cadena, dígitos, tiempo — *Pista:* A · *Depende:* F5.1 · *Resp.:* — · *Estado:* libre
-- [ ] **F6.3** · Generador de payloads inválidos y malformados (mutaciones) — *Pista:* B · *Depende:* F5.4 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
+- [x] **F6.3** · Generador de payloads inválidos y malformados (mutaciones) — *Pista:* B · *Depende:* F5.4 · *Resp.:* Bayron · *Estado:* hecha (20 nov) · D67 · sin rondas (sin agentes) · `cargo run -p bench --release --bin mutar`; doc en `docs/fase6/mutaciones.md`; F6.3-P1 en `docs/fase6/pendientes.md` §28 (pista A)
 - [ ] **F6.4** · Mitigaciones (DTD/entidades, `pattern` como AFD, `$ref` cíclico) y fuzzing con cargo-fuzz — *Pista:* AB · *Depende:* F5.3 · *Resp.:* — · *Estado:* libre
 - [x] **F6.5** · Arnés de métricas: MB/s, ciclos/byte, pico de memoria, asignaciones, profundidad, estados — *Pista:* B · *Depende:* F6.7 · *Resp.:* Bayron · *Estado:* hecha (20 nov) · D65 · `cargo run -p bench --release --bin metricas`; resultados en `docs/fase6/metricas.md`
 - [x] **F6.6** · Benchmark criterion del parser de esquemas con N y 4N claves (sustituye la prueba ignorada, D1) — *Pista:* B · *Depende:* — · *Resp.:* Bayron · *Estado:* hecha (19 nov) · D58 · `crates/bench/benches/parser_claves.rs`; razones 4,6-5,4 (lineal); `docs/fase2/pendientes.md` §1
