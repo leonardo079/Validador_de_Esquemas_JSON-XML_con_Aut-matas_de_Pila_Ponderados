@@ -33,7 +33,7 @@ aquí solo se remite a ellas.
     Linux) y pasarle el esquema por la entrada estándar o por un archivo temporal. Con
     eso, un aborto solo tumba esa compilación (el servidor la vería como un 500).
 - **Dónde:** `server/src/api.rs:300` (`spawn` del hilo de compilación).
-- **Tarea:** F7.7 (`mem_limit`), F7.3 (proceso hijo).
+- **Tarea:** F7.7 (`mem_limit`). **F7.3 (D68):** el proceso hijo se resolvió con el sandbox Docker para el código generado. Para la compilación de esquemas se descarta, porque arrancar un contenedor por petición no compensa; queda el `mem_limit` de F7.7 ([sandbox.md](sandbox.md) §5).
 
 ### 2. `id` persistente (F7.1-P2)
 
@@ -264,4 +264,26 @@ aquí solo se remite a ellas.
 - **Arreglo propuesto:** el proceso hijo de F7.3 (§1), al que sí se le puede mandar una
   señal.
 - **Dónde:** `server/src/api.rs:300`.
-- **Tarea:** F7.3.
+- **Tarea:** F7.3. **Resuelto para el código generado (F7.3, D68):** compilar y ejecutar corre en un contenedor aparte, con `timeout` dentro y `docker kill` al pasar el plazo de pared ([sandbox.md](sandbox.md) §2). La compilación de *esquemas* sigue en un hilo (§1).
+
+### 13. Binario compilado en caché por esquema (F7.3-P1)
+
+- **Estado:** cada `ejecutar` del sandbox compila desde cero: alrededor de 1 s en C y varios segundos en Rust
+  con `-O`, más el arranque del contenedor.
+- **Arreglo propuesto:** en F7.5, compilar una vez por `id` de esquema y guardar el binario. Hay dos maneras:
+  - un segundo modo de `sandbox-run`, que solo ejecute un binario recibido en el tar;
+  - un contenedor de larga vida por esquema.
+
+  Las restricciones de [sandbox.md](sandbox.md) §2 se mantienen en los dos casos.
+- **Dónde:** `server/src/sandbox.rs` (`ejecutar`), `sandbox/sandbox-run.sh`.
+- **Tarea:** F7.5.
+
+### 14. El código generado tiene que compilar sin dependencias (F7.3-P2)
+
+- **Estado:** el sandbox compila sin red un `main.rs` suelto o un conjunto de `.c`/`.h`, sin Cargo.
+- **Arreglo propuesto:**
+  - si F5.1 emite un crate que depende de `runtime-rs` y `lexer`, copiar sus fuentes en la imagen (etapa
+    `COPY` con su propio `Cargo.toml` de workspace) y usar `cargo build --offline`;
+  - o que el emisor incluya el núcleo en el mismo archivo.
+- **Dónde:** `sandbox/Dockerfile`, `sandbox/sandbox-run.sh`.
+- **Tarea:** F5.1 (decide la forma, pista A) y F7.5.

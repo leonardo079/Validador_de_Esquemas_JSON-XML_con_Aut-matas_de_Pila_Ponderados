@@ -1,7 +1,7 @@
 # Tareas comunes del proyecto. En Windows sin `make`, usar scripts/lint.ps1.
 C_SOURCES := $(shell find crates/runtime-c -name '*.c' -o -name '*.h' 2>/dev/null)
 
-.PHONY: all build test test-baseline-xml fmt fmt-check clippy c-fmt-check unsafe-check lint coverage docs docs-check doradas clean
+.PHONY: all build test test-baseline-xml test-sandbox fmt fmt-check clippy c-fmt-check unsafe-check lint coverage docs docs-check doradas clean
 
 all: build
 
@@ -28,6 +28,12 @@ test-baseline-xml:
 	$(BASELINE_XML_RUN) $(BASELINE_XML_IMAGE) cargo fetch --locked
 	$(BASELINE_XML_RUN) --network none --cap-drop ALL --security-opt no-new-privileges \
 		$(BASELINE_XML_IMAGE) sh scripts/test-baseline-xml.sh
+
+# F7.3 (D68): pruebas del sandbox con contenedores reales (`docs/fase7/sandbox.md`).
+# Mantener a la par con `scripts/test-sandbox.ps1`.
+test-sandbox:
+	docker build -t validador-sandbox:1 sandbox
+	cargo test -p server --release --test sandbox -- --ignored --test-threads 1
 
 fmt:
 	cargo fmt --all

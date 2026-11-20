@@ -12,6 +12,7 @@ use std::time::Duration;
 
 mod api;
 pub mod compilar;
+pub mod sandbox;
 
 pub use api::{router, router_con, Compilador};
 

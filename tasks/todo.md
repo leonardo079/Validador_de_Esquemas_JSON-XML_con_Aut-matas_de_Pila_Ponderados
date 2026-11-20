@@ -713,3 +713,14 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [x] Doc en `docs/fase6/mutaciones.md`; hallazgo F6.3-P1 en `docs/fase6/pendientes.md` §28 (decide la pista A); `lint OK`; 733 pruebas del workspace en verde.
 
 **Estado (20 nov):** hecha. Pendiente: F6.3-P1, para Leonardo; generador XML (F5.4-P1), opcional.
+
+# Tarea F7.3: sandbox Docker para el código generado (pista B, Bayron; 20 nov, D68)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario).
+
+- [x] Imagen `sandbox/` (`validador-sandbox:1`): Rust 1.100.0 por digest con `rustc`, `cc`, `tar` y `timeout`; usuario 10001; punto de entrada `sandbox-run` con las órdenes de compilación fijas (C11 y Rust) y `timeout` para compilar y para ejecutar.
+- [x] `server::sandbox`: un contenedor por trabajo con `--network none`, `--read-only` + tmpfs, sin root, memoria sin swap, CPU, `--pids-limit`, `--ulimit`, `--cap-drop ALL`, `no-new-privileges` e `--ipc none`; entrada por tar sin montajes; plazo de pared con `docker kill`; salida recortada; nombres y tamaño validados.
+- [x] 3 pruebas sin Docker en `cargo test` (argumentos, `comprobar`, tar ustar) y 8 con contenedores reales (`scripts/test-sandbox.ps1` o `make test-sandbox`): C y Rust, error de compilación, bucle infinito, sin red/root y solo lectura, memoria, bomba de `fork`, salida. Todas en verde.
+- [x] Doc en `docs/fase7/sandbox.md`; `docs/fase7/pendientes.md` §1 y §12 anotados y §13-§14 nuevos; `lint OK`; 736 pruebas del workspace en verde (9 ignoradas).
+
+**Estado (20 nov):** hecha. Pendiente: F7.3-P1 (caché del binario por esquema, F7.5) y F7.3-P2 (código generado sin dependencias, F5.1, pista A).
