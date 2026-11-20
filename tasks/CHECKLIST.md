@@ -83,7 +83,7 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 - [ ] **F6.3** · Generador de payloads inválidos y malformados (mutaciones) — *Pista:* B · *Depende:* F5.4 · *Resp.:* — · *Estado:* libre
 - [ ] **F6.4** · Mitigaciones (DTD/entidades, `pattern` como AFD, `$ref` cíclico) y fuzzing con cargo-fuzz — *Pista:* AB · *Depende:* F5.3 · *Resp.:* — · *Estado:* libre
 - [ ] **F6.5** · Arnés de métricas: MB/s, ciclos/byte, pico de memoria, asignaciones, profundidad, estados — *Pista:* B · *Depende:* F6.7 · *Resp.:* — · *Estado:* libre
-- [ ] **F6.6** · Benchmark criterion del parser de esquemas con N y 4N claves (sustituye la prueba ignorada, D1) — *Pista:* B · *Depende:* — · *Resp.:* — · *Estado:* libre
+- [x] **F6.6** · Benchmark criterion del parser de esquemas con N y 4N claves (sustituye la prueba ignorada, D1) — *Pista:* B · *Depende:* — · *Resp.:* Bayron · *Estado:* hecha (19 nov) · D58 · `crates/bench/benches/parser_claves.rs`; razones 4,6-5,4 (lineal); `docs/fase2/pendientes.md` §1
 - [x] **F6.7** · Líneas base: `serde_json` + `jsonschema` y libxml2 (DOM + XSD) sobre el corpus — *Pista:* B · *Depende:* — · *Resp.:* Bayron · *Estado:* hecha (18 nov) · **F6.7a (JSON): 15 nov · 1 ronda** (D48-D50) y **F6.7b (XML, libxml2 en Docker): 18 nov · 1 ronda** (D54); observaciones en `docs/fase6/pendientes.md` §1-§27 (§14 y §21 bloqueantes para F7; §26 por confirmar con Leonardo); criterios en `tasks/todo.md`
 
 ## Fase 7 — aplicación web (`server/`, `web/`, `sandbox/`, `infra/`)

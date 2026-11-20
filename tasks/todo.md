@@ -666,3 +666,14 @@ Hecha directamente por el orquestador, sin Planner/Tester/Reviewers (decisión d
 - [x] `npm test` (18 pruebas), `tsc --noEmit` y `npm run build` en verde; probado de punta a punta con `cargo run -p server --release` + `npm run dev` (página, `/api/health`, XSD 200 y esquema con errores 422 por el proxy).
 
 **Estado (19 nov):** hecha. Pendiente para F7.6: vistas del autómata, árbol de derivación y métricas; para F7.5: descargar el código y validar payloads.
+
+# Tarea F6.6: benchmark del parser de esquemas (pista B, Bayron; 19 nov, D58)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario).
+
+- [x] `crates/bench/benches/parser_claves.rs` con criterion 0.5.1 (sin `plotters` ni `rayon`): objetos de N = 10⁴ y 4N claves en `properties`, `const`, `$defs` y `dependentRequired`, con `Throughput::Elements`.
+- [x] Corre con `cargo bench -p bench --bench parser_claves` (y `-- --test`); no entra en `cargo test` (D1).
+- [x] Primera medida: t(4N)/t(N) = 5,0 / 5,4 / 4,6 / 4,8 (lineal; la cuadrática daba 26-28), anotada en `docs/fase2/pendientes.md` §1.
+- [x] `lint OK` (fmt + clippy con `--all-targets`, que compila el benchmark).
+
+**Estado (19 nov):** hecha.

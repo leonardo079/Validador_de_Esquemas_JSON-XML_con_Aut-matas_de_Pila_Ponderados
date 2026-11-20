@@ -11,5 +11,17 @@ repository.workspace = true
 lexer.workspace = true
 automaton.workspace = true
 
+[dev-dependencies]
+schema-parser.workspace = true
+# Sin `plotters` ni `rayon`: solo el arnés de `cargo bench` (F6.6, D1).
+criterion = { version = "=0.5.1", default-features = false, features = ["cargo_bench_support"] }
+
+# F6.6: detector de una regresión cuadrática en las claves repetidas del parser
+# de esquemas (sustituye a la prueba ignorada `muchas_claves_en_tiempo_lineal`,
+# D1, hallazgo 2). `cargo bench -p bench --bench parser_claves`.
+[[bench]]
+name = "parser_claves"
+harness = false
+
 [lints]
 workspace = true
