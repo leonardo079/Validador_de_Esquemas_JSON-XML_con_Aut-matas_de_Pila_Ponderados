@@ -1,0 +1,18 @@
+{
+  "_id": "invalid-unique-items-01",
+  "category": "invalid",
+  "format": "json",
+  "description": "uniqueItems: 1 y 1.0 son el mismo número; 1 violación en el ']'.",
+  "phase": 4,
+  "schema": {
+    "type": "array",
+    "uniqueItems": true
+  },
+  "payload": "[1, 2, 1.0]",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 10
+  }
+}

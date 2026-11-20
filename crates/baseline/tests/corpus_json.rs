@@ -12,11 +12,18 @@
 use baseline::corpus::{self, Case, ErrorKind, Format, Payload};
 use baseline::{run_case, with_stack, Outcome, Unavailable};
 
-/// Casos cuyo número de violaciones en la línea base difiere a propósito del
-/// de `expected` (el peso del DPDA): (`_id`, campo, motivo). El único campo
-/// admitido es `violations`. Hoy no diverge ninguno; las diferencias de
-/// recuento conocidas están en `docs/fase6/linea-base.md` §4.
-const DIVERGENCIAS: &[(&str, &str, &str)] = &[];
+/// Casos cuyo resultado en la línea base difiere a propósito del de
+/// `expected` (el del DPDA): (`_id`, campo, motivo). Campos admitidos:
+/// `violations` (el recuento) y `errorKind` (la clase del error, solo con el
+/// mismo `valid`; añadido en F4.6). Las diferencias de recuento conocidas
+/// están en `docs/fase6/linea-base.md` §4.
+const DIVERGENCIAS: &[(&str, &str, &str)] = &[(
+    "extreme-big-number-01",
+    "errorKind",
+    "el DPDA guarda como mucho 1 024 bytes del lexema (`docs/00-alcance.md` §4) y da \
+     `limit` cuando una comprobación lo lee; `serde_json` no representa 10¹⁰²⁴ en `f64` \
+     y la línea base da `Unsupported` (D50, B19)",
+)];
 
 /// Diferencias entre el resultado de la línea base y `expected` (vacío =
 /// coincide), con el archivo, el campo, lo esperado y lo obtenido (B11).
@@ -31,7 +38,17 @@ fn comparar(case: &Case, o: &Outcome, divergencias: &[(&str, &str, &str)]) -> Ve
         ));
     }
     let clase = x.error_kind.map(ErrorKind::kind);
-    if o.kind != clase {
+    let div_clase = divergencias
+        .iter()
+        .find(|(id, campo, _)| *id == case.id && *campo == "errorKind");
+    if let Some((_, _, motivo)) = div_clase {
+        if o.kind == clase {
+            e.push(format!(
+                "{quien}: está en DIVERGENCIAS («{motivo}») pero la clase ya no diverge: \
+                 quitar la entrada"
+            ));
+        }
+    } else if o.kind != clase {
         e.push(format!(
             "{quien}: `errorKind` esperado {:?} (clase {clase:?}), obtenido {:?}",
             x.error_kind, o.kind
@@ -44,7 +61,9 @@ fn comparar(case: &Case, o: &Outcome, divergencias: &[(&str, &str, &str)]) -> Ve
             o.violation_count()
         ));
     }
-    let divergencia = divergencias.iter().find(|(id, _, _)| *id == case.id);
+    let divergencia = divergencias
+        .iter()
+        .find(|(id, campo, _)| *id == case.id && *campo == "violations");
     match (x.violations, divergencia) {
         (Some(n), None) if n != o.violation_count() as u64 => e.push(format!(
             "{quien}: `violations` esperado {n}, obtenido {} ({:?}); si es una \
@@ -86,8 +105,8 @@ fn comparar(case: &Case, o: &Outcome, divergencias: &[(&str, &str, &str)]) -> Ve
 #[test]
 fn la_linea_base_recorre_el_corpus_json() {
     for (id, campo, motivo) in DIVERGENCIAS {
-        assert_eq!(
-            *campo, "violations",
+        assert!(
+            matches!(*campo, "violations" | "errorKind"),
             "{id}: campo de DIVERGENCIAS no admitido"
         );
         assert!(!motivo.trim().is_empty(), "{id}: DIVERGENCIAS sin motivo");

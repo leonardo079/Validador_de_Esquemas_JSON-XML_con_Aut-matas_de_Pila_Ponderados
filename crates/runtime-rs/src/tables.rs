@@ -6,12 +6,15 @@
 //! que el mismo formato sirva en Rust y en C. Teoría en
 //! `docs/fase4/automata.md` §3-§4.
 //!
-//! Campos reservados para los combinadores (F4.5a): `Check::slot` (siempre
-//! 0), `Frame::slots`/`Frame::gates` (vacíos), `Trans::outs` (siempre
-//! [`OUT_IDENTITY`] en las transiciones que apilan o abren un escalar) y
-//! `Tables::scalar_slots` (la zona global de salidas de la instancia escalar
-//! abierta, 0 palabras; `docs/fase4/automata.md` §3.6). El núcleo de F4.1b
-//! no los lee.
+//! Combinadores (F4.5a, `docs/fase4/automata.md` §18): cada comprobación
+//! cuenta a un destino (`Check::slot`: 0 el peso global, k ≥ 1 la salida k
+//! de la instancia; con [`SLOT_CHILD`], la de la instancia que abre la
+//! transición), cada tipo de marco tiene sus salidas (`Frame::slots`) y sus
+//! puertas (`Frame::gates`), que se evalúan al cerrar la instancia, y la
+//! transición que abre una instancia con salidas lleva el mapa que las suma
+//! a las de la instancia padre (`Trans::outs`; [`OUT_IDENTITY`] si no tiene
+//! salidas). Las instancias escalares usan la zona global de
+//! `Tables::scalar_slots` palabras al principio de la memoria.
 
 /// Clases fijas de Σ: los eventos estructurales del lexer JSON. Las clases
 /// de carácter de cadena van a continuación ([`class::CHAR`] + la clase del
@@ -98,8 +101,48 @@ pub mod xclass {
 /// Sin bit de máscara que fijar ([`Trans::bit`], [`Trans::mark`]).
 pub const NO_BIT: u32 = u32::MAX;
 
-/// Mapa de salidas identidad ([`Trans::outs`]; F4.5a añadirá otros).
+/// La instancia que abre la transición no tiene salidas ([`Trans::outs`]).
 pub const OUT_IDENTITY: u32 = u32::MAX;
+
+/// [`Check::slot`]: la comprobación cuenta en la instancia que abre la
+/// transición (las de entrada de un valor), no en la actual.
+pub const SLOT_CHILD: u32 = 1 << 31;
+
+/// Qué combina una [`Gate`] al cerrar la instancia.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum GateKind {
+    /// `anyOf`: +1 al destino si todas las entradas son > 0.
+    Any,
+    /// `oneOf`: +1 si no hay exactamente una entrada en 0.
+    One,
+    /// `not`: +1 si la entrada es 0.
+    Not,
+    /// `dependentSchemas`: si el bit `Gate::bit` de la máscara está, suma
+    /// la entrada al destino.
+    Implies,
+}
+
+/// Una puerta: combina las salidas `gate_inputs[inputs .. inputs + n_inputs]`
+/// de la instancia y suma a `target` (0: el peso global).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Gate {
+    pub kind: GateKind,
+    /// Regla a la que se atribuye (índice en [`Tables::rules`]).
+    pub rule: u32,
+    pub target: u32,
+    pub inputs: u32,
+    pub n_inputs: u32,
+    /// [`GateKind::Implies`]: bit de la máscara; [`NO_BIT`] si nunca salta.
+    pub bit: u32,
+}
+
+/// Un mapa de salidas: la salida j + 1 de la instancia que se cierra se
+/// suma a la `out_targets[off + j]` de la instancia padre.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct OutMap {
+    pub off: u32,
+    pub len: u32,
+}
 
 /// Error de peso ∞ que da una transición o el propio núcleo.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -205,6 +248,10 @@ pub enum Test {
     NumEnum,
     /// … es múltiplo de `divisors[arg]` (`multipleOf`).
     MultipleOf,
+    /// Los elementos del arreglo que se cierra son distintos por valor
+    /// (`uniqueItems`, F4.5b): sus hashes canónicos, ordenados, sin dos
+    /// iguales seguidos.
+    Unique,
     /// … está en uno de los intervalos `intervals[arg .. arg + len]`,
     /// ordenados y disjuntos (`enum`/`fixed` de `xs:float`/`xs:double`: el
     /// intervalo de redondeo de cada valor, F4.1c).
@@ -220,7 +267,8 @@ pub struct Check {
     /// Costo estático c (`automaton::weight::cost`); ordena las
     /// comprobaciones de la transición.
     pub cost: u32,
-    /// Salida a la que cuenta (F4.5a); siempre 0.
+    /// Destino (F4.5a): 0 el peso global, k la salida k; con
+    /// [`SLOT_CHILD`], de la instancia que abre la transición.
     pub slot: u32,
     /// Contador del marco que leen [`Test::CountMin`] y [`Test::CountMax`]
     /// (F4.1b-CR-S5); 0 en las demás.
@@ -243,21 +291,27 @@ impl Check {
 }
 
 /// Tipo de marco: disposición de sus registros en la pila. Las palabras
-/// de registros son `[máscara (mask_words)] [contadores (k)]`: la máscara
-/// de nombres va primero y el contador i, en la palabra `mask_words + i`
+/// de registros son `[máscara (mask_words)] [contadores (k)] [salidas
+/// (slots)]`: la máscara de nombres va primero, el contador i en la palabra
+/// `mask_words + i` y la salida j (desde 1) en `words − slots + j − 1`
 /// (F4.1a-CR-S1: [`Test::Mask`] y [`Test::Dependent`] solo leen las
-/// `mask_words` primeras; F4.1b-CR-S5: k = `words − mask_words`).
+/// `mask_words` primeras; k = `words − mask_words − slots`). Un tipo de
+/// marco con `words` = 0 y salidas es el de una instancia escalar (no se
+/// apila; usa la zona global).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Frame {
     /// Palabras `u64` de registros (máscara y contadores).
     pub words: u32,
     /// Palabras de la máscara (`words − mask_words` son los contadores).
     pub mask_words: u32,
-    /// Salidas (F4.5a); 0.
+    /// Salidas (F4.5a).
     pub slots: u32,
-    /// Puertas `gates[gates .. gates + n_gates]` (F4.5a); vacías.
+    /// Puertas `gates[gates .. gates + n_gates]`, en orden de evaluación.
     pub gates: u32,
     pub n_gates: u32,
+    /// Arreglo con `uniqueItems` (F4.5b): el hash canónico de cada elemento
+    /// va a la reserva y [`Test::Unique`] la comprueba al cerrarlo.
+    pub unique: bool,
 }
 
 /// Qué hace una [`CounterOp`].
@@ -355,9 +409,15 @@ pub struct Tables<'a> {
     pub counter_ops: &'a [CounterOp],
     /// Intervalos de [`Test::NumIn`].
     pub intervals: &'a [Interval],
+    /// Puertas de los tipos de marco y sus entradas (F4.5a).
+    pub gates: &'a [Gate],
+    pub gate_inputs: &'a [u32],
+    /// Mapas de salidas ([`Trans::outs`]) y sus destinos.
+    pub outmaps: &'a [OutMap],
+    pub out_targets: &'a [u32],
     /// Palabras de la zona global de salidas de la instancia escalar
-    /// abierta, al principio de la memoria del llamador (F4.5a; 0 en
-    /// F4.1b). La pila de marcos empieza detrás.
+    /// abierta, al principio de la memoria del llamador (F4.5a). La pila de
+    /// marcos empieza detrás.
     pub scalar_slots: u32,
     /// Clase de carácter de cada punto de código ASCII (128 entradas).
     pub ascii: &'a [u32],
@@ -382,6 +442,26 @@ impl<'a> Tables<'a> {
             Some(r) if r.lo <= cp => r.class,
             _ => 0,
         }
+    }
+
+    /// Palabras `u64` de memoria que el llamador presta al núcleo para
+    /// validar con `limits` (F4-U18): la zona del escalar, `max_depth` marcos
+    /// del tipo más grande (registros y [`crate::FRAME_OVERHEAD`]) y la
+    /// reserva de hashes de la capa de buena formación y de `uniqueItems`.
+    /// Saturado: con unos
+    /// límites absurdos, `usize::MAX` (el llamador no podrá reservarla).
+    pub fn state_words(&self, limits: &crate::Limits) -> usize {
+        let frame = self
+            .frames
+            .iter()
+            .map(|f| f.words as usize)
+            .max()
+            .unwrap_or(0)
+            .saturating_add(crate::FRAME_OVERHEAD);
+        (self.scalar_slots as usize)
+            .saturating_add(limits.max_depth.saturating_mul(frame))
+            .saturating_add(limits.key_pool)
+            .saturating_add(limits.max_unique)
     }
 
     /// Número de estados.

@@ -1,0 +1,23 @@
+{
+  "_id": "invalid-type-01",
+  "category": "invalid",
+  "format": "json",
+  "description": "El valor de \"edad\" es una cadena donde el esquema pide un entero.",
+  "phase": 4,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "edad": {
+        "type": "integer"
+      }
+    }
+  },
+  "payload": "{\"edad\": \"diez\"}",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "pointer": "/edad",
+    "offset": 9
+  }
+}

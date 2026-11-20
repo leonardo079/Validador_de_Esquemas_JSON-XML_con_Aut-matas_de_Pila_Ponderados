@@ -25,7 +25,9 @@ impl Automaton {
         writeln!(w, "  \"registerBytes\": {},", s.register_bytes)?;
         writeln!(w, "  \"maxFrameBytes\": {},", s.max_frame_bytes)?;
         writeln!(w, "  \"products\": {},", s.products)?;
-        writeln!(w, "  \"deferred\": {}", s.deferred)?;
+        writeln!(w, "  \"deferred\": {},", s.deferred)?;
+        writeln!(w, "  \"dfaStates\": {},", s.dfa_states)?;
+        writeln!(w, "  \"dfaStatesMinimized\": {}", s.dfa_states_min)?;
         writeln!(w, "}}")
     }
 
@@ -139,6 +141,7 @@ impl Automaton {
                     Test::CountMin => format!("c{} ≥ {}", c.counter, c.bound()),
                     Test::CountMax => format!("c{} ≤ {}", c.counter, c.bound()),
                     Test::Unset => format!("sin {}", c.arg),
+                    Test::Unique => "únicos (hash)".to_owned(),
                     Test::NumIn => format!("∈ {} intervalos", c.len),
                     Test::LengthMin => format!("|s| ≥ {}", c.bound()),
                     Test::LengthMax => format!("|s| ≤ {}", c.bound()),

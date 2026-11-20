@@ -1,0 +1,25 @@
+{
+  "_id": "non-dpda-oneof-both-01",
+  "category": "non-dpda",
+  "format": "json",
+  "description": "oneOf: las dos ramas aceptan, 1 violación al cerrar el número.",
+  "phase": 4,
+  "strategy": "bounded-determinization",
+  "schema": {
+    "oneOf": [
+      {
+        "type": "integer"
+      },
+      {
+        "minimum": 0
+      }
+    ]
+  },
+  "payload": "3",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 0
+  }
+}

@@ -12,12 +12,59 @@
 //! (`Sets`, por su lista ordenada) y su id es el tipo de marco que lo lee.
 //! Teoría: `docs/fase4/automata.md` §6.4.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use ir::{Node, NodeId, Rule};
+use runtime_rs::tables::{GateKind, OUT_IDENTITY};
 
 use crate::BuildError;
+
+/// Una puerta de un conjunto (F4.5a): combina las salidas `inputs` y suma a
+/// `target` (0: el destino base del conjunto). La regla es la del
+/// combinador; `key`, la clave de `dependentSchemas`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct GateSpec {
+    pub(crate) kind: GateKind,
+    pub(crate) node: NodeId,
+    pub(crate) rule: usize,
+    pub(crate) target: u32,
+    pub(crate) inputs: Vec<u32>,
+    pub(crate) key: Option<String>,
+}
+
+/// Lo que cada conjunto tiene además de sus componentes: sus salidas (las
+/// 1..=`n_out` van al padre por el mapa de la transición que lo abre; las
+/// demás son de las ramas) y sus puertas en orden de evaluación.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub(crate) struct Meta {
+    pub(crate) n_slots: u32,
+    pub(crate) gates: Rc<[GateSpec]>,
+}
+
+/// Lo que da el DFS conjuntivo de un nodo: los que aportan reglas propias y
+/// las reglas de los combinadores encontrados (nodo, índice).
+#[derive(Debug, Default)]
+struct Raw {
+    nodes: Vec<NodeId>,
+    combs: Vec<(usize, usize)>,
+}
+
+/// Si la regla es un combinador (F4.5a).
+fn combinator(r: &Rule) -> bool {
+    matches!(
+        r,
+        Rule::AnyOf(_) | Rule::OneOf(_) | Rule::Not(_) | Rule::DependentSchemas(_)
+    )
+}
+
+/// Si el nodo aporta reglas que el constructor compila (ni aristas
+/// conjuntivas ni combinadores, que el cierre resuelve).
+fn builds(node: &Node) -> bool {
+    node.rules
+        .iter()
+        .any(|c| !matches!(c.rule, Rule::Ref(_) | Rule::AllOf(_)) && !combinator(&c.rule))
+}
 
 /// Presupuesto de trabajo de los cierres por esquema (nodos y aristas
 /// recorridos, y tamaños de las uniones): con memoria por destino y alias
@@ -118,7 +165,8 @@ pub(crate) fn resolve_aliases(nodes: &[Node]) -> Result<Vec<u32>, BuildError> {
 #[derive(Debug)]
 pub(crate) struct Sets {
     list: Vec<Rc<[NodeId]>>,
-    ids: HashMap<Rc<[NodeId]>, SetId>,
+    meta: Vec<Meta>,
+    ids: HashMap<(Rc<[NodeId]>, Meta), SetId>,
 }
 
 impl Sets {
@@ -126,24 +174,33 @@ impl Sets {
         let vacio: Rc<[NodeId]> = Rc::from(Vec::new());
         Sets {
             list: vec![Rc::clone(&vacio)],
-            ids: HashMap::from([(vacio, ANY)]),
+            meta: vec![Meta::default()],
+            ids: HashMap::from([((vacio, Meta::default()), ANY)]),
         }
     }
 
-    /// Id de `v` (ya ordenado y sin repetir).
-    fn intern(&mut self, v: Vec<NodeId>) -> SetId {
-        if let Some(&id) = self.ids.get(v.as_slice()) {
+    /// Id de `v` (ya ordenado y sin repetir) con sus salidas y puertas.
+    fn intern(&mut self, v: Vec<NodeId>, meta: Meta) -> SetId {
+        let v: Rc<[NodeId]> = Rc::from(v);
+        let key = (Rc::clone(&v), meta.clone());
+        if let Some(&id) = self.ids.get(&key) {
             return id;
         }
         let id = self.list.len() as SetId;
-        let v: Rc<[NodeId]> = Rc::from(v);
-        self.list.push(Rc::clone(&v));
-        self.ids.insert(v, id);
+        self.list.push(v);
+        self.meta.push(meta);
+        self.ids.insert(key, id);
         id
     }
 
+    /// Los componentes (con destino ≠ 0, ids virtuales: `Closures::real`).
     pub(crate) fn get(&self, id: SetId) -> &[NodeId] {
         &self.list[id as usize]
+    }
+
+    /// Salidas y puertas del conjunto.
+    pub(crate) fn meta(&self, id: SetId) -> &Meta {
+        &self.meta[id as usize]
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -157,6 +214,14 @@ pub(crate) struct Closures<'a> {
     nodes: &'a [Node],
     alias: Vec<u32>,
     memo: Vec<Option<SetId>>,
+    raws: Vec<Option<Rc<Raw>>>,
+    /// Ids virtuales (F4.5a): el componente (nodo real, destino k ≥ 1) es
+    /// el id `nodes.len() + i` con `virt[i]` = (nodo, k).
+    virt: Vec<(NodeId, u32)>,
+    virt_ids: HashMap<(usize, u32), usize>,
+    /// Mapas de salidas internados (destinos en el padre).
+    pub(crate) outmaps: Vec<Vec<u32>>,
+    outmap_ids: HashMap<Vec<u32>, u32>,
     /// Marcas del DFS: (generación, en la pila).
     mark: Vec<(u32, bool)>,
     generation: u32,
@@ -170,6 +235,11 @@ impl<'a> Closures<'a> {
             nodes,
             alias: resolve_aliases(nodes)?,
             memo: vec![None; nodes.len()],
+            raws: vec![None; nodes.len()],
+            virt: Vec::new(),
+            virt_ids: HashMap::new(),
+            outmaps: Vec::new(),
+            outmap_ids: HashMap::new(),
             mark: vec![(0, false); nodes.len()],
             generation: 0,
             work: 0,
@@ -193,34 +263,199 @@ impl<'a> Closures<'a> {
         Ok(())
     }
 
-    /// C(v): DFS iterativo (pila explícita, D7) sobre las aristas
-    /// conjuntivas con los alias resueltos; un nodo ya en la pila es un
-    /// ciclo (`Internal`).
+    /// El nodo real de un componente (F4.5a: los ids virtuales).
+    pub(crate) fn real(&self, id: NodeId) -> NodeId {
+        match id.index().checked_sub(self.nodes.len()) {
+            Some(i) => self.virt.get(i).map_or(id, |v| v.0),
+            None => id,
+        }
+    }
+
+    /// El destino de un componente: 0 (el destino base) o la salida k.
+    pub(crate) fn tgt(&self, id: NodeId) -> u32 {
+        match id.index().checked_sub(self.nodes.len()) {
+            Some(i) => self.virt.get(i).map_or(0, |v| v.1),
+            None => 0,
+        }
+    }
+
+    /// Los ids virtuales resueltos: (nodo real, destino) de cada uno.
+    pub(crate) fn virtuals(&self) -> &[(NodeId, u32)] {
+        &self.virt
+    }
+
+    /// El id del componente (nodo real `x`, destino `t`).
+    fn vid(&mut self, x: usize, t: u32) -> NodeId {
+        if t == 0 {
+            return NodeId::new(x);
+        }
+        let n = self.nodes.len();
+        let i = *self.virt_ids.entry((x, t)).or_insert_with(|| {
+            self.virt.push((NodeId::new(x), t));
+            self.virt.len() - 1
+        });
+        NodeId::new(n + i)
+    }
+
+    /// El alias de `v`, o `None` si no aporta nada.
+    fn alias_of(&self, v: NodeId) -> Result<Option<usize>, BuildError> {
+        match self.alias.get(v.index()) {
+            Some(&r) if r == NONE => Ok(None),
+            Some(&r) => Ok(Some(r as usize)),
+            None => Err(BuildError::Internal(format!(
+                "nodo {} fuera de la IR",
+                v.index()
+            ))),
+        }
+    }
+
+    /// Id interno del mapa de salidas `targets`.
+    pub(crate) fn outmap(&mut self, targets: Vec<u32>) -> u32 {
+        if let Some(&i) = self.outmap_ids.get(&targets) {
+            return i;
+        }
+        let i = self.outmaps.len() as u32;
+        self.outmaps.push(targets.clone());
+        self.outmap_ids.insert(targets, i);
+        i
+    }
+
+    /// El mapa de salidas con el que se abre el conjunto `s` desde la raíz
+    /// (sin padre: ninguna salida va a él).
+    pub(crate) fn root_outs(&mut self, s: SetId) -> u32 {
+        if self.sets.meta(s).n_slots == 0 {
+            OUT_IDENTITY
+        } else {
+            self.outmap(Vec::new())
+        }
+    }
+
+    /// C(v) con los combinadores (F4.5a): los componentes del cierre
+    /// conjuntivo de v con destino 0; cada rama de un `anyOf`, `oneOf`,
+    /// `not` o `dependentSchemas` alcanzado abre una salida (una por nodo de
+    /// rama) con el cierre de la rama como destino, y una puerta que la
+    /// combina hacia el destino del combinador. Sin combinadores es el
+    /// cierre conjuntivo de antes. Las puertas se ordenan para que cada una
+    /// se evalúe después de las que escriben sus entradas.
     pub(crate) fn of(&mut self, v: NodeId) -> Result<SetId, BuildError> {
-        let r = match self.alias.get(v.index()) {
-            Some(&r) if r == NONE => return Ok(ANY),
-            Some(&r) => r as usize,
-            None => {
-                return Err(BuildError::Internal(format!(
-                    "nodo {} fuera de la IR",
-                    v.index()
-                )))
-            }
+        let Some(r) = self.alias_of(v)? else {
+            return Ok(ANY);
         };
         if let Some(id) = self.memo[r] {
             return Ok(id);
         }
+        let raw = self.raw(r)?;
+        if raw.combs.is_empty() {
+            let id = self.sets.intern(raw.nodes.clone(), Meta::default());
+            self.memo[r] = Some(id);
+            return Ok(id);
+        }
+        let mut comps: Vec<NodeId> = Vec::new();
+        let mut slot_of: HashMap<Option<usize>, u32> = HashMap::new();
+        let mut n_slots = 0u32;
+        let mut gates: Vec<GateSpec> = Vec::new();
+        let mut seen: HashSet<(usize, u32)> = HashSet::new();
+        let mut work = vec![(r, 0u32)];
+        while let Some((x, t)) = work.pop() {
+            self.spend(1)?;
+            if !seen.insert((x, t)) {
+                continue;
+            }
+            let raw = self.raw(x)?;
+            for &n in &raw.nodes {
+                let id = self.vid(n.index(), t);
+                comps.push(id);
+            }
+            for &(y, i) in &raw.combs {
+                let nodes = self.nodes;
+                let rule = &nodes[y].rules[i].rule;
+                let ramas: Vec<(Option<String>, NodeId)> = match rule {
+                    Rule::AnyOf(v) | Rule::OneOf(v) => v.iter().map(|&m| (None, m)).collect(),
+                    Rule::Not(m) => vec![(None, *m)],
+                    Rule::DependentSchemas(v) => {
+                        v.iter().map(|(k, m)| (Some(k.clone()), *m)).collect()
+                    }
+                    _ => continue,
+                };
+                let mut ins = Vec::with_capacity(ramas.len());
+                for (_, m) in &ramas {
+                    let a = self.alias_of(*m)?;
+                    let k = *slot_of.entry(a).or_insert_with(|| {
+                        n_slots += 1;
+                        n_slots
+                    });
+                    ins.push(k);
+                    if let Some(a) = a {
+                        work.push((a, k));
+                    }
+                }
+                let node = NodeId::new(y);
+                match rule {
+                    Rule::DependentSchemas(_) => {
+                        for ((key, _), k) in ramas.into_iter().zip(ins) {
+                            gates.push(GateSpec {
+                                kind: GateKind::Implies,
+                                node,
+                                rule: i,
+                                target: t,
+                                inputs: vec![k],
+                                key,
+                            });
+                        }
+                    }
+                    _ => gates.push(GateSpec {
+                        kind: match rule {
+                            Rule::AnyOf(_) => GateKind::Any,
+                            Rule::OneOf(_) => GateKind::One,
+                            _ => GateKind::Not,
+                        },
+                        node,
+                        rule: i,
+                        target: t,
+                        inputs: ins,
+                        key: None,
+                    }),
+                }
+            }
+        }
+        comps.sort_unstable();
+        comps.dedup();
+        let gates = topo(gates)?;
+        self.spend(comps.len() + gates.len())?;
+        let id = self.sets.intern(
+            comps,
+            Meta {
+                n_slots,
+                gates: Rc::from(gates),
+            },
+        );
+        self.memo[r] = Some(id);
+        Ok(id)
+    }
+
+    /// El DFS conjuntivo de `r` (alias resuelto): sus nodos con reglas
+    /// propias y sus combinadores, memorizado.
+    fn raw(&mut self, r: usize) -> Result<Rc<Raw>, BuildError> {
+        if let Some(x) = &self.raws[r] {
+            return Ok(Rc::clone(x));
+        }
         self.generation += 1;
         let g = self.generation;
         let mut found = Vec::new();
+        let mut combs = Vec::new();
         let mut buf = Vec::new();
         // (nodo, destinos pendientes).
         let mut stack: Vec<(usize, Vec<usize>)> = Vec::new();
         let mut enter = |c: &mut Self, x: usize, stack: &mut Vec<(usize, Vec<usize>)>| {
             c.mark[x] = (g, true);
             let node = &c.nodes[x];
-            if contributes(node) {
+            if builds(node) {
                 found.push(NodeId::new(x));
+            }
+            for (i, rc) in node.rules.iter().enumerate() {
+                if combinator(&rc.rule) {
+                    combs.push((x, i));
+                }
             }
             conj_targets(node, &mut buf);
             let next: Vec<usize> = buf
@@ -257,30 +492,146 @@ impl<'a> Closures<'a> {
         }
         found.sort_unstable();
         found.dedup();
-        self.spend(found.len())?;
-        let id = self.sets.intern(found);
-        self.memo[r] = Some(id);
-        Ok(id)
+        combs.sort_unstable();
+        combs.dedup();
+        self.spend(found.len() + combs.len())?;
+        let raw = Rc::new(Raw {
+            nodes: found,
+            combs,
+        });
+        self.raws[r] = Some(Rc::clone(&raw));
+        Ok(raw)
     }
 
     /// La unión de varios conjuntos (los componentes de un hijo del
-    /// producto, F4-U2).
-    pub(crate) fn union(&mut self, ids: &[SetId]) -> Result<SetId, BuildError> {
-        let mut v: Vec<NodeId> = Vec::new();
-        let mut distintos: Vec<SetId> = ids.iter().copied().filter(|&i| i != ANY).collect();
+    /// producto, F4-U2), cada uno con el destino en el padre del componente
+    /// que lo aporta (F4.5a): 0 (el destino base del padre) o una salida
+    /// del padre. Las salidas del padre distintas pasan a ser las salidas
+    /// 1..=n del hijo, cuyo mapa (el destino en el padre de cada una) se
+    /// devuelve; las de las ramas de cada parte se renumeran detrás. Sin
+    /// salidas, el mapa es [`OUT_IDENTITY`] y el resultado es la unión de
+    /// antes.
+    pub(crate) fn union(&mut self, parts: &[(SetId, u32)]) -> Result<(SetId, u32), BuildError> {
+        let mut distintos: Vec<(SetId, u32)> =
+            parts.iter().copied().filter(|&(i, _)| i != ANY).collect();
         distintos.sort_unstable();
         distintos.dedup();
-        if let [solo] = distintos.as_slice() {
-            return Ok(*solo);
+        let simple = distintos
+            .iter()
+            .all(|&(i, t)| t == 0 && self.sets.meta(i).n_slots == 0);
+        if simple {
+            if let [(solo, _)] = distintos.as_slice() {
+                return Ok((*solo, OUT_IDENTITY));
+            }
+            let mut v: Vec<NodeId> = Vec::new();
+            for &(i, _) in &distintos {
+                v.extend_from_slice(self.sets.get(i));
+            }
+            self.spend(v.len())?;
+            v.sort_unstable();
+            v.dedup();
+            return Ok((self.sets.intern(v, Meta::default()), OUT_IDENTITY));
         }
-        for &i in &distintos {
-            v.extend_from_slice(self.sets.get(i));
+        // Salidas del hijo que van al padre, por orden de aparición.
+        let mut targets: Vec<u32> = Vec::new();
+        for &(_, t) in &distintos {
+            if t != 0 && !targets.contains(&t) {
+                targets.push(t);
+            }
         }
-        self.spend(v.len())?;
-        v.sort_unstable();
-        v.dedup();
-        Ok(self.sets.intern(v))
+        let mut next = targets.len() as u32;
+        let mut comps: Vec<NodeId> = Vec::new();
+        let mut gates: Vec<GateSpec> = Vec::new();
+        for &(p, t) in &distintos {
+            let base = match targets.iter().position(|&x| x == t) {
+                Some(j) if t != 0 => j as u32 + 1,
+                _ => 0,
+            };
+            let off = next;
+            let meta = self.sets.meta(p).clone();
+            next += meta.n_slots;
+            let remap = |k: u32| if k == 0 { base } else { off + k };
+            let ids: Vec<NodeId> = self.sets.get(p).to_vec();
+            self.spend(ids.len() + meta.gates.len())?;
+            for id in ids {
+                let (x, k) = (self.real(id), self.tgt(id));
+                let v = self.vid(x.index(), remap(k));
+                comps.push(v);
+            }
+            for g in meta.gates.iter() {
+                let mut g = g.clone();
+                g.target = remap(g.target);
+                // S-3: el mismo combinador hacia el mismo destino cuenta una
+                // vez aunque llegue por dos partes (sus ramas repetidas
+                // escriben salidas que nadie lee).
+                if gates.iter().any(|h: &GateSpec| {
+                    (h.node, h.rule, &h.key, h.target) == (g.node, g.rule, &g.key, g.target)
+                }) {
+                    continue;
+                }
+                for k in &mut g.inputs {
+                    *k = remap(*k);
+                }
+                gates.push(g);
+            }
+        }
+        comps.sort_unstable();
+        comps.dedup();
+        let id = self.sets.intern(
+            comps,
+            Meta {
+                n_slots: next,
+                gates: Rc::from(gates),
+            },
+        );
+        let outs = if next == 0 {
+            OUT_IDENTITY
+        } else {
+            self.outmap(targets)
+        };
+        Ok((id, outs))
     }
+}
+
+/// Ordena las puertas para que cada una vaya después de las que escriben
+/// sus entradas (Kahn); un ciclo es `Internal` (la Fase 3 rechaza los
+/// ciclos de combinadores que no consumen entrada).
+fn topo(gates: Vec<GateSpec>) -> Result<Vec<GateSpec>, BuildError> {
+    let n = gates.len();
+    let mut indeg = vec![0usize; n];
+    let mut after: Vec<Vec<usize>> = vec![Vec::new(); n];
+    let mut writers: HashMap<u32, Vec<usize>> = HashMap::new();
+    for (i, g) in gates.iter().enumerate() {
+        if g.target != 0 {
+            writers.entry(g.target).or_default().push(i);
+        }
+    }
+    for (j, g) in gates.iter().enumerate() {
+        for k in &g.inputs {
+            for &i in writers.get(k).map_or(&[][..], Vec::as_slice) {
+                after[i].push(j);
+                indeg[j] += 1;
+            }
+        }
+    }
+    let mut ready: Vec<usize> = (0..n).rev().filter(|&i| indeg[i] == 0).collect();
+    let mut order = Vec::with_capacity(n);
+    while let Some(i) = ready.pop() {
+        order.push(i);
+        for &j in &after[i] {
+            indeg[j] -= 1;
+            if indeg[j] == 0 {
+                ready.push(j);
+            }
+        }
+    }
+    if order.len() != n {
+        return Err(BuildError::Internal(
+            "ciclo de combinadores sin consumir entrada (I14)".to_owned(),
+        ));
+    }
+    let mut gates: Vec<Option<GateSpec>> = gates.into_iter().map(Some).collect();
+    Ok(order.into_iter().filter_map(|i| gates[i].take()).collect())
 }
 
 #[cfg(test)]

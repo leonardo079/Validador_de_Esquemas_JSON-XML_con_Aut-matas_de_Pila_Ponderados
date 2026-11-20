@@ -1,0 +1,23 @@
+{
+  "_id": "non-dpda-oneof-valid-01",
+  "category": "non-dpda",
+  "format": "json",
+  "description": "oneOf: exactamente una rama acepta (entero negativo).",
+  "phase": 4,
+  "strategy": "bounded-determinization",
+  "schema": {
+    "oneOf": [
+      {
+        "type": "integer"
+      },
+      {
+        "minimum": 0
+      }
+    ]
+  },
+  "payload": "-3",
+  "expected": {
+    "valid": true,
+    "violations": 0
+  }
+}

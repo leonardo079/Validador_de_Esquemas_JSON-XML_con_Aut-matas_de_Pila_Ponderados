@@ -256,7 +256,9 @@ fn tope_de_estados_por_producto() {
     let cadena = bajar(r#"{"allOf": [{"enum": ["abcdefgh"]}, {"maxLength": 3}]}"#);
     match build_with(&cadena, &ocho) {
         Err(BuildError::ProductLimit { states, scalar, .. }) => {
-            assert_eq!((states, scalar), (10, true));
+            // Desde F4.4b el producto de la cadena se construye contando
+            // sus estados al crearlos: el 9.º pasa el tope de 8.
+            assert_eq!((states, scalar), (9, true));
         }
         otro => panic!("{otro:?}"),
     }

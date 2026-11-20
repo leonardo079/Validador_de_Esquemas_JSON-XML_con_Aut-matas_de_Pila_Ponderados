@@ -182,11 +182,12 @@ async fn automata_construible_da_su_resumen() {
     assert_eq!(v["automaton"]["summary"], json(&dorada));
 }
 
-/// Una regla que el constructor aún no compila (`pattern`, F4-U5) no es un
-/// error del esquema: 200 con `automaton.status = "pending"`.
+/// Una regla que el constructor no compila (un `const` compuesto, F4-U5 y
+/// recorte 2 de F4.5b; antes `pattern` y `uniqueItems`) no es un error del
+/// esquema: 200 con `automaton.status = "pending"`.
 #[tokio::test]
 async fn regla_pendiente_da_200_con_automata_pendiente() {
-    let esquema = r#"{"type": "string", "pattern": "^a+$"}"#;
+    let esquema = r#"{"const": {"a": 1}}"#;
     let (estado, cuerpo) = pedir(&router(Config::default()), post(esquema)).await;
     assert_eq!(estado, StatusCode::OK, "{cuerpo}");
     assert_eq!(json(&cuerpo)["automaton"]["status"], "pending");

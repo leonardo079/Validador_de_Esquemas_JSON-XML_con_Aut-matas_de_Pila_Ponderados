@@ -114,7 +114,7 @@ Las pruebas de la Fase 3 leen el esquema de un caso con su **texto original** (`
 
 `automata/<nombre>.json` es la salida exacta de `schemac automaton schemas/parse-ok/<nombre>.json`: el resumen de tamaños del autómata de pila ponderado M de la Fase 4 (estados, transiciones, clases, marcos; [docs/fase4/automata.md](../docs/fase4/automata.md) §8). Hoy hay una, `objeto-cerrado`, contada a mano en ese apartado; su DOT es `docs/fase4/automata-objeto-cerrado.dot`, que generan `make docs` y comprueba `make docs-check`. La prueba `resumen_de_la_dorada` (`crates/cli/tests/automaton.rs`) compara byte a byte; se regeneran con `make doradas`.
 
-El corpus de `cases/` lo recorre también el autómata (`crates/automaton/tests/corpus.rs`): con el esquema `true` acepta todo payload JSON bien formado y rechaza los malformados en su offset; los casos cuyo esquema ya compila dan su `expected`, y los `non-dpda` dan «estrategia pendiente» con la tarea que los cubrirá.
+El corpus de `cases/` lo recorre también el autómata con su ejecutor (`crates/automaton/tests/corpus.rs`, F4.6; [docs/fase4/runtime.md](../docs/fase4/runtime.md) §5): con el esquema `true` acepta todo payload JSON bien formado y rechaza los malformados en su offset; todo caso cuyo esquema ya compila, JSON o XML, da el `valid`, `errorKind`, `violations` y `offset` de `expected` en bloques de 1, 7 y 4096 bytes y el mismo veredicto en fallo temprano; los JSON coinciden además con la línea base (salvo `extreme-big-number-01`, declarado); y los `non-dpda` que aún no compilan dan «estrategia pendiente» con la tarea que los cubrirá.
 
 ## Semillas de proptest (`*.proptest-regressions`)
 

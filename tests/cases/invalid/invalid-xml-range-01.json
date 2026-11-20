@@ -1,0 +1,15 @@
+{
+  "_id": "invalid-xml-range-01",
+  "category": "invalid",
+  "format": "xml",
+  "description": "Edad 150 por encima de maxInclusive=120.",
+  "phase": 4,
+  "schema": "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\n  <xs:element name=\"persona\">\n    <xs:complexType>\n      <xs:sequence>\n        <xs:element name=\"nombre\" type=\"xs:string\"/>\n        <xs:element name=\"edad\">\n          <xs:simpleType>\n            <xs:restriction base=\"xs:int\">\n              <xs:minInclusive value=\"0\"/>\n              <xs:maxInclusive value=\"120\"/>\n            </xs:restriction>\n          </xs:simpleType>\n        </xs:element>\n      </xs:sequence>\n    </xs:complexType>\n  </xs:element>\n</xs:schema>",
+  "payload": "<persona><nombre>Ana</nombre><edad>150</edad></persona>",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 38
+  }
+}

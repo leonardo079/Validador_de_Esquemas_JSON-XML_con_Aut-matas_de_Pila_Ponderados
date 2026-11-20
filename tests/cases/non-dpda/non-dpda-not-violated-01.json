@@ -1,0 +1,20 @@
+{
+  "_id": "non-dpda-not-violated-01",
+  "category": "non-dpda",
+  "format": "json",
+  "description": "not: la instancia cumple el esquema negado, 1 violación.",
+  "phase": 4,
+  "strategy": "product",
+  "schema": {
+    "not": {
+      "type": "string"
+    }
+  },
+  "payload": "\"x\"",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 2
+  }
+}

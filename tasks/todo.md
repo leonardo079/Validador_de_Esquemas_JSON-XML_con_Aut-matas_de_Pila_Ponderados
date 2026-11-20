@@ -425,7 +425,7 @@ La compilación del esquema, el parseo y la validación se pueden llamar por sep
 
 Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden de la pista A: F4.1a → F4.1b → F4.1c → F4.6 → F5.1 → [PC-E] → F4.4b → F4.5a → F4.5b → F5.2 → F5.3. En paralelo (sin pisar la pista A; Bayron si tiene tiempo): F4.4a (sin dependencias) y F4.3 (tras el commit de F4.1a).
 
-## Tarea F4.3: Verificación de determinismo de δ y minimización de Hopcroft de las partes finitas
+## Tarea F4.3: Verificación de determinismo de δ y minimización de Hopcroft de las partes finitas — HECHA (19 nov, D60)
 
 **Descripción:**
 - `automaton::minimize::hopcroft(&Dfa) -> Dfa`: partición inicial por salida (con el estado muerto), O(k·n log n), iterativo, numeración canónica (F4-B14, F4-B15).
@@ -435,19 +435,19 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 - `automata.md` §«Determinismo y minimización»: Myhill-Nerode; por qué no se minimiza el DPDA (en general no hay un DPDA ni un VPA mínimo canónico); costo.
 
 **Criterios de aceptación:**
-- [ ] Proptest de AFD completos aleatorios (≤ 40 estados, ≤ 4 clases, ≤ 3 salidas): Hopcroft da el mismo número de estados que Moore y un autómata equivalente al original (salidas incluidas); es idempotente.
-- [ ] A mano: el AFD de subconjuntos de `(a|b)*abb` baja de 5 a 4 estados; el trie de `{"ab","cb"}` con el mismo destino comparte el sufijo y con destinos distintos no; los inalcanzables desaparecen.
-- [ ] `check` acepta todos los M de F4.1a-c y del corpus, y detecta sobre tablas hechas a mano un `TransId` fuera de rango, rangos que se solapan, un hueco en la partición y una transición que apila con una clase de retorno.
-- [ ] D7: un AFD en cadena de 10⁵ estados se minimiza en un hilo de 256 KiB.
-- [ ] La dorada de F4.1a se regenera si cambia y la cuenta a mano de `automata.md` se actualiza.
+- [x] Proptest de AFD completos aleatorios (≤ 40 estados, ≤ 4 clases, ≤ 3 salidas): Hopcroft da el mismo número de estados que Moore y un autómata equivalente al original (salidas incluidas); es idempotente.
+- [x] A mano: el AFD de subconjuntos de `(a|b)*abb` baja de 5 a 4 estados; el trie de `{"ab","cb"}` con el mismo destino comparte el sufijo y con destinos distintos no; los inalcanzables desaparecen.
+- [x] `check` acepta todos los M de F4.1a-c y del corpus, y detecta sobre tablas hechas a mano un `TransId` fuera de rango, rangos que se solapan, un hueco en la partición y una transición que apila con una clase de retorno.
+- [x] D7: un AFD en cadena de 10⁵ estados se minimiza en un hilo de 256 KiB.
+- [x] La dorada de F4.1a se regenera si cambia y la cuenta a mano de `automata.md` se actualiza.
 
 **Heredado de la revisión de F4.1c (19 nov, D38; detalle en `docs/fase4/pendientes.md`):**
-- [ ] §39/§47/§53 (S1, S12): con la representación actual 2 000 literales en 200 elementos ya pasan de 2²⁰ (δ densa con |Σ| = 61, AFD del contenido simple copiado por marco, un trie de follow(x) por estado); `re2` (200 elementos de 40 tipos × 50 literales, 1 131 091 entradas) debe compilar: grupo global del texto de contenido simple con `Enter`/`Leave` como los atributos, trie compartido entre estados con la misma lista de aristas, partición de clases y Hopcroft.
-- [ ] §48 y §52 (S5, S8): partir `fill_frame` en `fill_empty`/`fill_simple`/`fill_model` y una sola contabilidad por pieza emitida (`elem` frente a `frame_cost`).
-- [ ] §56 (S13): `Builder::new` memoriza `classes_of` por conjunto de palabras (hoy por texto; `w4.xsd` 153 MB frente a 63 MB de `check`).
-- [ ] F4.1c-CRX-S4: una prueba que falle si el cobro de los nombres de follow(x) (`glushkov.rs:298`) se mueve detrás de la UPA.
-- [ ] F4.1c-CRX-S5 = F4E-I2: el tamaño del trie de atributos se memoriza por tipo en `ElemSpec` y Σ|nombre| de atributos se cobra una vez a los pasos.
-- [ ] F4D-M1 residual / F4D-I1: la cuenta conservadora de F4-U6 (≈ 60 por redondeo IEEE y los tres casos de §53) se ajusta si F4.3 cambia la representación.
+- [ ] §39/§47/§53 (S1, S12): con la representación actual 2 000 literales en 200 elementos ya pasan de 2²⁰ (δ densa con |Σ| = 61, AFD del contenido simple copiado por marco, un trie de follow(x) por estado); `re2` (200 elementos de 40 tipos × 50 literales, 1 131 091 entradas) debe compilar: grupo global del texto de contenido simple con `Enter`/`Leave` como los atributos, trie compartido entre estados con la misma lista de aristas, partición de clases y Hopcroft. **Recortado** → `docs/fase4/pendientes.md` §63.
+- [ ] §48 y §52 (S5, S8): partir `fill_frame` en `fill_empty`/`fill_simple`/`fill_model` y una sola contabilidad por pieza emitida (`elem` frente a `frame_cost`). **Recortado** → `docs/fase4/pendientes.md` §63.
+- [ ] §56 (S13): `Builder::new` memoriza `classes_of` por conjunto de palabras (hoy por texto; `w4.xsd` 153 MB frente a 63 MB de `check`). **Recortado** → `docs/fase4/pendientes.md` §63.
+- [ ] F4.1c-CRX-S4: una prueba que falle si el cobro de los nombres de follow(x) (`glushkov.rs:298`) se mueve detrás de la UPA. **Recortado** → `docs/fase4/pendientes.md` §63.
+- [ ] F4.1c-CRX-S5 = F4E-I2: el tamaño del trie de atributos se memoriza por tipo en `ElemSpec` y Σ|nombre| de atributos se cobra una vez a los pasos. **Recortado** → `docs/fase4/pendientes.md` §63.
+- [ ] F4D-M1 residual / F4D-I1: la cuenta conservadora de F4-U6 (≈ 60 por redondeo IEEE y los tres casos de §53) se ajusta si F4.3 cambia la representación. **Recortado** → `docs/fase4/pendientes.md` §63.
 
 **Verificación:** `cargo test -p automaton`, `make lint`, `make test`, `make docs-check`.
 
@@ -457,7 +457,7 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 
 **Tamaño:** S-M. **Revisión:** `code-reviewer` (D35).
 
-## Tarea F4.4a: Analizador de `pattern` (dos dialectos) y rechazo en la Fase 3
+## Tarea F4.4a: Analizador de `pattern` (dos dialectos) y rechazo en la Fase 3 — HECHA (20 nov, D61)
 
 **Descripción:**
 - `ir::regex` (F4-U15): `parse(src, Dialect::{Ecma, Xsd}) -> Result<Regex, RegexError{kind, at}>` sobre el subconjunto de F4-U14; AST en arena, análisis iterativo, anidamiento ≤ 256, ≤ 4 096 posiciones (F4-U16); `matches(&Regex, &str)` por simulación del conjunto de posiciones, O(|s|·m), sin retroceso (oráculo de F4.4b y de D29).
@@ -467,11 +467,11 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 - `docs/fase4/pattern.md` (gramática, dialectos, motivo de cada rechazo, ReDoS) y cierre de `docs/fase3/meta-esquema.md` §8.
 
 **Criterios de aceptación:**
-- [ ] Tabla de ≥ 30 filas con código y `at` esperados: ECMA acepta `^[A-Z]{3}-\d{4}$`, `^(?:a|b)+$`, `[^\n]`, `é`, `^a|b$`; ECMA rechaza `(a)\1`, `\k<n>`, `(?=a)`, `(?!a)`, `(?<=a)`, `(?<!a)`, `\b`, `a*?`, `a{2,}?`, `(?<n>a)`, `\p{L}`, `a^b`, `[z-a]`, `(a`, `a{3,2}`; XSD acepta `[A-Z]{3}`, `X+L`, `^a$` (literales); XSD rechaza `\w`, `\i`, `\p{Nd}`, `[a-z-[aeiou]]`, `(?:a)`.
-- [ ] `matches` cumple una tabla (patrón, cadena, resultado) que cubre el anclaje según el dialecto (`a` en ECMA encuentra `xay`; en XSD no), `.` frente a `\n` y a un astral (cuenta como uno), clases negadas y `{m,n}`.
-- [ ] Proptest sin pánico con cadenas arbitrarias; `a{999999999}` da `limit`; 10⁵ `(` en un hilo de 256 KiB dan un error, no un desbordamiento.
-- [ ] Esquemas nuevos en `tests/schemas/semantic-error/` (`pattern-lookahead`, `-retrorreferencia`, `-perezoso`, `-mal-formado`, `-demasiado-grande`) con su entrada en `errores-semanticos.json`; en el corpus XSD, `(a` y `b)` en el mismo paso dan dos errores; ningún `parse-ok` ni caso del corpus deja de pasar.
-- [ ] (Si entra D29) `ZZZ` sobre `pattern="[a-z]"` da `value` en su posición.
+- [x] Tabla de ≥ 30 filas con código y `at` esperados: ECMA acepta `^[A-Z]{3}-\d{4}$`, `^(?:a|b)+$`, `[^\n]`, `é`, `^a|b$`; ECMA rechaza `(a)\1`, `\k<n>`, `(?=a)`, `(?!a)`, `(?<=a)`, `(?<!a)`, `\b`, `a*?`, `a{2,}?`, `(?<n>a)`, `\p{L}`, `a^b`, `[z-a]`, `(a`, `a{3,2}`; XSD acepta `[A-Z]{3}`, `X+L`, `^a$` (literales); XSD rechaza `\w`, `\i`, `\p{Nd}`, `[a-z-[aeiou]]`, `(?:a)`.
+- [x] `matches` cumple una tabla (patrón, cadena, resultado) que cubre el anclaje según el dialecto (`a` en ECMA encuentra `xay`; en XSD no), `.` frente a `\n` y a un astral (cuenta como uno), clases negadas y `{m,n}`.
+- [x] Proptest sin pánico con cadenas arbitrarias; `a{999999999}` da `limit`; 10⁵ `(` en un hilo de 256 KiB dan un error, no un desbordamiento.
+- [x] Esquemas nuevos en `tests/schemas/semantic-error/` (`pattern-lookahead`, `-retrorreferencia`, `-perezoso`, `-mal-formado`, `-demasiado-grande`) con su entrada en `errores-semanticos.json`; en el corpus XSD, `(a` y `b)` en el mismo paso dan dos errores; ningún `parse-ok` ni caso del corpus deja de pasar.
+- [ ] (Si entra D29) `ZZZ` sobre `pattern="[a-z]"` da `value` en su posición. **Recortado** (recorte 1) → `docs/fase4/pendientes.md` §65.
 
 **Verificación:** `cargo test -p ir -p semantic -p xsd`, `cargo test -p semantic --release`, `make lint`, `make test`, `make docs-check`.
 
@@ -481,7 +481,7 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 
 **Tamaño:** M (bajo sin D29). **Arrastra:** `docs/fase3/pendientes.md` §37 5.6-P1 y CR-S2 (y 5.6-P2); §38 5.7-P2; `meta-esquema.md` §8. **Revisión:** `code-reviewer`.
 
-## Tarea F4.4b: `pattern` → AFD minimizado dentro de M
+## Tarea F4.4b: `pattern` → AFD minimizado dentro de M — HECHA (20 nov, D62)
 
 **Descripción:**
 - `automaton::pattern`: `Regex` → Glushkov → subconjuntos sobre clases de puntos de código con el anclaje de F4-B18 → tope de 4 096 estados contado antes de reservar (`Limit` en la ubicación del `pattern`) → Hopcroft (F4.3) → `Dfa`.
@@ -489,11 +489,11 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 - `pattern.md`: construcción, peor caso 2^m (`(a|b)*a(a|b){k}`), O(1) por carácter.
 
 **Criterios de aceptación:**
-- [ ] Proptest: con ≥ 20 patrones (corpus, F4.4a y frontera), el AFD minimizado y `ir::regex::matches` coinciden en cadenas aleatorias con los caracteres del patrón, `\n` y un astral.
-- [ ] Tamaños: `^(a{p})*$` queda en p estados + el muerto para p ∈ {2, 3, 5, 7, 11}; `(a|b)*a(a|b){12}` da `limit` antes de reservar y con k = 8 compila; `^(a+)+$` queda en ≤ 3 estados y 10⁵ `a` seguidas de `!` se recorren con un evento por carácter (se cuentan eventos, D1).
-- [ ] Corpus: `non-dpda-pattern-01` da 0; caso nuevo `invalid-pattern-01`: 1 violación, `schema`, en el offset de la comilla de cierre.
-- [ ] XSD: `[A-Z]{3}` sobre `xs:string` acepta `ABC` y rechaza `ABCD` y ` ABC`; `[0-9]{3}` sobre `xs:int` acepta ` 123 `. JSON: `a` acepta `"xay"`; `^a` rechaza `"ba"`; `pattern` sobre un número da 0.
-- [ ] El resultado no cambia con bloques de 1, 7 y 4 096 bytes.
+- [x] Proptest: con ≥ 20 patrones (corpus, F4.4a y frontera), el AFD minimizado y `ir::regex::matches` coinciden en cadenas aleatorias con los caracteres del patrón, `\n` y un astral.
+- [x] Tamaños: `^(a{p})*$` queda en p estados + el muerto para p ∈ {2, 3, 5, 7, 11}; `(a|b)*a(a|b){12}` da `limit` antes de reservar y con k = 8 compila; `^(a+)+$` queda en ≤ 3 estados y 10⁵ `a` seguidas de `!` se recorren con un evento por carácter (se cuentan eventos, D1).
+- [x] Corpus: `non-dpda-pattern-01` da 0; caso nuevo `invalid-pattern-01`: 1 violación, `schema`, en el offset de la comilla de cierre.
+- [x] XSD: `[A-Z]{3}` sobre `xs:string` acepta `ABC` y rechaza `ABCD` y ` ABC`; `[0-9]{3}` sobre `xs:int` acepta ` 123 `. JSON: `a` acepta `"xay"`; `^a` rechaza `"ba"`; `pattern` sobre un número da 0.
+- [x] El resultado no cambia con bloques de 1, 7 y 4 096 bytes.
 
 **Verificación:** `cargo test -p automaton`, `make lint`, `make test`, `make docs-check`.
 
@@ -503,7 +503,7 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 
 **Tamaño:** M. **Arrastra:** D6; D46 (3); `docs/fase3/pendientes.md` §5 L-1. **Revisión:** `code-reviewer`.
 
-## Tarea F4.5a: Combinadores — producto con salidas y puertas al desapilar
+## Tarea F4.5a: Combinadores — producto con salidas y puertas al desapilar — HECHA (20 nov, D63)
 
 **Descripción:**
 - Generaliza el producto de F4.1b según F4-U10, U12 y U13: salidas por rama para `anyOf`, `oneOf`, `not` y `dependentSchemas`; mapa de salidas en las transiciones que apilan; puertas ANY, ONE, NOT, IMPLIES al desapilar. Un límite o un malformado (∞) termina antes y nunca se invierte (S-2).
@@ -512,11 +512,11 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 - `automata.md` §«Combinadores»: cierre de los autómatas de pila visible bajo intersección y complemento; el circuito; el homomorfismo a 𝔹; tamaños. Medir `$ref` con hermanas como producto (§22) y, si procede, proponer el cambio de su fila.
 
 **Criterios de aceptación:**
-- [ ] Corpus: `non-dpda-anyof-ambiguous-01` y `non-dpda-allof-not-01` dan 0 y la estrategia del resumen es la de su campo `strategy`. Casos nuevos en `non-dpda/`: `oneof` válido, `oneof` con las dos ramas (1), `anyof` sin ninguna (1), `not` violado (1).
-- [ ] Semántica: `anyOf` con ramas que fallan 2 y 3 veces cuenta 1 y el mismo `allOf` cuenta 5; `not:{type:string}` da 0 sobre `1` y 1 sobre `"x"`; `not` de una cadena que pasa el límite da `limit`; `oneOf` con dos ramas iguales que aceptan da 1; `dependentSchemas {"a":{"required":["b"]}}`: `{"b":1}` → 0, `{"a":1}` → 1, `{"b":1,"a":1}` → 0; un `anyOf` anidado bajo `properties` de una rama cuenta en la rama correcta.
-- [ ] 15 primos (§5 L-1): `allOf` de 15 `^(a{p})*$`; el constructor se corta al pasar 4 096 (lo comprueba su contador, no el tiempo); resultado `deferred` (o `limit` con el recorte 3); `""` → 0, `"aa"` → 14, `"a"×30` → 12.
-- [ ] Fallo temprano: en `anyOf` la rama que falla no lo detiene; en `allOf` se detiene en la violación de menor costo.
-- [ ] Proptest: `anyOf:[S]` y `not:{not:S}` dan el mismo veredicto (0 o ≥ 1) que S sobre payloads pequeños con esquemas de F4.1a-b. La cadena de diamantes de 10⁴ con `anyOf` compila con un número lineal de marcos.
+- [x] Corpus: `non-dpda-anyof-ambiguous-01` y `non-dpda-allof-not-01` dan 0 y la estrategia del resumen es la de su campo `strategy`. Casos nuevos en `non-dpda/`: `oneof` válido, `oneof` con las dos ramas (1), `anyof` sin ninguna (1), `not` violado (1). Veredictos sí; la estrategia del resumen queda en el recorte 5 (`pendientes.md` §70).
+- [x] Semántica: `anyOf` con ramas que fallan 2 y 3 veces cuenta 1 y el mismo `allOf` cuenta 5; `not:{type:string}` da 0 sobre `1` y 1 sobre `"x"`; `not` de una cadena que pasa el límite da `limit`; `oneOf` con dos ramas iguales que aceptan da 1; `dependentSchemas {"a":{"required":["b"]}}`: `{"b":1}` → 0, `{"a":1}` → 1, `{"b":1,"a":1}` → 0; un `anyOf` anidado bajo `properties` de una rama cuenta en la rama correcta.
+- [x] 15 primos (§5 L-1): `allOf` de 15 `^(a{p})*$`; el constructor se corta al pasar 4 096 (lo comprueba su contador, no el tiempo); resultado `deferred` (o `limit` con el recorte 3); `""` → 0, `"aa"` → 14, `"a"×30` → 12. Con el recorte 3: `limit` en el estado 4 097 (`quince_primos_dan_limit`).
+- [x] Fallo temprano: en `anyOf` la rama que falla no lo detiene; en `allOf` se detiene en la violación de menor costo.
+- [x] Proptest: `anyOf:[S]` y `not:{not:S}` dan el mismo veredicto (0 o ≥ 1) que S sobre payloads pequeños con esquemas de F4.1a-b. La cadena de diamantes de 10⁴ con `anyOf` compila con un número lineal de marcos.
 
 **Verificación:** `cargo test -p automaton -p runtime-rs`, `make lint`, `make test`, `make docs-check`.
 
@@ -527,10 +527,10 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 **Tamaño:** M (alto). **Arrastra:** §5 L-1, S-2, S-3; D5; D46 (4) enmendado por D51; §22 (parte JSON); `clasificacion.md` §4.2 y §8. **Revisión:** `code-reviewer` (el núcleo lo revisa `security-auditor` en F4.6).
 
 **Heredado de la revisión de F4.1b (17 nov, D38):**
-- [ ] F4.1b-CR3-S2: con F4-B20 la clave de un tipo de marco pasa a ser (`NodeId`, salida) y el mismo nodo aparece en más conjuntos: máscaras de entrada, `enum` ordenados, conjuntos de cadenas, divisores y lexemas siguen memorizados por (nodo, regla) sin depender de la salida; las comprobaciones por salida entran en `extra` antes de reservar; prueba sin reloj como `enum_compartido_se_recorre_una_vez` con un `enum` compartido por muchas ramas de `anyOf`.
-- [ ] F4.1b-CR-S4: `Automaton::stack_words` (`model.rs:181-189`) suma `scalar_slots` (hoy fijado a 0 en `model.rs:115`), que pasa a ser un campo de `Automaton`, para que `validate` no se quede corta cuando la zona escalar tenga tamaño.
+- [x] F4.1b-CR3-S2: con F4-B20 la clave de un tipo de marco pasa a ser (`NodeId`, salida) y el mismo nodo aparece en más conjuntos: máscaras de entrada, `enum` ordenados, conjuntos de cadenas, divisores y lexemas siguen memorizados por (nodo, regla) sin depender de la salida; las comprobaciones por salida entran en `extra` antes de reservar; prueba sin reloj como `enum_compartido_se_recorre_una_vez` con un `enum` compartido por muchas ramas de `anyOf`.
+- [x] F4.1b-CR-S4: `Automaton::stack_words` (`model.rs:181-189`) suma `scalar_slots` (hoy fijado a 0 en `model.rs:115`), que pasa a ser un campo de `Automaton`, para que `validate` no se quede corta cuando la zona escalar tenga tamaño.
 
-## Tarea F4.5b: `uniqueItems` diferido y literales compuestos
+## Tarea F4.5b: `uniqueItems` diferido y literales compuestos — HECHA (20 nov, D64; literales en el recorte 2)
 
 **Descripción:**
 - `runtime-rs`: SipHash-1-3 y hash canónico en *streaming* (números por valor, cadenas por punto de código, arreglos en orden, objetos sin orden por suma modular de H(clave‖valor)), con un registro de hash por marco; una reserva fija usada como pila (F4-B22, F4-U16): cada arreglo con `uniqueItems` ordena su región al leer `]` y, si hay dos iguales, da 1 violación en ese `]`; más de 4 096 elementos → `limit`.
@@ -538,10 +538,10 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 - `automata.md` §«Verificación diferida»: por qué `uniqueItems` no es libre de contexto, cota de colisión y comportamiento bajo `not`.
 
 **Criterios de aceptación:**
-- [ ] `non-dpda-unique-items-01` da 0 con estrategia `deferred`; casos nuevos: `[1, 2, 1.0]` → 1 violación en el `]`; objetos iguales con las claves en otro orden → 1.
-- [ ] `uniqueItems`: `[[1,2],[2,1]]` → 0; `["a","a"]` → 1; `[1,"1"]` → 0; `[true,1]` → 0; 4 097 elementos únicos → `limit` en el 4 097; arreglos anidados con `uniqueItems` comparten la reserva y cada uno comprueba solo su región.
-- [ ] Literales: `const:{"a":[1,{"b":null}]}` acepta `{"a":[1.0,{"b":null}]}` y rechaza con 1 `{"a":[1,{"b":null}],"c":1}` y `{"a":[1]}`; `enum:[{"a":1},[1],2]` acepta los tres y rechaza `{"a":2}` con 1; un `const` de 300 claves compila con un número lineal de estados.
-- [ ] Proptest: valores iguales por valor (claves reordenadas, números reescritos) dan el mismo hash; `uniqueItems` coincide con un oráculo std (`serde_json::Value` normalizado) en arreglos pequeños.
+- [x] `non-dpda-unique-items-01` da 0 con estrategia `deferred`; casos nuevos: `[1, 2, 1.0]` → 1 violación en el `]`; objetos iguales con las claves en otro orden → 1.
+- [x] `uniqueItems`: `[[1,2],[2,1]]` → 0; `["a","a"]` → 1; `[1,"1"]` → 0; `[true,1]` → 0; 4 097 elementos únicos → `limit` en el 4 097; arreglos anidados con `uniqueItems` comparten la reserva y cada uno comprueba solo su región.
+- [ ] Literales: `const:{"a":[1,{"b":null}]}` acepta `{"a":[1.0,{"b":null}]}` y rechaza con 1 `{"a":[1,{"b":null}],"c":1}` y `{"a":[1]}`; `enum:[{"a":1},[1],2]` acepta los tres y rechaza `{"a":2}` con 1; un `const` de 300 claves compila con un número lineal de estados. **Recortado** (recorte 2) → `docs/fase4/pendientes.md` §72.
+- [x] Proptest: valores iguales por valor (claves reordenadas, números reescritos) dan el mismo hash; `uniqueItems` coincide con un oráculo std (`serde_json::Value` normalizado) en arreglos pequeños. (`coincide_con_el_oraculo` en `unique.rs`).
 
 **Verificación:** `cargo test -p automaton -p runtime-rs`, `make lint`, `make test`, `make docs-check`.
 
@@ -551,7 +551,7 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 
 **Tamaño:** M (bajo). **Arrastra:** §5 S-1 (la reserva, que F4.6 reutiliza para las claves no declaradas) y S-2. **Revisión:** `code-reviewer` (la reserva la audita `security-auditor` en F4.6).
 
-## Tarea F4.6: Ejecutor con lexer, límites, reporte y buena formación (oráculo; cierre de la Fase 4)
+## Tarea F4.6: Ejecutor con lexer, límites, reporte y buena formación (oráculo; cierre de la Fase 4) — HECHA (19 nov, D59)
 
 **Descripción** (con F4-U9):
 - API de F4-U18 sobre el núcleo `no_std`, con los lexers `no_std` de JSON y XML delante (eventos → clases, una pasada). Memoria del llamador (`Tables::state_words(&Limits)`).
@@ -564,13 +564,13 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 - Fuera de esta tarea: el puntero de la instancia es F6.1; `sv_limits_t`, el tiempo y el campo `limits` del corpus son F6.2.
 
 **Criterios de aceptación:**
-- [ ] Todo el corpus (casos actuales y los de F4.4b-F4.5b que existan): `valid`, `errorKind`, `violations` y `offset` iguales a `expected`, con un `Report` idéntico en bloques de 1, 7 y 4 096 bytes.
-- [ ] Con F6.7a (hecha): el veredicto coincide con `baseline::JsonBaseline` en los casos JSON (las divergencias de conteo de F4-U3/U13 declaradas en `DIVERGENCIAS`); en XML, con `expected` (y con libxml2 si F6.7b está).
-- [ ] Casos nuevos de las categorías del PDF que faltan: `invalid-type-01`, `invalid-additional-properties-01`, `invalid-enum-01`, `invalid-range-01`; dos `invalid-xml-*` (rango; hijo requerido); `malformed-json-duplicate-key-01` (clave no declarada repetida), `malformed-json-syntax-01` (`{"a" 1}`), `malformed-xml-unclosed-01`; `extreme-depth-01` (257 `[` → `limit` en el 257.º), `extreme-big-number-01` (1 025 cifras → `limit`).
-- [ ] Cero reservas entre `new` y `finish` (asignador contador, F4-B25) en todo el corpus y en 10⁵ niveles con `max_depth` = 10⁵, sin recursión.
-- [ ] Cada límite se prueba en su valor y en su valor + 1, con el offset esperado; `limit` atraviesa `not` sin invertirse (cuando F4.5a esté).
-- [ ] El fallo temprano detiene `feed` en la violación de menor costo; la conformidad total sigue hasta el final; los dos dan el mismo veredicto en el corpus.
-- [ ] Proptest de payloads JSON y XML aleatorios y de mutaciones de un byte: sin pánico y con el mismo `Report` en los tres tamaños de bloque.
+- [x] Todo el corpus (casos actuales y los de F4.4b-F4.5b que existan): `valid`, `errorKind`, `violations` y `offset` iguales a `expected`, con un `Report` idéntico en bloques de 1, 7 y 4 096 bytes. — `todo_el_corpus_da_lo_esperado` (los `non-dpda` siguen `Pending` hasta F4.4b-F4.5b)
+- [x] Con F6.7a (hecha): el veredicto coincide con `baseline::JsonBaseline` en los casos JSON (las divergencias de conteo de F4-U3/U13 declaradas en `DIVERGENCIAS`); en XML, con `expected` (y con libxml2 si F6.7b está). — `json_coincide_con_la_linea_base`; divergencia declarada: `extreme-big-number-01` (§60)
+- [x] Casos nuevos de las categorías del PDF que faltan: `invalid-type-01`, `invalid-additional-properties-01`, `invalid-enum-01`, `invalid-range-01`; dos `invalid-xml-*` (rango; hijo requerido); `malformed-json-duplicate-key-01` (clave no declarada repetida), `malformed-json-syntax-01` (`{"a" 1}`), `malformed-xml-unclosed-01`; `extreme-depth-01` (257 `[` → `limit` en el 257.º), `extreme-big-number-01` (1 025 cifras → `limit`).
+- [x] Cero reservas entre `new` y `finish` (asignador contador, F4-B25) en todo el corpus y en 10⁵ niveles con `max_depth` = 10⁵, sin recursión. — `cero_reservas_en_todo_el_corpus_y_en_profundidad`
+- [x] Cada límite se prueba en su valor y en su valor + 1, con el offset esperado; `limit` atraviesa `not` sin invertirse (cuando F4.5a esté). — `limites.rs`; lo de `not`, en F4.5a
+- [x] El fallo temprano detiene `feed` en la violación de menor costo; la conformidad total sigue hasta el final; los dos dan el mismo veredicto en el corpus. — en el corpus (`todo_el_corpus_da_lo_esperado`) y `fallo_temprano_informa_la_de_menor_costo`
+- [x] Proptest de payloads JSON y XML aleatorios y de mutaciones de un byte: sin pánico y con el mismo `Report` en los tres tamaños de bloque. — `aleatorio.rs`
 
 **Verificación:** `cargo test -p runtime-rs -p automaton`, `make lint`, `make test`, `make docs-check`.
 
@@ -585,28 +585,28 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 **Revisión:** `code-reviewer` + `security-auditor` (D35: payload no confiable), sobre el núcleo entero: índices y saturaciones, reservas y regiones, DoS por claves o atributos, colisiones de hash, profundidad.
 
 **Heredado de la revisión de F4.1a (16 nov, D38; detalle en `docs/fase4/pendientes.md`):**
-- [ ] F4.1a-CR-S2 (seguridad): `step` da `Internal` si la clase de carácter es ≥ `n_classes` con tablas incoherentes, en vez de leer la fila del estado siguiente (`core.rs:205,264-268`).
-- [ ] F4.1a-CR-S3: `automaton::validate` toma el tamaño de la memoria de `Limits` (hoy reserva (nº de `{`/`[` + 1) × (marco máximo + 1) palabras, hasta 520 B por byte con 4 096 nombres; `lib.rs:131-141`).
-- [ ] F4.1a-CR-S9: `Options::new(mode)` o `Default` antes de añadir `Limits` (`core.rs:30-33`).
-- [ ] F4.1a-CR-S7: los dos modos se comparan sabiendo que, en fallo temprano, un payload truncado tras una violación da `schema` y en total `syntax`.
+- [x] F4.1a-CR-S2 (seguridad): `step` da `Internal` si la clase de carácter es ≥ `n_classes` con tablas incoherentes, en vez de leer la fila del estado siguiente (`core.rs:205,264-268`).
+- [x] F4.1a-CR-S3: `automaton::validate` toma el tamaño de la memoria de `Limits` (hoy reserva (nº de `{`/`[` + 1) × (marco máximo + 1) palabras, hasta 520 B por byte con 4 096 nombres; `lib.rs:131-141`). — `validate_with`
+- [x] F4.1a-CR-S9: `Options::new(mode)` o `Default` antes de añadir `Limits` (`core.rs:30-33`).
+- [x] F4.1a-CR-S7: los dos modos se comparan sabiendo que, en fallo temprano, un payload truncado tras una violación da `schema` y en total `syntax`. — `runtime.md` §3
 
 **Heredado de la revisión de F4.1b (17 nov, D38):**
-- [ ] F4.1b-CR-S3 (rendimiento): al cerrar cada número, `compare` e `is_multiple` cuestan O(|cota del esquema|) (hasta 16 MiB): en compilación, quitar los ceros a la izquierda del exponente, decidir al compilar la comprobación si |E| de la cota pasa del rango alcanzable por un lexema de 1 024 bytes, y guardar en `DivisorRef` el e_d ya saturado, para que cada número cueste O(`LEXEME_MAX`).
-- [ ] F4.1b-CR-S7: S-3 cuenta un nodo repetido una sola vez (`allOf:[{$ref:x},{$ref:x}]` con x violado da 1; `jsonschema` da 2): declararlo en `DIVERGENCIAS` junto a las de D47 cuando entre al corpus.
+- [ ] F4.1b-CR-S3 (rendimiento): al cerrar cada número, `compare` e `is_multiple` cuestan O(|cota del esquema|) (hasta 16 MiB): en compilación, quitar los ceros a la izquierda del exponente, decidir al compilar la comprobación si |E| de la cota pasa del rango alcanzable por un lexema de 1 024 bytes, y guardar en `DivisorRef` el e_d ya saturado, para que cada número cueste O(`LEXEME_MAX`). **Recortado** (orden de recorte): pasa a F6.5/E3, `docs/fase4/pendientes.md` §61.
+- [x] F4.1b-CR-S7: S-3 cuenta un nodo repetido una sola vez (`allOf:[{$ref:x},{$ref:x}]` con x violado da 1; `jsonschema` da 2): declararlo en `DIVERGENCIAS` junto a las de D47 cuando entre al corpus. — ningún caso del corpus lo usa todavía; queda en la lista de `DIVERGENCIAS` si entra
 
 **Heredado de la revisión de F4.1c (19 nov, D38; detalle en `docs/fase4/pendientes.md`):**
-- [ ] §33 = F4C-S3/I2 (Medium; antes de F6.7b para el oráculo): la capa de buena formación compara el nombre de cierre completo (prefijo incluido, hash del QName en el marco) en todo elemento, y rechaza `xmlns`/`xmlns:p` repetidos en la etiqueta y `:` inicial o final (`<p:a></q:a>`, `<a></p:a>`, `<:pedido>…</:pedido>` hoy dan peso 0).
-- [ ] §34 (Medium): espacios de nombres del payload por nombre local, `<x:pedido xmlns:x="urn:otro">` aceptado, `xsi:*`/`xml:lang` suman 1; según lo que decidan las dos personas (desviación en `00-alcance.md` §1.2 o tabla de prefijos acotada).
-- [ ] §35 = F4C-S5 (Low): normalizar `\r\n`/`\r` → `\n` (XML 1.0 §2.11) en texto y `\t\n\r` → espacio en atributos antes de `length`/`enum`/`fixed` de `xs:string`.
-- [ ] §13/§45 = F4C-S6/F4D-M3 (Medium; **High** en cuanto F6.5 o F7 llamen a `validate`): profundidad desde `Limits` (256) y `limit` antes del `vec!`; prueba con 1 MB de `<` sobre un XSD de marco grande (hoy pide 3,2 GB y aborta).
-- [ ] §44 = F4C-S4 (Low): `step` da `Internal` con clase ≥ `n_classes` y `Core::new` valida `n_classes ≥ class::CHAR + 1` (amplía F4.1a-CR-S2).
-- [ ] §46 = F4C-S7 (Low; también F5.2): `words.checked_add(1)` en `push` (32 bits).
-- [ ] §49 (Info, informe): el lexema de 1 024 bytes da `limit` en `xs:decimal`/`xs:integer` con más cifras y facetas numéricas.
+- [x] §33 = F4C-S3/I2 (Medium; antes de F6.7b para el oráculo): la capa de buena formación compara el nombre de cierre completo (prefijo incluido, hash del QName en el marco) en todo elemento, y rechaza `xmlns`/`xmlns:p` repetidos en la etiqueta y `:` inicial o final (`<p:a></q:a>`, `<a></p:a>`, `<:pedido>…</:pedido>` hoy dan peso 0).
+- [ ] §34 (Medium): espacios de nombres del payload por nombre local, `<x:pedido xmlns:x="urn:otro">` aceptado, `xsi:*`/`xml:lang` suman 1; según lo que decidan las dos personas (desviación en `00-alcance.md` §1.2 o tabla de prefijos acotada). **Sin cambiar**: necesita la decisión de las dos personas (§34, §62).
+- [x] §35 = F4C-S5 (Low): normalizar `\r\n`/`\r` → `\n` (XML 1.0 §2.11) en texto y `\t\n\r` → espacio en atributos antes de `length`/`enum`/`fixed` de `xs:string`. — falta contrastar con libxml2 en Docker
+- [x] §13/§45 = F4C-S6/F4D-M3 (Medium; **High** en cuanto F6.5 o F7 llamen a `validate`): profundidad desde `Limits` (256) y `limit` antes del `vec!`; prueba con 1 MB de `<` sobre un XSD de marco grande (hoy pide 3,2 GB y aborta).
+- [x] §44 = F4C-S4 (Low): `step` da `Internal` con clase ≥ `n_classes` y `Core::new` valida `n_classes ≥ class::CHAR + 1` (amplía F4.1a-CR-S2).
+- [x] §46 = F4C-S7 (Low; también F5.2): `words.checked_add(1)` en `push` (32 bits).
+- [x] §49 (Info, informe): el lexema de 1 024 bytes da `limit` en `xs:decimal`/`xs:integer` con más cifras y facetas numéricas. — documentado en `runtime.md` §3
 
 ## Punto de control PC-E (tras F4.6 + F5.1)
 
 - [ ] Un esquema JSON y el pedido XSD pasan por esquema → M → validador Rust generado, y el corpus pasa.
-- [ ] La Fase 4 queda cerrada al terminar F4.5b (sin ningún `Pending`).
+- [ ] La Fase 4 queda cerrada al terminar F4.5b (sin ningún `Pending`). **Estado (20 nov):** F4.5b hecha; queda `Pending` solo para los literales compuestos de `enum`/`const` (recorte 2, §72), según lo que decidan las dos personas.
 
 # Tarea F7.1: backend axum (pista B, Bayron; plan del Planner del 18 nov, aprobado el 18 nov con U1-U8)
 

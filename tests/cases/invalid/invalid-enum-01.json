@@ -1,0 +1,26 @@
+{
+  "_id": "invalid-enum-01",
+  "category": "invalid",
+  "format": "json",
+  "description": "Cadena fuera del enum de colores.",
+  "phase": 4,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "color": {
+        "enum": [
+          "rojo",
+          "verde"
+        ]
+      }
+    }
+  },
+  "payload": "{\"color\": \"azul\"}",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "pointer": "/color",
+    "offset": 15
+  }
+}

@@ -39,6 +39,11 @@ y que se resuelven en otra fase. Las decisiones de diseño viven en el
     los colapsan en **un único error interno** de tamaño fijo. Por eso no tienen fila en
     la tabla de abajo; la lista completa solo va al registro y a las pruebas.
 
+  - **Errores del payload (F4.6, [../fase4/runtime.md](../fase4/runtime.md) §1):** el
+    validador informa solo el **primer** error, con la ubicación del esquema recortada a 256
+    bytes (`location_clipped`), así que su reporte mide una constante (≲ 300 bytes) sea cual
+    sea el payload: cociente 0, solo suma a K. No tiene fila en la tabla.
+
   Por tanto la salida es ≤ ρ(r)·n + K, con n los bytes de la entrada, K unos cientos de
   bytes (el error de la Fase 2, o los bordes de un arreglo) y ρ(r) el mayor cociente de
   la tabla de abajo.

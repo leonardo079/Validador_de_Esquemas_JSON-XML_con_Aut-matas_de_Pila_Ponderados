@@ -126,6 +126,12 @@ fn check_keyword(kw: &Keyword, root: bool, errors: &mut Vec<SemanticError>) {
                 ));
             }
         }
+        // F4.4a: el subconjunto regular de F4-U14 (D6, mitigación de ReDoS).
+        (Kw::Pattern, Value::Str(v)) => {
+            if let Err(e) = ir::regex::parse(&v.value, ir::regex::Dialect::Ecma) {
+                errors.push(pattern_error(&e, v));
+            }
+        }
         (Kw::Anchor, Value::Str(v)) if !is_anchor(&v.value) => errors.push(invalid(
             name,
             "un nombre que empiece por una letra ASCII o `_`, seguido de letras, dígitos, \
@@ -241,6 +247,41 @@ fn unique(
                 at: s.span.start,
             });
         }
+    }
+}
+
+/// Un `pattern` rechazado por `ir::regex` (F4-B19): mal formado →
+/// `meta-schema`, fuera del subconjunto → `unsupported`, demasiado grande →
+/// `limit`; en la posición de la cadena, con el constructo citado.
+#[cold]
+fn pattern_error(e: &ir::regex::RegexError, v: &Str) -> SemanticError {
+    use ir::regex::RegexErrorKind as K;
+    let found = format!(
+        "`{}` en el carácter {} de \"{}\"",
+        e.construct,
+        e.at + 1,
+        short(&v.value)
+    );
+    let kind = match e.kind {
+        K::Malformed => ErrorKind::InvalidValue {
+            keyword: "pattern",
+            expected: "una expresión regular ECMA-262 bien formada",
+            found: format!("{found} ({})", e.reason),
+        },
+        K::Unsupported => ErrorKind::UnsupportedForm {
+            keyword: "pattern",
+            found,
+            reason: e.reason,
+        },
+        K::Limit => ErrorKind::Limit {
+            keyword: "pattern",
+            found,
+            reason: e.reason,
+        },
+    };
+    SemanticError {
+        kind,
+        at: v.span.start,
     }
 }
 

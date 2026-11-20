@@ -70,7 +70,7 @@ El compilador aplica estas clases con una sola tabla en el código, comprobada c
 | Palabra clave | Soporte | Cat. |
 |---|---|---|
 | `minLength`, `maxLength` | Contador de puntos de código en el marco de la cadena. | (b) |
-| `pattern` | Subconjunto de ECMA-262 compilado a AFD **sin backtracking**: literales, clases `[...]`, `.`, `\d \w \s`, anclas `^ $`, alternancia, grupos, cuantificadores `* + ? {m,n}`. **Rechazados:** retrorreferencias, *lookahead*/*lookbehind*, cuantificadores perezosos o posesivos (mitigación de ReDoS). | (c) |
+| `pattern` | Subconjunto de ECMA-262 compilado a AFD **sin backtracking**: literales, clases `[...]`, `.`, `\d \w \s`, anclas `^ $` (solo al principio o al final de una alternativa de primer nivel), alternancia, grupos, cuantificadores `* + ? {m,n}`, escapes de control y `\uHHHH`, con semántica de puntos de código (`u`). **Rechazados:** retrorreferencias, *lookahead*/*lookbehind*, cuantificadores perezosos o posesivos, `\b`, `\p{…}`, grupos con nombre, `\cX`, `\u{…}` (mitigación de ReDoS; F4-U14, [fase4/pattern.md](fase4/pattern.md)). | (c) |
 | `format` | Solo anotación: se ignora (no se valida). | — |
 
 ### 2.5 Arreglos
@@ -130,7 +130,7 @@ Las construcciones XSD se analizan a un **AST propio de XSD** y bajan a la **mis
 | `xs:attribute` | `name`, `type`, `use` (`required`/`optional`), `default`, `fixed`; `form="unqualified"`, sin efecto (§3.4). Los requeridos usan máscara de bits. | (b) |
 | `xs:simpleContent` + `xs:extension` | Texto de tipo simple más atributos. La `base` tiene que ser un tipo simple: extender un tipo complejo de contenido simple es derivar un tipo complejo de otro y se rechaza (§3.3, D27). | (a) |
 | `xs:simpleType` + `xs:restriction` | Con nombre o anónimo; `base` o un `xs:simpleType` anónimo como base. Facetas: `enumeration`, `minInclusive`, `maxInclusive`, `minExclusive`, `maxExclusive`, `length`, `minLength`, `maxLength`. Las comprobaciones de XSD 1.0 sobre los tipos simples están en [fase3/xsd.md](fase3/xsd.md) §10. | (a); facetas de longitud (b) |
-| Faceta `pattern` | Igual que `pattern` de JSON Schema (sintaxis de regex XSD equivalente al subconjunto de §2.4). | (c) |
+| Faceta `pattern` | Igual que `pattern` de JSON Schema con la sintaxis de XSD (anclado implícito, `^ $` literales). **Desviación:** `\d` = `[0-9]`. **Rechazados:** `\D \w \W \i \I \c \C \p \P` y la resta de clases (F4-U14). | (c) |
 
 ### 3.2 Tipos predefinidos
 
@@ -174,9 +174,10 @@ Todos son configurables en tiempo de compilación o en `sv_limits_t` (T5.2, T6.4
 | Tamaño máximo del payload | sin límite (streaming) |
 | Longitud máxima de una cadena | 1 MiB |
 | Longitud máxima del lexema de un número | 1 024 bytes |
-| Claves no declaradas por objeto (detección de duplicados) | 1 024 |
+| Claves no declaradas por objeto (detección de duplicados) | 1 024, y 4 096 entre todos los objetos abiertos (F4-U16); lo mismo para los atributos no declarados de una etiqueta XML |
 | Elementos para `uniqueItems` | 4 096 |
 | Estados en la determinización acotada (T3.7) | 4 096 |
+| Posiciones de un `pattern` tras expandir `{m,n}` / grupos anidados | 4 096 / 256 (F4-U16) |
 | Partículas por modelo de contenido XSD (partícula = elemento o grupo, la raíz incluida; D26) | 4 096. Pasarlo es un error `limit` en la partícula 4 097 |
 | Referencias de entidad/carácter XML por documento | 100 000 |
 | Tiempo máximo de validación | sin límite en la librería; 10 s en la aplicación web |

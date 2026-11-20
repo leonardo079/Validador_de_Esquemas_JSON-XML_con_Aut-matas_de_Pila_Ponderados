@@ -105,6 +105,10 @@ std::thread_local! {
 /// Nombre de un conjunto para el DOT y los errores: las ubicaciones de sus
 /// componentes (hasta tres) unidas con «∧».
 pub(crate) fn label(ir: &VerifiedIr, comps: &[NodeId]) -> String {
+    // Los ids virtuales de F4.5a (componentes con salida) no tienen
+    // ubicación propia: se nombra el conjunto por sus componentes reales.
+    let n = ir.nodes().len();
+    let comps: Vec<NodeId> = comps.iter().copied().filter(|id| id.index() < n).collect();
     let mut parts: Vec<String> = comps
         .iter()
         .take(3)
@@ -156,8 +160,12 @@ pub(crate) struct Emitter<'a> {
     pub(crate) ir: &'a VerifiedIr,
     /// |Σ|.
     pub(crate) n_classes: u32,
-    /// Punto de código → clase de carácter (1..; 0 es «otro»).
-    pub(crate) char_class: HashMap<char, u32>,
+    /// Partición de los puntos de código en clases de carácter (1..; 0 es
+    /// «otro»): cada carácter de `chars` en su clase y los conjuntos de los
+    /// `pattern` como unión de clases (F4-B3, F4.4b).
+    pub(crate) part: crate::pattern::Partition,
+    /// Un punto de código de cada clase de carácter.
+    reps: Vec<u32>,
     pub(crate) a: Automaton,
     trans_ids: HashMap<Trans, u32>,
     rule_ids: HashMap<(NodeId, usize), u32>,
@@ -169,43 +177,69 @@ pub(crate) struct Emitter<'a> {
     /// El primer error al rellenar (un índice que no cabe en `u32`, un nombre
     /// fuera de la unión): [`Emitter::finish`] lo devuelve.
     pub(crate) error: Option<BuildError>,
+    /// Ids virtuales de los componentes con salida (F4.5a): el id
+    /// `ir.nodes().len() + i` es (nodo real, salida) = `virt[i]`.
+    virt: Vec<(NodeId, u32)>,
 }
 
 impl<'a> Emitter<'a> {
     /// Tablas vacías con las clases fijas `fixed` (sus nombres en el DOT) y
-    /// una clase de carácter por punto de código de `chars` (F4-B3); los
-    /// demás, la clase «otro». `upper` es la cota de |Q| para reservar δ.
-    /// La transición 0 es el error de sintaxis (`model::ERROR`).
+    /// las clases de carácter de la partición de `chars` (cada uno en la
+    /// suya, F4-B3) y de los conjuntos `sets` de los `pattern` (F4.4b); lo
+    /// demás es la clase «otro». Sin `sets`, la clase i + 1 es el i-ésimo
+    /// carácter de `chars`, como antes de F4.4b. `upper` es la cota de |Q|
+    /// para reservar δ. La transición 0 es el error de sintaxis
+    /// (`model::ERROR`).
     pub(crate) fn new(
         ir: &'a VerifiedIr,
         chars: &BTreeSet<char>,
+        sets: &[ir::regex::CharSet],
         fixed: &[&str],
         upper: usize,
         products: usize,
     ) -> Emitter<'a> {
-        let n_classes = fixed.len() + 1 + chars.len();
-        let char_class: HashMap<char, u32> = chars
-            .iter()
-            .enumerate()
-            .map(|(i, &c)| (c, i as u32 + 1))
-            .collect();
+        let singles: Vec<u32> = chars.iter().map(|&c| u32::from(c)).collect();
+        let refs: Vec<&ir::regex::CharSet> = sets.iter().collect();
+        let part = crate::pattern::Partition::refine(&singles, &refs);
+        let reps = part.reps();
+        let n_classes = fixed.len() + part.n_classes;
         let mut class_names: Vec<String> = fixed.iter().map(|s| (*s).to_owned()).collect();
         class_names.push("otro".to_owned());
-        class_names.extend(chars.iter().map(|c| format!("'{c}'")));
+        let mut primero: Vec<Option<(u32, u32)>> = vec![None; part.n_classes];
+        let mut tramos = vec![0usize; part.n_classes];
+        for &(lo, hi, k) in &part.runs {
+            primero[k as usize].get_or_insert((lo, hi));
+            tramos[k as usize] += 1;
+        }
+        for k in 1..part.n_classes {
+            let nombre = match primero[k] {
+                Some((lo, hi)) if lo == hi && tramos[k] == 1 => {
+                    format!("'{}'", char::from_u32(lo).unwrap_or('?'))
+                }
+                Some((lo, hi)) => format!(
+                    "[{}-{}{}]",
+                    char::from_u32(lo).unwrap_or('?').escape_debug(),
+                    char::from_u32(hi).unwrap_or('?').escape_debug(),
+                    if tramos[k] > 1 { "…" } else { "" }
+                ),
+                None => format!("#{k}"),
+            };
+            class_names.push(nombre);
+        }
         let mut ascii = vec![0u32; 128];
         let mut ranges = Vec::new();
-        for (&c, &k) in &char_class {
-            if (c as u32) < 128 {
+        for &(lo, hi, k) in &part.runs {
+            for c in lo..=hi.min(127) {
                 ascii[c as usize] = k;
-            } else {
+            }
+            if hi >= 128 {
                 ranges.push(CharRange {
-                    lo: c as u32,
-                    hi: c as u32,
+                    lo: lo.max(128),
+                    hi,
                     class: k,
                 });
             }
         }
-        ranges.sort_by_key(|r| r.lo);
         let a = Automaton {
             format: crate::model::PayloadFormat::Json,
             n_classes: n_classes as u32,
@@ -222,6 +256,11 @@ impl<'a> Emitter<'a> {
             divisors: Vec::new(),
             counter_ops: Vec::new(),
             intervals: Vec::new(),
+            gates: Vec::new(),
+            gate_inputs: Vec::new(),
+            outmaps: Vec::new(),
+            out_targets: Vec::new(),
+            scalar_slots: 0,
             ascii,
             ranges,
             rules: Vec::new(),
@@ -231,11 +270,14 @@ impl<'a> Emitter<'a> {
             class_names,
             frame_names: Vec::new(),
             products,
+            dfa_states: 0,
+            dfa_states_min: 0,
         };
         let mut e = Emitter {
             ir,
             n_classes: n_classes as u32,
-            char_class,
+            part,
+            reps,
             a,
             trans_ids: HashMap::new(),
             rule_ids: HashMap::new(),
@@ -243,6 +285,7 @@ impl<'a> Emitter<'a> {
             lexeme_ids: HashMap::new(),
             counter_ids: HashMap::new(),
             error: None,
+            virt: Vec::new(),
         };
         e.simple(Op::Fail(runtime_rs::tables::Fault::Syntax), 0);
         e
@@ -304,6 +347,7 @@ impl<'a> Emitter<'a> {
             slots: 0,
             gates: 0,
             n_gates: 0,
+            unique: false,
         });
         self.a.frame_names.push(name);
         self.last(self.a.frames.len())
@@ -311,13 +355,18 @@ impl<'a> Emitter<'a> {
 
     pub(crate) fn classes_of(&self, w: &str) -> Vec<usize> {
         w.chars()
-            .map(|c| self.char_class.get(&c).copied().unwrap_or(0) as usize)
+            .map(|c| self.part.class(u32::from(c)) as usize)
             .collect()
     }
 
     /// Clase de carácter de `c` (sin sumar `class::CHAR`).
     pub(crate) fn class_of(&self, c: char) -> usize {
-        self.char_class.get(&c).copied().unwrap_or(0) as usize
+        self.part.class(u32::from(c)) as usize
+    }
+
+    /// Un punto de código de la clase de carácter `a` (sin la base fija).
+    pub(crate) fn class_rep(&self, a: usize) -> u32 {
+        self.reps.get(a).copied().unwrap_or(0)
     }
 
     /// Clases de carácter (sin la base fija).
@@ -325,7 +374,20 @@ impl<'a> Emitter<'a> {
         self.n_classes as usize - runtime_rs::tables::class::CHAR as usize
     }
 
-    /// Un trie como grupo de estados: (estado de cada estado del trie, trie).
+    /// `d` minimizado con Hopcroft (F4.3), con los estados de antes y de
+    /// después sumados al resumen.
+    pub(crate) fn minimized<O: Copy + Eq + std::hash::Hash + Default>(
+        &mut self,
+        d: Dfa<O>,
+    ) -> Dfa<O> {
+        let m = crate::minimize::hopcroft(&d);
+        self.a.dfa_states += d.n_states();
+        self.a.dfa_states_min += m.n_states();
+        m
+    }
+
+    /// Un trie (minimizado) como grupo de estados: (estado de cada estado del
+    /// trie, trie).
     pub(crate) fn trie_states(
         &mut self,
         g: u32,
@@ -334,7 +396,7 @@ impl<'a> Emitter<'a> {
         dead: &str,
     ) -> TrieStates {
         let ws: Vec<Vec<usize>> = words.iter().map(|w| self.classes_of(w)).collect();
-        let trie = Dfa::trie(self.n_chars(), &ws);
+        let trie = self.minimized(Dfa::trie(self.n_chars(), &ws));
         let prefixes = prefix_names(&trie, words, &ws);
         let mut states = Vec::with_capacity(trie.n_states());
         for s in 0..trie.n_states() as u32 {
@@ -443,8 +505,88 @@ impl<'a> Emitter<'a> {
         arg: u32,
         len: u32,
     ) -> Check {
-        let kind = self.ir.node(node).rules[i].rule.kind();
-        self.check_of(node, i, kind, test, arg, len)
+        let (real, slot) = self.resolve(node);
+        let kind = self.ir.node(real).rules[i].rule.kind();
+        let mut c = self.check_of(real, i, kind, test, arg, len);
+        c.slot = slot;
+        c
+    }
+
+    /// Los ids virtuales del análisis (F4.5a).
+    pub(crate) fn set_virtuals(&mut self, v: &[(NodeId, u32)]) {
+        self.virt = v.to_vec();
+    }
+
+    /// (nodo real, salida) de un componente.
+    pub(crate) fn resolve(&self, id: NodeId) -> (NodeId, u32) {
+        match id.index().checked_sub(self.ir.nodes().len()) {
+            Some(i) => self.virt.get(i).copied().unwrap_or((id, 0)),
+            None => (id, 0),
+        }
+    }
+
+    /// Un tipo de marco con salidas y puertas (F4.5a): `words` cuenta los
+    /// registros sin las salidas.
+    pub(crate) fn frame_with(
+        &mut self,
+        words: u32,
+        mask_words: u32,
+        slots: u32,
+        gates: (u32, u32),
+        name: String,
+    ) -> u32 {
+        self.a.frames.push(Frame {
+            words: words + slots,
+            mask_words,
+            slots,
+            gates: gates.0,
+            n_gates: gates.1,
+            unique: false,
+        });
+        self.a.frame_names.push(name);
+        self.a.scalar_slots = self.a.scalar_slots.max(slots);
+        self.last(self.a.frames.len())
+    }
+
+    /// Las puertas de un conjunto en las tablas, en su orden: `bits` da el
+    /// bit de máscara de cada clave de `dependentSchemas` (solo en el marco
+    /// de objeto; fuera, la puerta nunca salta).
+    pub(crate) fn gates(
+        &mut self,
+        list: &[crate::conj::GateSpec],
+        bits: Option<&HashMap<&str, u32>>,
+    ) -> (u32, u32) {
+        let ini = self.idx(self.a.gates.len());
+        for g in list {
+            let kind = self.ir.node(g.node).rules[g.rule].rule.kind();
+            let rule = self.rule_of(g.node, g.rule, kind);
+            let inputs = self.idx(self.a.gate_inputs.len());
+            self.a.gate_inputs.extend_from_slice(&g.inputs);
+            let bit = match (&g.key, bits) {
+                (Some(k), Some(b)) => b.get(k.as_str()).copied().unwrap_or(NO_BIT),
+                _ => NO_BIT,
+            };
+            let n_inputs = self.idx(g.inputs.len());
+            self.a.gates.push(runtime_rs::tables::Gate {
+                kind: g.kind,
+                rule,
+                target: g.target,
+                inputs,
+                n_inputs,
+                bit,
+            });
+        }
+        (ini, self.idx(list.len()))
+    }
+
+    /// Los mapas de salidas del análisis, con sus ids.
+    pub(crate) fn outmaps(&mut self, maps: &[Vec<u32>]) {
+        for m in maps {
+            let off = self.idx(self.a.out_targets.len());
+            self.a.out_targets.extend_from_slice(m);
+            let len = self.idx(m.len());
+            self.a.outmaps.push(runtime_rs::tables::OutMap { off, len });
+        }
     }
 
     /// [`Emitter::check`] de una regla dada por su clase (también las

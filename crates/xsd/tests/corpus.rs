@@ -150,8 +150,8 @@ fn cumple_la_definicion(nombre: &str, ir: &VerifiedIr) -> Vec<NodeClass> {
 /// `atributos-ajenos` y `tipos-simples`) y los dos de `tests/cases` pasan el
 /// análisis y salen clasificados según la definición, con nodos (c) solo
 /// por `pattern`. El pedido (`valid-xml-pedido-01`) tiene exactamente un nodo (b),
-/// el tipo anónimo de `pedido`, por su `Attributes` (`id` requerido), y el
-/// esquema de `malformed-xml-billion-laughs-01`, ninguno. Los casos usan el
+/// el tipo anónimo de `pedido`, por su `Attributes` (`id` requerido), y los
+/// demás (`malformed-xml-billion-laughs-01` y los de F4.6), ninguno. Los casos usan el
 /// texto de su campo `schema`, que es el de la copia en `parse-ok`.
 #[test]
 fn corpus_clasificado() {
@@ -179,7 +179,13 @@ fn corpus_clasificado() {
     let ids: Vec<&str> = casos.iter().map(|c| c.id.as_str()).collect();
     assert_eq!(
         ids,
-        ["malformed-xml-billion-laughs-01", "valid-xml-pedido-01"],
+        [
+            "invalid-xml-missing-child-01",
+            "invalid-xml-range-01",
+            "malformed-xml-billion-laughs-01",
+            "malformed-xml-unclosed-01",
+            "valid-xml-pedido-01"
+        ],
         "casos XSD de tests/cases"
     );
     for caso in &casos {

@@ -6,7 +6,9 @@
   "frames": 3,
   "classes": 16,
   "registerBytes": 8,
-  "maxFrameBytes": 16,
+  "maxFrameBytes": 40,
   "products": 0,
-  "deferred": 0
+  "deferred": 0,
+  "dfaStates": 3,
+  "dfaStatesMinimized": 3
 }

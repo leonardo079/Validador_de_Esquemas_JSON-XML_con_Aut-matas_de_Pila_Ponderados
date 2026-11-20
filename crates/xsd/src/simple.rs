@@ -609,10 +609,37 @@ fn restriction(ctx: &mut Ctx<'_, '_>, c: usize, errors: &mut Errors) {
                 }
                 Err(why) => bad_value(why, errors),
             },
-            FacetKind::Pattern => {
-                own.patterns.push(&v.value);
-                extend(&mut own.pattern_span, f.span);
-            }
+            // F4.4a: cada `xs:pattern` se analiza por separado, antes de
+            // unirlas con `|` (5.6-P1, CR-S2), con los rechazos de XSD
+            // (F4-U14, F4-B19).
+            FacetKind::Pattern => match ir::regex::parse(&v.value, ir::regex::Dialect::Xsd) {
+                Ok(_) => {
+                    own.patterns.push(&v.value);
+                    extend(&mut own.pattern_span, f.span);
+                }
+                Err(e) => {
+                    use ir::regex::RegexErrorKind as K;
+                    let found = clip(&format!("{} (carácter {})", e.construct, e.at + 1));
+                    let kind = match e.kind {
+                        K::Malformed => ErrorKind::InvalidValue {
+                            attr: "value",
+                            expected: "una expresión regular de XSD bien formada",
+                            found: clip(&format!("{found}: {}", e.reason)),
+                        },
+                        K::Unsupported => ErrorKind::UnsupportedValue {
+                            attr: "value",
+                            found,
+                            category: "expresión regular",
+                            reason: e.reason,
+                        },
+                        K::Limit => ErrorKind::PatternLimit {
+                            found,
+                            reason: e.reason,
+                        },
+                    };
+                    errors.simple(kind, v.at());
+                }
+            },
         }
     }
     if errors.simples.len() == before {

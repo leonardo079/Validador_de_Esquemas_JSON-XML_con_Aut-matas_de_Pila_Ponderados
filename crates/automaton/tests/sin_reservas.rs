@@ -128,12 +128,12 @@ fn cero_reservas_con_registros_y_productos() {
 fn cero_reservas(esquema: &str, payloads: &[&[u8]]) {
     let ir = ir_de(esquema);
     let a = automaton::build(&ir).unwrap();
-    let mut mem = vec![0u64; a.stack_words(64)];
+    let mut mem = vec![0u64; a.state_words(&runtime_rs::Limits::default())];
     for &p in payloads {
         for mode in [Mode::Total, Mode::EarlyFail] {
             for chunk in [1, 7, 4096] {
                 let antes = reservas();
-                let mut v = JsonValidator::new(a.tables(), &Options { mode }, &mut mem);
+                let mut v = JsonValidator::new(a.tables(), &Options::new(mode), &mut mem);
                 for c in p.chunks(chunk) {
                     if v.feed(c) == Flow::Stop {
                         break;
@@ -270,8 +270,9 @@ fn comprobaciones_de_entrada_compartidas() {
     let (n, b, r) = bytes_al_construir(&prefix_items_de_producto(2000, 200));
     let a = r.unwrap();
     // 6 clases × 200 ramas en la entrada, más los 200 `maxLength` al
-    // cerrar la cadena en cada uno de los 2 estados de su trie (vacío).
-    assert_eq!(a.tables().checks.len(), 6 * 200 + 2 * 200);
+    // cerrar la cadena en el único estado de su trie vacío (minimizado,
+    // F4.3: el inicial y el muerto son equivalentes).
+    assert_eq!(a.tables().checks.len(), 6 * 200 + 200);
     assert!(b < BYTES_POR_BYTE * n as u64, "{b} bytes para {n}");
 }
 
@@ -342,7 +343,7 @@ fn cero_reservas_con_xml() {
          </xs:schema>",
     );
     let a = automaton::build(&ir).unwrap();
-    let mut mem = vec![0u64; a.stack_words(64)];
+    let mut mem = vec![0u64; a.state_words(&runtime_rs::Limits::default())];
     let payloads: [&[u8]; 7] = [
         b"<?xml version='1.0'?><r d='1.5' f='1'><a><y>t</y><x>0.1</x></a><b>7</b><a><x>NaN</x></a><b>-2</b></r>",
         b"<r d='x'><a><x>1</x><x>2</x></a><z q='1'><w/></z><b>99999999999</b><?p q?></r>",
@@ -356,7 +357,7 @@ fn cero_reservas_con_xml() {
         for mode in [Mode::Total, Mode::EarlyFail] {
             for chunk in [1, 7, 4096] {
                 let antes = reservas();
-                let mut v = XmlValidator::new(a.tables(), &Options { mode }, &mut mem);
+                let mut v = XmlValidator::new(a.tables(), &Options::new(mode), &mut mem);
                 for c in p.chunks(chunk) {
                     if v.feed(c) == Flow::Stop {
                         break;
@@ -659,4 +660,86 @@ fn nombres_largos_de_follow_dan_limit_antes_de_recorrerlos() {
     ));
     assert!(es_limit(&r), "{:?}", r.map(|a| a.summary()));
     assert!(pedidos < 16 << 20, "{pedidos} bytes antes del límite");
+}
+
+/// Criterio 4 de F4.6: cero reservas entre `new` y `finish` con los límites
+/// por defecto (la reserva de claves en uso) en **todo** el corpus, JSON y
+/// XML, en los dos modos y en bloques de 1, 7 y 4096 bytes; y con 10⁵
+/// niveles de anidamiento con `max_depth` = 10⁵, sin recursión (el núcleo
+/// corre en un hilo de 256 KiB).
+#[test]
+fn cero_reservas_en_todo_el_corpus_y_en_profundidad() {
+    use baseline::corpus::{self, Format, Payload};
+    let mut n = 0;
+    for c in corpus::casos().unwrap() {
+        let Payload::Bytes(p) = &c.payload else {
+            continue;
+        };
+        let texto = String::from_utf8(c.schema_text.clone()).unwrap();
+        let ir = match c.format {
+            Format::Json => ir_de(&texto),
+            Format::Xml => xsd_de(&texto),
+        };
+        let Ok(a) = automaton::build(&ir) else {
+            continue;
+        };
+        let mut mem = vec![0u64; a.state_words(&runtime_rs::Limits::default())];
+        for mode in [Mode::Total, Mode::EarlyFail] {
+            for chunk in [1, 7, 4096] {
+                let antes = reservas();
+                let r = correr_sin_reservar(&a, p, &Options::new(mode), &mut mem, chunk);
+                assert_eq!(reservas() - antes, 0, "{}, {mode:?}, {chunk}: {r:?}", c.id);
+            }
+        }
+        n += 1;
+    }
+    assert!(n >= 17, "{n}");
+
+    let a = automaton::build(&ir_de(r##"{"items": {"$ref": "#"}}"##)).unwrap();
+    let d = 100_000;
+    let p = format!("{}{}", "[".repeat(d), "]".repeat(d));
+    let mut o = Options::new(Mode::Total);
+    o.limits.max_depth = d;
+    let mut mem = vec![0u64; a.state_words(&o.limits)];
+    let (r, delta) = std::thread::Builder::new()
+        .stack_size(256 << 10)
+        .spawn(move || {
+            let antes = reservas();
+            let r = correr_sin_reservar(&a, p.as_bytes(), &o, &mut mem, 4096);
+            (r, reservas() - antes)
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+    assert!(r.valid, "{r:?}");
+    assert_eq!(delta, 0);
+}
+
+fn correr_sin_reservar(
+    a: &automaton::Automaton,
+    p: &[u8],
+    o: &Options,
+    mem: &mut [u64],
+    chunk: usize,
+) -> runtime_rs::Report {
+    match a.format() {
+        automaton::PayloadFormat::Json => {
+            let mut v = JsonValidator::new(a.tables(), o, mem);
+            for c in p.chunks(chunk) {
+                if v.feed(c) == Flow::Stop {
+                    break;
+                }
+            }
+            v.finish()
+        }
+        automaton::PayloadFormat::Xml => {
+            let mut v = XmlValidator::new(a.tables(), o, mem);
+            for c in p.chunks(chunk) {
+                if v.feed(c) == Flow::Stop {
+                    break;
+                }
+            }
+            v.finish()
+        }
+    }
 }

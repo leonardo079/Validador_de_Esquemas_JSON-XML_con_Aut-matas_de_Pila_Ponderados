@@ -148,5 +148,20 @@
     "description": "Dos componentes con ciclo (A ↔ B y C consigo misma por `not`): un error por componente, en orden de posición." },
   { "file": "ciclo-con-hermanos.json", "code": "cycle", "line": 6, "column": 15, "count": 1,
     "contains": "#/$defs/nodo —$ref→ #/$defs/nodo",
-    "description": "En 2020-12 `$ref` es un aplicador más junto a sus hermanos: el `$ref` del propio nodo es una autoarista aunque la recursión por `items` sea válida." }
+    "description": "En 2020-12 `$ref` es un aplicador más junto a sus hermanos: el `$ref` del propio nodo es una autoarista aunque la recursión por `items` sea válida." },
+  { "file": "pattern-lookahead.json", "code": "unsupported", "line": 3, "column": 14, "count": 1,
+    "contains": "lookahead",
+    "description": "`pattern` con lookahead: no es regular en una pasada (D6, F4-U14)." },
+  { "file": "pattern-retrorreferencia.json", "code": "unsupported", "line": 1, "column": 13, "count": 1,
+    "contains": "retrorreferencias",
+    "description": "`pattern` con una retrorreferencia `\\1`: no es regular (D6)." },
+  { "file": "pattern-perezoso.json", "code": "unsupported", "line": 1, "column": 34, "count": 1,
+    "contains": "perezosos",
+    "description": "Cuantificador perezoso `+?`: fuera del subconjunto (F4-U14)." },
+  { "file": "pattern-mal-formado.json", "code": "meta-schema", "line": 1, "column": 13, "count": 1,
+    "contains": "bien formada",
+    "description": "Paréntesis sin cerrar: no es una expresión ECMA-262 bien formada." },
+  { "file": "pattern-demasiado-grande.json", "code": "limit", "line": 1, "column": 13, "count": 1,
+    "contains": "4 096 posiciones",
+    "description": "10 000 posiciones al expandir `{m,n}`: pasa el tope de 4 096 (F4-U16)." }
 ]

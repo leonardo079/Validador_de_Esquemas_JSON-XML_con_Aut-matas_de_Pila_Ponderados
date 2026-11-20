@@ -72,15 +72,15 @@ fn dot_de_la_dorada() {
 #[test]
 fn pendiente_y_errores_dan_1() {
     let p = temporal(
-        "pattern.json",
-        r#"{"properties": {"x": {"pattern": "^a"}}}"#,
+        "literal.json",
+        r#"{"properties": {"x": {"const": {"a": 1}}}}"#,
     );
     let (code, out, err) = schemac(&["automaton".as_ref(), p.as_os_str()]);
     let _ = std::fs::remove_file(&p);
     assert_eq!(code, 1);
     assert!(out.is_empty());
     assert!(
-        err.ends_with("estrategia pendiente: pattern (F4.4b) en #/properties/x\n"),
+        err.ends_with("estrategia pendiente: const (F4.5b) en #/properties/x\n"),
         "{err}"
     );
     let x = temporal(
@@ -88,10 +88,10 @@ fn pendiente_y_errores_dan_1() {
         "<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'><xs:element name='e'><xs:simpleType>\
          <xs:restriction base='xs:string'><xs:pattern value='a+'/></xs:restriction></xs:simpleType></xs:element></xs:schema>",
     );
+    // Desde F4.4b, el `xs:pattern` de un XSD compila.
     let (code, _, err) = schemac(&["automaton".as_ref(), x.as_os_str()]);
     let _ = std::fs::remove_file(&x);
-    assert_eq!(code, 1);
-    assert!(err.contains("pattern (F4.4b)"), "{err}");
+    assert_eq!(code, 0, "{err}");
     let (code, _, err) = schemac(&[
         "automaton".as_ref(),
         ruta("schemas/parse-error/coma-final.json").as_os_str(),

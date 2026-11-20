@@ -1,0 +1,18 @@
+{
+  "_id": "invalid-unique-items-02",
+  "category": "invalid",
+  "format": "json",
+  "description": "uniqueItems: dos objetos iguales con las claves en otro orden; 1 violación en el ']'.",
+  "phase": 4,
+  "schema": {
+    "type": "array",
+    "uniqueItems": true
+  },
+  "payload": "[{\"a\": 1, \"b\": 2}, {\"b\": 2, \"a\": 1}]",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 35
+  }
+}

@@ -17,6 +17,9 @@
 //!    elemento saltado, instrucciones de procesamiento) y después se
 //!    rellenan sus filas.
 
+/// Si XML ya compila `xs:pattern` (F4.4b); mientras no, `Pending`.
+pub(crate) const PATTERNS: bool = true;
+
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -180,12 +183,21 @@ struct TextSpec<'a> {
     /// Comprobaciones que emite el cierre del texto en un estado (como
     /// mucho): las del presupuesto (§15 de `automata.md`).
     per_state: usize,
+    /// `xs:pattern` de la cadena de restricciones (F4.4b): (nodo, regla);
+    /// todas deben cumplirse (las de un mismo paso ya van unidas con `|`).
+    pats: Vec<(NodeId, usize)>,
 }
 
 struct Analysis<'a> {
     cl: Closures<'a>,
     /// El presupuesto de F4-U6 (`BuildOptions::max_delta`).
     max_delta: usize,
+    /// El tope de estados de un producto o de un AFD (F4-U16).
+    max_product: usize,
+    /// El AFD de cada `xs:pattern`, una vez por regla (F4.4b).
+    patterns: HashMap<(NodeId, usize), crate::pattern::PatternDfa>,
+    /// Los conjuntos de caracteres de los `pattern` (partición global).
+    sets: Vec<ir::regex::CharSet>,
     chars: BTreeSet<char>,
     upper: usize,
     extra: usize,
@@ -279,6 +291,9 @@ impl<'a> Analysis<'a> {
         let mut an = Analysis {
             cl: Closures::new(ir.nodes())?,
             max_delta: opts.max_delta,
+            max_product: opts.max_product_states,
+            patterns: HashMap::new(),
+            sets: Vec::new(),
             chars,
             upper: FIXED_STATES + decl_size,
             extra: 0,
@@ -408,7 +423,10 @@ impl<'a> Analysis<'a> {
     /// El presupuesto de F4-U6 con las clases vistas hasta ahora (|Σ| solo
     /// crece, así que es una cota inferior de la cuenta final).
     fn check_budget(&self, ir: &VerifiedIr, at: NodeId) -> Result<(), BuildError> {
-        let k = class::CHAR as usize + 1 + self.chars.len();
+        let k = class::CHAR as usize
+            + 1
+            + self.chars.len()
+            + self.sets.iter().map(Vec::len).sum::<usize>();
         if budget(self.upper, k, self.extra) > self.max_delta {
             return Err(delta_limit(
                 self.upper,
@@ -767,6 +785,37 @@ impl<'a> Analysis<'a> {
     /// pasos y a `extra` antes de unirlas (una vez por lista de reglas), y al
     /// final las comprobaciones que emite el texto (estados × c(t)), con el
     /// presupuesto comprobado antes de volver.
+    /// El AFD de `xs:pattern` de la regla `i` de `id`, una vez por regla
+    /// (F4.4b; dialecto XSD, anclado): más de `max_product` estados es
+    /// `limit` en su ubicación, contado antes de crearlos.
+    fn pattern(
+        &mut self,
+        ir: &VerifiedIr,
+        id: NodeId,
+        i: usize,
+        src: &str,
+    ) -> Result<(), BuildError> {
+        if self.patterns.contains_key(&(id, i)) {
+            return Ok(());
+        }
+        match crate::pattern::compile(src, ir::regex::Dialect::Xsd, self.max_product) {
+            Ok(p) => {
+                self.sets.extend(p.sets.iter().cloned());
+                self.patterns.insert((id, i), p);
+                Ok(())
+            }
+            Err(crate::pattern::PatternError::Limit(n)) => Err(BuildError::Limit {
+                what: "estados del AFD de `pattern`",
+                limit: self.max_product,
+                found: n,
+                location: location_clipped(ir, id, LOCATION_MAX),
+            }),
+            Err(crate::pattern::PatternError::Invalid(e)) => Err(internal(format!(
+                "`xs:pattern` que el frontal aceptó y `ir::regex` no: {e}"
+            ))),
+        }
+    }
+
     fn text(
         &mut self,
         ir: &'a VerifiedIr,
@@ -791,6 +840,7 @@ impl<'a> Analysis<'a> {
             fixed: None,
             size: 0,
             per_state: 0,
+            pats: Vec::new(),
         };
         for k in 0..self.cl.sets.get(set).len() {
             let id = self.cl.sets.get(set)[k];
@@ -834,6 +884,10 @@ impl<'a> Analysis<'a> {
                         spec.ranges.push((id, i, c.rule.kind(), n.lexeme.as_str()));
                     }
                     Rule::Enum(_) => spec.lits.push((id, i, 0)),
+                    Rule::Pattern(src) => {
+                        self.pattern(ir, id, i, src)?;
+                        spec.pats.push((id, i));
+                    }
                     Rule::Ref(_) => {}
                     _ => {
                         return Err(internal(format!(
@@ -916,10 +970,36 @@ impl<'a> Analysis<'a> {
             self.chars.extend(lexical_chars(lexical).chars());
             spec.size = lexical_size(lexical);
         }
+        // Con `pattern`, el AFD del texto es el producto con el de cada uno
+        // (con *collapse* delante, ≤ 2·|p| + 1, si el tipo no es
+        // `xs:string`), y el constructor lo corta en `max_product`: esa es
+        // la cota (F4.4b).
+        if spec.pats.len() > 64 {
+            return Err(BuildError::Limit {
+                what: "`xs:pattern` sobre el mismo texto",
+                limit: 64,
+                found: spec.pats.len(),
+                location: ctx(),
+            });
+        }
+        if !spec.pats.is_empty() {
+            let mut size = spec.size;
+            for k in &spec.pats {
+                let p = self.patterns[k].dfa.n_states();
+                let p = if lexical == Lexical::String {
+                    p
+                } else {
+                    2 * p + 1
+                };
+                size = size.saturating_mul(p);
+            }
+            spec.size = size.min(self.max_product);
+        }
         let per_state = spec.lits.len()
             + spec.lens.len()
             + spec.ranges.len()
             + spec.nenums.len()
+            + spec.pats.len()
             + usize::from(spec.fixed.is_some())
             + 1;
         spec.per_state = per_state;
@@ -1157,6 +1237,9 @@ struct Builder<'a> {
     t: Emitter<'a>,
     /// AFD de cada texto (ya con las clases de carácter).
     dfas: Vec<Dfa<TextOut>>,
+    /// Por texto y estado de su AFD, los `pattern` que se cumplen (bit j =
+    /// el j-ésimo de `TextSpec::pats`; F4.4b).
+    pbits: Vec<Vec<u64>>,
     /// Grupo global de los textos de atributo: estado de cada estado del AFD.
     attr_states: HashMap<u32, Vec<u32>>,
     frames: Vec<FrameStates>,
@@ -1167,7 +1250,7 @@ struct Builder<'a> {
     fenum_ranges: HashMap<u32, u32>,
     fixed_ids: HashMap<u32, u32>,
     /// Comprobaciones del cierre de cada texto por salida del AFD, una vez.
-    text_memo: HashMap<(u32, TextOut), Vec<Check>>,
+    text_memo: HashMap<(u32, TextOut, u64), Vec<Check>>,
     overflow: [Option<u32>; 4],
     // Partes fijas.
     d0: u32,
@@ -1193,7 +1276,12 @@ struct Builder<'a> {
 
 impl<'a> Builder<'a> {
     fn new(ir: &'a VerifiedIr, an: Analysis<'a>, opts: &BuildOptions) -> Result<Self, BuildError> {
-        let n_classes = class::CHAR as usize + 1 + an.chars.len();
+        // |Σ| exacto con los conjuntos de los `xs:pattern` (F4.4b).
+        let n_classes = {
+            let singles: Vec<u32> = an.chars.iter().map(|&c| u32::from(c)).collect();
+            let refs: Vec<&ir::regex::CharSet> = an.sets.iter().collect();
+            class::CHAR as usize + crate::pattern::Partition::refine(&singles, &refs).n_classes
+        };
         if budget(an.upper, n_classes, an.extra) > opts.max_delta {
             return Err(delta_limit(
                 an.upper,
@@ -1203,10 +1291,10 @@ impl<'a> Builder<'a> {
                 location_clipped(ir, NodeId::ROOT, LOCATION_MAX),
             ));
         }
-        let t = Emitter::new(ir, &an.chars, &xclass::NAMES, an.upper, 0);
+        let mut t = Emitter::new(ir, &an.chars, &an.sets, &xclass::NAMES, an.upper, 0);
         let n = t.n_chars();
         let class_of = |c: char| t.class_of(c);
-        let dfas = an
+        let crudos: Vec<Dfa<TextOut>> = an
             .texts
             .iter()
             .map(|s| {
@@ -1219,12 +1307,30 @@ impl<'a> Builder<'a> {
             })
             .collect();
         let decl = decl_dfa(n, &class_of);
+        // F4.3: cada parte finita se minimiza antes de volcarla a δ (el
+        // presupuesto ya se contó con los tamaños sin minimizar, que lo
+        // acotan).
+        let mut dfas = Vec::with_capacity(crudos.len());
+        let mut pbits = Vec::with_capacity(crudos.len());
+        for (tx, d) in crudos.into_iter().enumerate() {
+            let spec = &an.texts[tx];
+            if spec.pats.is_empty() {
+                pbits.push(vec![u64::MAX; 0]);
+                dfas.push(t.minimized(d));
+                continue;
+            }
+            let (d, bits) = with_patterns(&mut t, &an, spec, d, opts.max_product_states)?;
+            pbits.push(bits);
+            dfas.push(d);
+        }
+        let decl = t.minimized(decl);
         let empty: TrieStates = (Vec::new(), Dfa::trie(1, &[]));
         let mut b = Builder {
             ir,
             an,
             t,
             dfas,
+            pbits,
             attr_states: HashMap::new(),
             frames: Vec::new(),
             entries: Vec::new(),
@@ -1432,7 +1538,7 @@ impl<'a> Builder<'a> {
                     let t = self.t.mv(states[dfa.next(s, a) as usize]);
                     self.t.set(q, class::CHAR + a as u32, t);
                 }
-                let list = self.text_checks(tx, dfa.out[s as usize]);
+                let list = self.text_checks(tx, s);
                 let leave = self.t.with_checks(Op::Leave, 0, list);
                 self.t.set(q, xclass::VALUE_END, leave);
             }
@@ -1733,8 +1839,7 @@ impl<'a> Builder<'a> {
             Content::Simple { text, .. } => {
                 let tx = *text;
                 let s = self.dfas[tx as usize].start;
-                let o = self.dfas[tx as usize].out[s as usize];
-                self.text_checks(tx, o)
+                self.text_checks(tx, s)
             }
             Content::Model(m) => match m.states[0].close {
                 KClose::No => {
@@ -1749,12 +1854,28 @@ impl<'a> Builder<'a> {
     /// Las comprobaciones del cierre del texto `tx` en un estado de salida
     /// `o` (decididas al compilar salvo las que leen el lexema o la
     /// longitud).
-    fn text_checks(&mut self, tx: u32, o: TextOut) -> Vec<Check> {
-        if let Some(v) = self.text_memo.get(&(tx, o)) {
+    fn text_checks(&mut self, tx: u32, s: u32) -> Vec<Check> {
+        let o = self.dfas[tx as usize].out[s as usize];
+        let bits = self.pbits[tx as usize]
+            .get(s as usize)
+            .copied()
+            .unwrap_or(0);
+        if let Some(v) = self.text_memo.get(&(tx, o, bits)) {
             return v.clone();
         }
-        let v = self.text_checks_new(tx, o);
-        self.text_memo.insert((tx, o), v.clone());
+        let mut v = self.text_checks_new(tx, o);
+        // F4.4b: 1 violación por `pattern` que el estado no cumple (decidido
+        // al compilar). Un texto fuera del espacio léxico ya cuenta 1 y no
+        // evalúa facetas (§36 de `pendientes.md`).
+        if o != TextOut::Reject {
+            let pats = self.an.texts[tx as usize].pats.clone();
+            for (j, (id, i)) in pats.into_iter().enumerate() {
+                if bits & (1 << j) == 0 {
+                    v.push(self.t.check(id, i, Test::Fails, 0, 0));
+                }
+            }
+        }
+        self.text_memo.insert((tx, o, bits), v.clone());
         v
     }
 
@@ -2058,7 +2179,7 @@ impl<'a> Builder<'a> {
                         let t = self.t.mv(states[dfa.next(s, a) as usize]);
                         self.t.set(q, class::CHAR + a as u32, t);
                     }
-                    let list = self.text_checks(tx, dfa.out[s as usize]);
+                    let list = self.text_checks(tx, s);
                     let t = self.t.with_checks(Op::Move, end_start, list);
                     self.t.set(q, xclass::END_TAG, t);
                     let t = self.t.mv(u);
@@ -2145,6 +2266,113 @@ impl<'a> Builder<'a> {
         }
         self.frames[f] = fs;
     }
+}
+
+/// El AFD del texto `d` (sobre las clases globales) por el de cada
+/// `xs:pattern` del texto (F4.4b): cada patrón se pasa a las clases globales
+/// (la partición global refina la suya) y, si el tipo no es `xs:string`, se
+/// le pone delante el transductor de *collapse* (el patrón ve el valor
+/// normalizado, como el espacio léxico). Producto contado antes de crear
+/// cada estado (`cap`), minimizado; devuelve el AFD con la salida del texto
+/// y, por estado, los bits de los `pattern` que se cumplen.
+fn with_patterns(
+    t: &mut Emitter<'_>,
+    an: &Analysis<'_>,
+    spec: &TextSpec<'_>,
+    d: Dfa<TextOut>,
+    cap: usize,
+) -> Result<(Dfa<TextOut>, Vec<u64>), BuildError> {
+    let n = d.n_classes;
+    let ws: Vec<usize> = WS.iter().map(|&c| t.class_of(c)).collect();
+    let space = t.class_of(' ');
+    let mut ps: Vec<Dfa<bool>> = Vec::new();
+    for k in &spec.pats {
+        let p = &an.patterns[k];
+        let local: Vec<usize> = (0..n)
+            .map(|a| p.part.class(t.class_rep(a)) as usize)
+            .collect();
+        let mut trans = Vec::with_capacity(p.dfa.n_states() * n);
+        for q in 0..p.dfa.n_states() as u32 {
+            for &l in &local {
+                trans.push(p.dfa.next(q, l));
+            }
+        }
+        let g = Dfa {
+            n_classes: n,
+            start: p.dfa.start,
+            trans,
+            out: p.dfa.out.clone(),
+        };
+        ps.push(if spec.lexical == Lexical::String {
+            g
+        } else {
+            crate::dfa::collapse(&g, &ws, space)
+        });
+    }
+    type Key = (u32, Vec<u32>);
+    let start: Key = (d.start, ps.iter().map(|p| p.start).collect());
+    let mut ids: HashMap<Key, u32> = HashMap::from([(start.clone(), 0)]);
+    let mut keys = vec![start];
+    let mut trans = Vec::new();
+    let mut i = 0;
+    while i < keys.len() {
+        let (q, qs) = keys[i].clone();
+        for a in 0..n {
+            let key: Key = (
+                d.next(q, a),
+                qs.iter().zip(&ps).map(|(&x, p)| p.next(x, a)).collect(),
+            );
+            let id = match ids.get(&key) {
+                Some(&id) => id,
+                None => {
+                    if keys.len() >= cap {
+                        return Err(BuildError::ProductLimit {
+                            states: keys.len() + 1,
+                            limit: cap,
+                            scalar: true,
+                            location: location_clipped(t.ir, spec.pats[0].0, LOCATION_MAX),
+                        });
+                    }
+                    let id = keys.len() as u32;
+                    ids.insert(key.clone(), id);
+                    keys.push(key);
+                    id
+                }
+            };
+            trans.push(id);
+        }
+        i += 1;
+    }
+    let out: Vec<(TextOut, u64)> = keys
+        .iter()
+        .map(|(q, qs)| {
+            let bits = qs
+                .iter()
+                .zip(&ps)
+                .enumerate()
+                .filter(|(_, (&x, p))| p.out[x as usize])
+                .fold(0u64, |b, (j, _)| b | (1 << j));
+            (d.out[*q as usize], bits)
+        })
+        .collect();
+    let raw = Dfa {
+        n_classes: n,
+        start: 0,
+        trans,
+        out,
+    };
+    let m = t.minimized(raw);
+    let bits = m.out.iter().map(|o| o.1).collect();
+    let out = m.out.iter().map(|o| o.0).collect();
+    Ok((
+        Dfa {
+            n_classes: m.n_classes,
+            start: m.start,
+            trans: m.trans,
+            out,
+        },
+        bits,
+    ))
 }
 
 #[cfg(test)]

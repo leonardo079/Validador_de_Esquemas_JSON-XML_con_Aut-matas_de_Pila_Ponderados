@@ -1,0 +1,21 @@
+{
+  "_id": "malformed-json-duplicate-key-01",
+  "category": "malformed",
+  "format": "json",
+  "description": "Clave no declarada \"x\" repetida en el mismo objeto: malformado (D2), en la comilla de cierre de la repetida.",
+  "phase": 4,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "a": {
+        "type": "integer"
+      }
+    }
+  },
+  "payload": "{\"a\": 1, \"x\": 1, \"x\": 2}",
+  "expected": {
+    "valid": false,
+    "errorKind": "syntax",
+    "offset": 19
+  }
+}

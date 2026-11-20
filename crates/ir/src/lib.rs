@@ -43,6 +43,7 @@
 mod classify;
 mod export;
 pub mod num;
+pub mod regex;
 mod verify;
 
 pub use classify::{

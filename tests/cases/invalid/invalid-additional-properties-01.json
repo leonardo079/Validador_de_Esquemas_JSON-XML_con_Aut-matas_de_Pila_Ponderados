@@ -1,0 +1,23 @@
+{
+  "_id": "invalid-additional-properties-01",
+  "category": "invalid",
+  "format": "json",
+  "description": "Propiedad \"b\" no declarada con additionalProperties: false.",
+  "phase": 4,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "a": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "payload": "{\"a\": \"x\", \"b\": 1}",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 16
+  }
+}

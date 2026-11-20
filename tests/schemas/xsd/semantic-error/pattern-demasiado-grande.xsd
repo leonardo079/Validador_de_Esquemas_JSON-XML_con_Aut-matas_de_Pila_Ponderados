@@ -1,0 +1,8 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:simpleType name="C">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="(a{100}){100}"/>
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:element name="c" type="C"/>
+</xs:schema>

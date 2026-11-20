@@ -452,12 +452,13 @@ fn casos_xml() -> Vec<(String, Vec<u8>)> {
     v
 }
 
-/// Criterio: los dos esquemas XSD de `tests/cases` bajan a una IR que pasa
-/// `verify`, con la forma esperada.
+/// Criterio: los esquemas XSD de `tests/cases` bajan a una IR que pasa
+/// `verify`, con la forma esperada (los de la persona de F4.6, solo que
+/// bajan).
 #[test]
 fn esquemas_de_los_casos_bajan() {
     let casos = casos_xml();
-    assert_eq!(casos.len(), 2, "{casos:?}");
+    assert_eq!(casos.len(), 5, "{casos:?}");
     for (nombre, bytes) in casos {
         let v = compilar(&bytes).unwrap_or_else(|e| panic!("{nombre}: {e:?}"));
         let orden: Vec<String> = (0..v.nodes().len()).map(|i| v.location(id(i))).collect();
@@ -479,11 +480,13 @@ fn esquemas_de_los_casos_bajan() {
             let pi = v.node(id(6));
             assert_eq!(pi.rules.len(), 2, "Lexical y Minimum(1)");
             assert_eq!(pi.rules[1].rule, Rule::Minimum(Num::new("1")));
-        } else {
+        } else if nombre.contains("billion") {
             assert_eq!(
                 orden,
                 ["#", "#/simpleContent/xs:string", "#/builtin/string"]
             );
+        } else {
+            assert_eq!(orden[1], "#/element/persona", "{nombre}");
         }
     }
 }

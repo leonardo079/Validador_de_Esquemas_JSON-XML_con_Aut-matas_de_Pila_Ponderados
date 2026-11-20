@@ -126,7 +126,11 @@ fn dorada_contada_a_mano() {
     let s = a.summary();
     assert_eq!((s.states, s.classes, s.transitions), (24, 16, 77));
     assert_eq!(s.frames, 3);
-    assert_eq!(s.max_frame_bytes, 16);
+    // Un marco de máscara: 1 palabra de registros + 4 (F4.6: buena
+    // formación y cabecera; F4.5b: hash canónico y clave del miembro).
+    assert_eq!(s.max_frame_bytes, 40);
+    // El trie de claves {a} no se reduce al minimizarlo (F4.3).
+    assert_eq!((s.dfa_states, s.dfa_states_min), (3, 3));
     let mut por_grupo = vec![(0usize, 0usize); a.groups().len()];
     for q in 0..a.n_states() as u32 {
         let g = a.state(StateId(q)).group as usize;
@@ -256,21 +260,31 @@ fn properties_y_additional_properties() {
     assert!(total(&a, "[1, {\"ab\": 1}]").valid);
 }
 
-/// D2: una clave declarada repetida es malformado (∞) en la comilla de
-/// apertura de la segunda.
+/// D2: una clave repetida, declarada o no (F4.6), es malformado (∞) en la
+/// comilla de **cierre** de la segunda, donde se sabe que lo es (como la
+/// línea base, D50 B14; columna incluida, también tras un escape).
 #[test]
 fn clave_declarada_repetida_es_infinito() {
     let a = compilar(r#"{"properties": {"a": true}, "required": ["b"]}"#);
-    for (p, offset) in [
-        (r#"{"a":1,"a":2}"#, 7),
-        (r#"{"b":1, "a":[], "b":{}}"#, 16),
-        (r#"{"a":1,"\u0061":1}"#, 7),
+    for (p, offset, col) in [
+        (r#"{"a":1,"a":2}"#, 9, 10),
+        (r#"{"b":1, "a":[], "b":{}}"#, 18, 19),
+        (r#"{"a":1,"\u0061":1}"#, 14, 15),
+        (r#"{"x":1,"x":2}"#, 9, 10),
+        (r#"{"b":1, "zé":[], "zé":{}}"#, 22, 21),
+        (r#"{"x":{"x":1, "x":2}}"#, 15, 16),
     ] {
         let r = total(&a, p);
         assert_eq!(r.violations, Weight::INFINITY, "{p}");
         assert_eq!(r.error_kind, Some(ErrorKind::Syntax));
         assert_eq!(r.first.unwrap().offset, offset, "{p}");
+        assert_eq!(r.first.unwrap().column, col, "{p}");
     }
+    // Una clave no declarada puede repetirse en objetos distintos, también
+    // anidados y tras cerrar el hijo.
+    assert!(!total(&a, r#"{"b":1, "x": {"x": 1}, "y": [{"x": 2}]}"#)
+        .error_kind
+        .is_some_and(|k| k != ErrorKind::Schema));
     // Repetidas en objetos distintos, no.
     assert!(total(&a, r#"{"b": {"a": 1, "c": {"a": 2}}}"#).valid);
 }
@@ -374,30 +388,6 @@ fn lo_no_implementado_es_pending_con_su_tarea() {
     for (src, rule, task) in [
         (r#"{"enum": [[1]]}"#, RuleKind::Enum, Task::Literals),
         (r#"{"const": {"a": 1}}"#, RuleKind::Const, Task::Literals),
-        (
-            r#"{"properties": {"x": {"pattern": "a"}}}"#,
-            RuleKind::Pattern,
-            Task::Pattern,
-        ),
-        (r#"{"anyOf": [true]}"#, RuleKind::AnyOf, Task::Combinators),
-        (r#"{"oneOf": [true]}"#, RuleKind::OneOf, Task::Combinators),
-        (r#"{"not": true}"#, RuleKind::Not, Task::Combinators),
-        (
-            r#"{"dependentSchemas": {"a": true}}"#,
-            RuleKind::DependentSchemas,
-            Task::Combinators,
-        ),
-        (
-            r#"{"uniqueItems": true}"#,
-            RuleKind::UniqueItems,
-            Task::Literals,
-        ),
-        // `not` (F4.5a) dentro de `allOf` (que ya compila).
-        (
-            r#"{"allOf": [{"not": {"minLength": 1}}]}"#,
-            RuleKind::Not,
-            Task::Combinators,
-        ),
     ] {
         match build(&bajar(src)) {
             Err(BuildError::Pending {
@@ -406,21 +396,25 @@ fn lo_no_implementado_es_pending_con_su_tarea() {
             otro => panic!("{src}: {otro:?}"),
         }
     }
-    let e = build(&bajar(r#"{"properties": {"x": {"pattern": "a"}}}"#)).unwrap_err();
+    let e = build(&bajar(r#"{"properties": {"x": {"const": [1]}}}"#)).unwrap_err();
     assert_eq!(
         e.to_string(),
-        "estrategia pendiente: pattern (F4.4b) en #/properties/x"
+        "estrategia pendiente: const (F4.5b) en #/properties/x"
     );
     // Lo inalcanzable no cuenta.
     assert!(build(&bajar(
-        r#"{"$defs": {"x": {"pattern": "a"}}, "type": "string"}"#
+        r#"{"$defs": {"x": {"const": [1]}}, "type": "string"}"#
     ))
     .is_ok());
+    // F4.5b: `uniqueItems` ya compila.
+    assert!(build(&bajar(r#"{"uniqueItems": true}"#)).is_ok());
+    // F4.4b: `pattern` ya compila en JSON.
+    assert!(build(&bajar(r#"{"properties": {"x": {"pattern": "a"}}}"#)).is_ok());
 }
 
-/// Desde F4.1c un XSD compila; solo su `pattern` queda pendiente (F4.4b).
+/// Desde F4.1c un XSD compila, y desde F4.4b también su `pattern`.
 #[test]
-fn xsd_compila_y_su_pattern_es_pending() {
+fn xsd_compila_con_su_pattern() {
     let ir_de = |src: &'static str| {
         std::thread::Builder::new()
             .stack_size(8 << 20)
@@ -442,10 +436,13 @@ fn xsd_compila_y_su_pattern_es_pending() {
          <xs:element name='e'><xs:simpleType><xs:restriction base='xs:string'>\
          <xs:pattern value='a+'/></xs:restriction></xs:simpleType></xs:element></xs:schema>",
     );
-    match build(&ir) {
-        Err(BuildError::Pending { task, .. }) => assert_eq!(task, Task::Pattern),
-        otro => panic!("{otro:?}"),
-    }
+    // F4.4b: también su `xs:pattern` (anclado).
+    let a = build(&ir).unwrap();
+    assert!(validate(&a, b"<e>aaa</e>", Mode::Total, 7).valid);
+    assert_eq!(
+        validate(&a, b"<e>aab</e>", Mode::Total, 7).violations.get(),
+        Some(1)
+    );
 }
 
 // ----------------------------------------------------------- propiedades ---
@@ -542,6 +539,15 @@ fn d7_cadena_de_ref_y_payload_profundo() {
             // Todo es alias del último: un solo arreglo propio.
             assert_eq!(a.groups().len(), 5);
             let n = 100_000;
+            // F4.6: la profundidad la acota `Limits::max_depth` (256 por
+            // defecto); aquí, 2·10⁵ + 1 para los dos niveles por nodo del
+            // árbol.
+            let mut o = automaton::Options::new(Mode::Total);
+            o.limits.max_depth = 2 * n + 1;
+            let validate = |a: &automaton::Automaton, p: &[u8], m: Mode, c: usize| {
+                assert_eq!(m, Mode::Total);
+                automaton::validate_with(a, p, &o, c)
+            };
             let profundo = format!("{}{}", "[".repeat(n), "]".repeat(n));
             let r = validate(&a, profundo.as_bytes(), Mode::Total, 4096);
             assert!(r.valid, "{r:?}");
@@ -572,16 +578,17 @@ fn d7_cadena_de_ref_y_payload_profundo() {
 fn pila_llena_da_limit() {
     use runtime_rs::{Flow, JsonValidator, Options};
     let a = compilar(DORADA);
-    // Dos marcos de «cualquiera» (1 palabra cada uno) caben; el tercero no.
-    let mut mem = vec![0u64; 2];
-    let mut v = JsonValidator::new(a.tables(), &Options { mode: Mode::Total }, &mut mem);
+    // Dos marcos de «cualquiera» (`FRAME_OVERHEAD` = 4 palabras cada uno)
+    // caben; el tercero no.
+    let mut mem = vec![0u64; 8];
+    let mut v = JsonValidator::new(a.tables(), &Options::new(Mode::Total), &mut mem);
     assert_eq!(v.feed(b"[[[]]]"), Flow::Stop);
     let r = v.finish();
     assert_eq!(r.error_kind, Some(ErrorKind::Limit));
     assert_eq!(r.violations, Weight::INFINITY);
     assert_eq!(r.first.unwrap().offset, 2);
-    let mut mem = vec![0u64; 3];
-    let mut v = JsonValidator::new(a.tables(), &Options { mode: Mode::Total }, &mut mem);
+    let mut mem = vec![0u64; 12];
+    let mut v = JsonValidator::new(a.tables(), &Options::new(Mode::Total), &mut mem);
     assert_eq!(v.feed(b"[[[]]]"), Flow::Continue);
     // La raíz exige un objeto: 1 violación, sin límite.
     assert_eq!(v.finish().violations.get(), Some(1));

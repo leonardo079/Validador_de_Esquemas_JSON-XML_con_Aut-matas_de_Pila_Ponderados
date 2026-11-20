@@ -1,7 +1,8 @@
 # Pendientes de la Fase 4 (autómata de pila ponderado)
 
 Observaciones que dejaron abiertas las tareas F4.1a (modelo formal de M, pesos, núcleo
-`no_std` y esqueleto JSON), F4.1b (registros, escalares y conjunción por E₌) y F4.1c (XML);
+`no_std` y esqueleto JSON), F4.1b (registros, escalares y conjunción por E₌), F4.1c (XML) y
+F4.6 (ejecutor: límites, reporte y buena formación, [runtime.md](runtime.md));
 teoría en
 [automata.md](automata.md). Lo resuelto se marca y se conserva.
 Las decisiones de diseño viven en el «Registro de decisiones» del plan; aquí solo se
@@ -9,7 +10,9 @@ remite a ellas.
 
 ## Vigilar más adelante
 
-### 1. Claves no declaradas repetidas (F4.1a-P1)
+### 1. Claves no declaradas repetidas (F4.1a-P1) — RESUELTO (F4.6)
+
+- **Resuelto en F4.6:** la capa de buena formación guarda el hash SipHash-1-3 de cada clave sin bit en la región de su objeto (1 024 por objeto, 4 096 entre todos) y da `syntax` en la comilla de cierre de la repetida ([runtime.md](runtime.md) §4; `clave_declarada_repetida_es_infinito`, `malformed-json-duplicate-key-01`, proptest `json_aleatorio`).
 
 - **Gravedad:** Medium (un payload JSON mal formado, con una clave no declarada repetida, se acepta como válido hasta F4.6).
 - **Estado:** M detecta con su máscara las claves **declaradas** repetidas (peso ∞, D2);
@@ -95,7 +98,9 @@ remite a ellas.
   salida del trie); medir el efecto en el informe («tamaño del autómata»).
 - **Tarea:** F4.3 (minimización, que ya une subautómatas iguales) o F4.6.
 
-### 5. Forma del reporte frente a F4-U18 (F4.1a-P5; interfaz compartida)
+### 5. Forma del reporte frente a F4-U18 (F4.1a-P5; interfaz compartida) — RESUELTO en el código (F4.6); la forma de `sv_report_t` va a las dos personas
+
+- **Resuelto en F4.6:** `Options { mode, limits }` con `Options::new`/`Default`, `Limits`, `Tables::state_words` y el reporte de [runtime.md](runtime.md) §1 (las tres precisiones de arriba se mantienen). Lo que cambia la interfaz compartida (F4-U18) está en §59.
 
 - **Gravedad:** Low (forma del reporte, interfaz compartida).
 - **Estado:** `runtime_rs::Report` tiene `valid`, `violations`, `error_kind` y el primer
@@ -109,7 +114,9 @@ remite a ellas.
   `sv_report_t` con estas tres precisiones.
 - **Tarea:** F4.6.
 
-### 6. Profundidad acotada solo por la memoria del llamador (F4.1a-P6)
+### 6. Profundidad acotada solo por la memoria del llamador (F4.1a-P6) — RESUELTO (F4.6)
+
+- **Resuelto en F4.6:** `Limits::max_depth` (256 por defecto) en el núcleo, independiente de la memoria; `automaton::validate` reserva `state_words(&limits)` ([runtime.md](runtime.md) §2-§3, `limites.rs::profundidad`).
 
 - **Gravedad:** Low (siempre `limit` sin pánico; falta el tope de `Limits`).
 - **Estado:** el núcleo apila mientras quepa en `mem`; si no cabe, error `limit`
@@ -211,7 +218,9 @@ remite a ellas.
   ([automata.md](automata.md) §3.1). Prueba: `mascara_separada_del_contador` (también con
   dos palabras de máscara).
 
-### 12. F4.1a-CR-S2: una clase fuera de rango lee la fila siguiente (seguridad)
+### 12. F4.1a-CR-S2: una clase fuera de rango lee la fila siguiente (seguridad) — RESUELTO (F4.6)
+
+- **Resuelto en F4.6:** `Core::step` da `Internal` si la clase es ≥ `n_classes`, antes de calcular el índice.
 
 - **Gravedad:** Low (solo con tablas incoherentes; veredicto erróneo, nunca lectura fuera de rango).
 - **Dónde:** `crates/runtime-rs/src/core.rs:171` (clase de carácter) y
@@ -223,7 +232,9 @@ remite a ellas.
   tablas corruptas.
 - **Tarea:** F4.6 (revisión de seguridad, D35).
 
-### 13. F4.1a-CR-S3: la pila que reserva `automaton::validate`
+### 13. F4.1a-CR-S3: la pila que reserva `automaton::validate` — RESUELTO (F4.6)
+
+- **Resuelto en F4.6:** `automaton::validate` reserva `Tables::state_words(&Limits)` palabras, de los límites y no del payload (`validate_with` para otros límites); ver también §45.
 
 - **Gravedad:** **Medium** (ronda 3, F4D-M3); **High** en cuanto F6.5 o F7 cableen `validate` con payloads de usuario.
 - **Dónde:** `crates/automaton/src/lib.rs:187-213` (`validate`: `vec![0u64; a.stack_words(depth)]`
@@ -277,7 +288,9 @@ remite a ellas.
   (F5.2) y las tablas `const` de F5.1 usen los mismos códigos.
 - **Tarea:** F5.2 (o F5.1).
 
-### 17. F4.1a-CR-S9: `Options` con campos públicos
+### 17. F4.1a-CR-S9: `Options` con campos públicos — RESUELTO (F4.6)
+
+- **Resuelto en F4.6:** `Options::new(mode)` y `Options::default()`; las pruebas ya no usan literales.
 
 - **Gravedad:** Low (nit).
 - **Dónde:** `crates/runtime-rs/src/core.rs:33-35`.
@@ -325,7 +338,9 @@ remite a ellas.
 
 ### Abiertas por la tarea F4.1b (registros, escalares y conjunción)
 
-### 21. El límite del lexema solo se aplica cuando hace falta (F4.1b-P1)
+### 21. El límite del lexema solo se aplica cuando hace falta (F4.1b-P1) — DECIDIDO (F4.6, D59)
+
+- **Decidido en F4.6:** se mantiene «solo cuando una comprobación lo lee»: un número largo sin rangos, `multipleOf` ni `enum` numérico no necesita guardarse (los registros de `integer` son saturados) y aplicarlo a todo número rechazaría payloads que el validador puede decidir sin el lexema. Documentado en [runtime.md](runtime.md) §3 (`limites.rs::lexema`, `extreme-big-number-01`).
 
 - **Gravedad:** Low.
 - **Estado:** el núcleo guarda los primeros 1 024 bytes del lexema (`LEXEME_MAX`,
@@ -547,7 +562,9 @@ remite a ellas.
 
 ### Abiertas por la tarea F4.1c (XML)
 
-### 33. Buena formación XML que queda fuera de M (F4.1c-P1)
+### 33. Buena formación XML que queda fuera de M (F4.1c-P1) — RESUELTO (F4.6)
+
+- **Resuelto en F4.6:** el QName de apertura completo se compara por hash con el de cierre en **todo** elemento con contenido (también los saltados); `:` al principio, al final o repetido en nombres de elemento y de atributo, y los atributos sin bit repetidos (`xmlns`, `xmlns:p`, no declarados, de un elemento saltado) son `syntax` ([runtime.md](runtime.md) §4; `nombres_de_cierre_y_prefijos`). Queda §34.
 
 - **Gravedad:** **Medium** (F4C-S3: XML mal formado aceptado con peso 0; diferencial con libxml2).
 - **Estado:** M comprueba los atributos declarados repetidos (bit, ∞) y, de los elementos con
@@ -587,7 +604,9 @@ remite a ellas.
   `targetNamespace`, y `xsi:` reconocido). Ante la duda, rechazar.
 - **Tarea:** cierre de F4.1c (orquestador) o F4.6.
 
-### 35. Normalización de fines de línea y de valores de atributo (F4.1c-P3, S3/F4C-S5)
+### 35. Normalización de fines de línea y de valores de atributo (F4.1c-P3, S3/F4C-S5) — RESUELTO (F4.6)
+
+- **Resuelto en F4.6:** `Core::xml_text_char` normaliza `\r\n`/`\r` → `\n` en texto y valores, y `\t \n` → espacio en los valores; las referencias de carácter no se normalizan ([runtime.md](runtime.md) §4; `limites.rs::fines_de_linea_xml`). Falta contrastarlo con libxml2 en Docker (`make test-baseline-xml`).
 
 - **Gravedad:** Low (F4C-S5: solo `xs:string` con longitudes, `enum` o `fixed`).
 - **Estado:** ni el lexer XML (`crates/lexer/src/xml.rs:22`, simplificación de la Fase 1) ni el
@@ -737,7 +756,9 @@ remite a ellas.
 - **S6 (nit):** `export.rs:104` usa `checked_add` + `get` para la lista de operaciones de
   contador.
 
-### 44. F4C-S4: clase fuera de rango en `Core::step` (amplía §12)
+### 44. F4C-S4: clase fuera de rango en `Core::step` (amplía §12) — RESUELTO (F4.6)
+
+- **Resuelto en F4.6:** `step` da `Internal` con una clase ≥ `n_classes` y `Core::new` se detiene con `Internal` si `n_classes` ≤ `class::CHAR`.
 
 - **Gravedad:** Low (F4C-S4).
 - **Dónde:** `crates/runtime-rs/src/core.rs:317` (`state * n_classes + a` sin `a < n_classes`).
@@ -748,7 +769,9 @@ remite a ellas.
   `Core::new` que `n_classes ≥ class::CHAR + 1`; prueba con tablas corruptas.
 - **Tarea:** F4.6.
 
-### 45. F4C-S6: `automaton::validate` reserva ∝ `<` × marco máximo (amplía §13)
+### 45. F4C-S6: `automaton::validate` reserva ∝ `<` × marco máximo (amplía §13) — RESUELTO (F4.6)
+
+- **Resuelto en F4.6:** la memoria sale de `Limits` (256 marcos), no del número de `<`: 1 MB de `<` sobre un XSD de marco grande pide 256 × (marco + 2) palabras y da `limit` en el 257.º (`limites.rs::profundidad`).
 
 - **Gravedad:** **Medium** (F4C-S6 y F4D-M3, ronda 3); **High** en cuanto F6.5 o F7 cableen `validate`.
 - **Dónde:** `crates/automaton/src/lib.rs:203-204` (rama `Xml`: `depth` = número de `<` + 1,
@@ -762,7 +785,9 @@ remite a ellas.
   del `vec!` y antes de que el arnés F6.5 o el servidor usen `validate`.
 - **Tarea:** F4.6, antes de F6.5/F7 (y Fase 7).
 
-### 46. F4C-S7: `words + 1` en 32 bits en `Core::push`
+### 46. F4C-S7: `words + 1` en 32 bits en `Core::push` — RESUELTO (F4.6)
+
+- **Resuelto en F4.6:** `push` usa `checked_add(FRAME_OVERHEAD)`; F5.2 lo porta igual.
 
 - **Gravedad:** Low (F4C-S7; solo en 32 bits).
 - **Dónde:** `crates/runtime-rs/src/core.rs:583` (`checked_add(words + 1)`).
@@ -999,3 +1024,184 @@ remite a ellas.
   `content_states` (una vez por tipo) y cargar Σ |nombre| de los atributos una vez al presupuesto
   de pasos.
 - **Tarea:** F4.3, junto con §56.
+
+### Abiertas por la tarea F4.6 (ejecutor)
+
+### 59. Interfaz del ejecutor para las dos personas (F4.6-P1; D42)
+
+- **Gravedad:** Low (interfaz compartida: F4-U18, `sv_report_t`, API C-ABI).
+- **Estado:** F4.6 fijó, sin cambiar lo aprobado en D51/D52: (1) `Options { mode, limits }`
+  con `Limits { max_depth, max_string, max_keys, key_pool, max_unique (F4.5b), max_xml_refs, max_payload,
+  hash_key }` (F4-U18 decía `new(tables, &Limits, mem)`; el modo va en las opciones, como dice
+  el mismo F4-U18); (2) `Tables::state_words(&Limits)` y `FRAME_OVERHEAD` = 2, 4 desde F4.5b (cada marco
+  lleva una palabra de buena formación: `sv_state_t` = zona escalar + `max_depth` × (marco
+  máximo + 2) + `key_pool` palabras); (3) la clave repetida (declarada o no) se informa en su
+  comilla de **cierre** (antes, la declarada en la de apertura), como la línea base; (4) el
+  límite de cadena cuenta bytes UTF-8 decodificados de todo tramo de caracteres, también
+  nombres y textos XML (F4-B23); (5) `\r\n` normalizado en XML; (6) la clave de SipHash por
+  defecto es pública (§4 de [runtime.md](runtime.md)).
+- **Arreglo propuesto:** proponerlo a Bayron en el mismo mensaje que D57 (1)-(4) y §34; F6.2
+  expone `Limits` en `sv_limits_t`.
+- **Tarea:** F6.2 (y F5.1/F5.2 para portar la disposición de la memoria).
+
+### 60. `DIVERGENCIAS` de la línea base con el campo `errorKind` (F4.6-P2)
+
+- **Gravedad:** Info (prueba de la pista B).
+- **Estado:** `extreme-big-number-01` da `limit` en el DPDA y `Unsupported` en
+  `serde_json` (10¹⁰²⁴ no cabe en `f64`, D50 B19). F4.6 amplió la tabla `DIVERGENCIAS` de
+  `crates/baseline/tests/corpus_json.rs` para admitir el campo `errorKind` (solo con el mismo
+  `valid`; una entrada que ya no diverge sigue siendo un fallo) y declaró el caso.
+- **Arreglo propuesto:** avisar a Bayron (es su crate).
+- **Tarea:** —.
+
+### 61. Costo de comparar con una cota larga (F4.1b-CR-S3; recorte de F4.6)
+
+- **Gravedad:** Medium (rendimiento con esquemas hostiles: el esquema lo controla quien
+  valida, no el payload).
+- **Estado:** al cerrar cada número, `num::compare` e `is_multiple` cuestan
+  O(|cota del esquema|), hasta 16 MiB. No se hizo en F4.6 (orden de recorte de
+  `tasks/plan.md`: no cambia ningún veredicto).
+- **Arreglo propuesto:** en compilación, quitar los ceros a la izquierda del exponente de la
+  cota, decidir si |E| pasa del rango alcanzable por un lexema de 1 024 bytes (comprobación
+  constante) y guardar en `DivisorRef` el exponente ya saturado, para que cada número cueste
+  O(`LEXEME_MAX`).
+- **Tarea:** F6.5 (medición) o E3 (revisión de seguridad); antes de F7.5 si el servidor valida
+  con esquemas del usuario.
+
+### 62. Espacios de nombres y `xsi:*` (sigue §34)
+
+- **Estado:** F4.6 no cambió §34: necesita la decisión de las dos personas (D42). Mientras
+  tanto, un elemento `<x:pedido xmlns:x="urn:otro">` se valida como `pedido` y `xsi:*` suma 1.
+- **Tarea:** decisión de las dos personas; si es la opción (b), F6.2.
+
+### Abiertas por la tarea F4.3 (determinismo y Hopcroft)
+
+### 63. Lo heredado de F4.1c que F4.3 no hizo (recorte; §39, §47, §48, §52, §53, §56-§58)
+
+- **Gravedad:** Medium (tamaño de M en XML con esquemas grandes; ningún veredicto cambia).
+- **Estado:** F4.3 minimiza cada parte finita y verifica el determinismo (§17 de
+  [automata.md](automata.md)), pero **no** cambia la representación XML que pedían los heredados
+  de la revisión de F4.1c, por el orden de recorte del plan (lo que no cambia ningún veredicto
+  va después del congelamiento): (1) grupo global del texto de contenido simple con
+  `Enter`/`Leave` y trie compartido entre estados con la misma lista de aristas, para que
+  `re2` (200 elementos de 40 tipos × 50 literales) compile (§39/§47/§53); (2) partir
+  `fill_frame` y una sola contabilidad por pieza (§48/§52); (3) `classes_of` memorizado por
+  conjunto de palabras (§56); (4) la prueba de que el cobro de los nombres de follow(x) no se
+  mueve detrás de la UPA (§57); (5) el tamaño del trie de atributos memorizado por tipo (§58);
+  (6) ajustar la cuenta conservadora de F4-U6 (F4D-M1 residual): no hace falta, porque la
+  representación no cambió.
+- **Arreglo propuesto:** el de cada sección citada.
+- **Tarea:** después de PC-E (E4 lo usa para «tamaño del autómata y riesgo de explosión»), o
+  una tarea nueva de la pista A si sobra tiempo.
+
+### 64. Campos nuevos del resumen de `schemac automaton` (F4.3-P1; para Bayron)
+
+- **Gravedad:** Info (interfaz F4-U7, aditiva).
+- **Estado:** el resumen añade `dfaStates` y `dfaStatesMinimized` al final, sin cambiar
+  `automatonVersion` (1). `maxFrameBytes` cuenta ya la palabra de buena formación de F4.6 (la
+  dorada pasa de 16 a 24). El servidor (F7.1) copia el resumen tal cual y la web (F7.4) lo
+  muestra; `web/src/*.test.*` tienen el resumen viejo como dato de prueba.
+- **Arreglo propuesto:** avisar a Bayron; si la web lista los campos con nombre, añadir los dos
+  nuevos.
+- **Tarea:** F7.6 (vista del autómata).
+
+### Abiertas por la tarea F4.4a (analizador de `pattern`)
+
+### 65. D29: enumeraciones, `default` y `fixed` frente a `pattern` (recorte 1)
+
+- **Gravedad:** Low (acepta de más en el esquema: una enumeración que no cumple el `pattern` de
+  su base hace que ese valor nunca valide; omisión ya escrita en `00-alcance.md` §3.4).
+- **Estado:** no se hizo (orden de recorte de `tasks/plan.md`, primer punto). Con
+  `ir::regex::Regex::matches` es una llamada por valor en `crates/xsd/src/simple.rs`
+  (`valid_restriction`), contra las `pattern` de toda la cadena de bases.
+- **Arreglo propuesto:** error `value` en la posición del valor (`ZZZ` sobre
+  `pattern="[a-z]"`) y quitar la omisión de `00-alcance.md` §3.4 (interfaz compartida, D42).
+- **Tarea:** después de PC-E, si hay tiempo; si no, se queda como omisión documentada.
+
+### 66. Mensajes de `pattern` y el código `limit` de la Fase 3 (F4.4a-P1; para Bayron)
+
+- **Gravedad:** Info (interfaz de errores de `schemac check` y del 422 del servidor).
+- **Estado:** la Fase 3 de JSON tiene un código nuevo, `limit` (`semantic::ErrorKind::Limit`),
+  para un `pattern` demasiado grande; en XSD, `ErrorKind::PatternLimit` con el código `limit` que
+  ya existía. La web pinta los códigos como texto, así que no se rompe nada.
+- **Tarea:** avisar a Bayron.
+
+### Abiertas por la tarea F4.4b (`pattern` → AFD)
+
+### 67. Offset de las violaciones del cierre de una cadena (F4.4b-P1; para Bayron)
+
+- **Gravedad:** Info (interfaz del reporte, F4-U18).
+- **Estado:** desde F4.4b, toda violación que se detecta al cerrar una cadena JSON (`enum`,
+  longitudes, `pattern`) se informa en la **comilla de cierre** (antes, en la de apertura,
+  porque el `Span` de `StringEnd` empieza ahí); `invalid-enum-01` pasa de 10 a 15. La línea base
+  no compara offsets de violaciones, así que no cambia nada en su prueba.
+- **Tarea:** avisar a Bayron (el puntero de F6.1 y la web lo mostrarán).
+
+### 68. Prueba del servidor con una regla pendiente (F4.4b-P2; para Bayron)
+
+- **Gravedad:** Info (prueba de la pista B).
+- **Estado:** `regla_pendiente_da_200_con_automata_pendiente` (`server/tests/api.rs`) usaba
+  `pattern`, que ya compila; ahora usa `uniqueItems` (F4.5b). Cuando F4.5b esté hecha no quedará
+  ninguna regla pendiente en JSON y esa prueba tendrá que usar otro estado (`limit`).
+- **Tarea:** F4.5b (ajustarla) y avisar a Bayron.
+
+
+### 69. Revisión del informe de F4.4b: clase «otro» y presupuesto — RESUELTO (20 nov)
+
+- **7.1 (defecto):** `Partition::reps` tomaba `0xE000` como representante de la clase 0
+  aunque estuviera cubierto (`^[^😀]$` aceptaba `"😀"`). Ahora busca el primer hueco que no sea
+  un sustituto (`clase_otro_con_el_hueco_de_los_sustitutos`).
+- **7.2 (presupuesto):** |Σ| se contaba con `chars.len()` sin las clases de los `pattern`; ahora
+  la cuenta final es la partición exacta y las parciales suman los rangos, y el producto de una
+  cadena JSON se acota (estados × clases ≤ `max_delta`) antes de reservar
+  (`presupuesto_con_las_clases_de_los_pattern`).
+
+### Abiertas por la tarea F4.5a (combinadores)
+
+### 70. Simulación paralela en marcos escalares y estrategia en el resumen (recortes 3 y 5)
+
+- **Gravedad:** Low (ningún caso del corpus cambia de veredicto; afecta a lo que compila).
+- **Estado:** al pasar el tope de 4 096 un producto escalar da `limit` (`ProductLimit`,
+  `scalar: true`) en vez de simular las componentes en paralelo (F4-U11); el resumen de
+  `schemac automaton` no da la estrategia efectiva de cada regla (c) ni el campo `strategy` del
+  corpus se compara (recorte 5: resumen mínimo; sigue `products`).
+  Consecuencia: un `anyOf` (o `allOf`) de varias ramas con `pattern` sobre la misma cadena
+  multiplica sus AFD y puede dar `limit` antes que la simulación paralela. Un conjunto formado
+  solo por componentes con salida se nombra `#` en los mensajes (`label` no ubica los ids
+  virtuales).
+- **Arreglo propuesto:** F4-U11 tal cual (una zona de estados por componente en el marco
+  escalar) y un campo `strategies` en el resumen.
+- **Tarea:** después de la entrega, si se retoma.
+
+### 71. Atribución del primer error que llega por una salida (F4.5a-P1; para Bayron)
+
+- **Gravedad:** Info (interfaz del reporte).
+- **Estado:** una violación dentro de una rama no es la «primera» del reporte hasta que llega al
+  peso global: la puerta que salta se atribuye a la regla del combinador, en el offset del
+  evento que cierra la instancia (`non-dpda-anyof-none-01`: el `}` en 7). Las comprobaciones
+  de entrada de un valor cuentan en la instancia que abren (`SLOT_CHILD`).
+- **Tarea:** F6.1 (el puntero de la instancia) y avisar a Bayron.
+
+### Abiertas por la tarea F4.5b (`uniqueItems` y literales)
+
+### 72. Literales compuestos de `enum`/`const` (recorte 2; interfaz compartida, D42)
+
+- **Gravedad:** Medium (esquemas válidos según el alcance que no compilan).
+- **Estado:** `enum`/`const` con objetos o arreglos siguen dando `estrategia pendiente: const
+  (F4.5b)` (código 1 de `schemac automaton`; `automaton.status = "pending"` en el servidor).
+  Compararlos por hash canónico se descartó (con la clave pública se fabrica un choque en ≈ 2³²
+  pasos y se aceptaría un valor que no es el literal); el autómata exacto de F4-U17 no entró.
+- **Arreglo propuesto (decisión de las dos personas):** (a) escribir en `00-alcance.md` §2.2
+  que los literales compuestos se rechazan (es el recorte 2 del plan), o (b) F4-U17: traducir
+  cada literal a reglas (`const` por clave, `required` de todas, `additionalProperties: false`;
+  `prefixItems` + longitud exacta) con la puerta ANY de F4.5a.
+- **Tarea:** decisión de las dos personas; (b) después de la entrega.
+
+### 73. `FRAME_OVERHEAD` = 4 y el resumen (F4.5b-P1; para Bayron)
+
+- **Gravedad:** Info.
+- **Estado:** cada marco lleva dos palabras más (hash canónico y clave del miembro), así que
+  `maxFrameBytes` de la dorada pasa de 24 a 40 y `state_words` suma `max_unique` (4 096). F5.1 y
+  F5.2 portan esta disposición.
+- **Tarea:** F5.1, F5.2; avisar a Bayron.
+

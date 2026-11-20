@@ -1,0 +1,24 @@
+{
+  "_id": "invalid-pattern-01",
+  "category": "invalid",
+  "format": "json",
+  "description": "Código que no cumple el pattern ^[A-Z]{3}-\\d{4}$: 1 violación al cerrar la cadena, en su comilla de cierre.",
+  "phase": 4,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "codigo": {
+        "type": "string",
+        "pattern": "^[A-Z]{3}-\\d{4}$"
+      }
+    }
+  },
+  "payload": "{\"codigo\": \"AB-1234\"}",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "pointer": "/codigo",
+    "offset": 19
+  }
+}

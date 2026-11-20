@@ -140,10 +140,11 @@ fn longitudes_en_puntos_de_codigo() {
     assert_eq!(v(&a, "\"\\u00f1a\""), Some(1));
     assert_eq!(v(&a, "\"\\ud83d\\ude00\\ud83d\\ude00\""), Some(1));
     assert_eq!(v(&a, "1"), Some(0));
-    // La violación de una cadena se detecta en su cierre, con el offset de
-    // su comienzo (el `Span` de `StringEnd` cubre la cadena).
+    // La violación de una cadena se detecta en su cierre y se informa en su
+    // comilla de cierre (F4.4b; antes, en la de apertura).
     let r = correr(&a, r#"  "ab""#, Mode::Total);
-    assert_eq!(r.first.unwrap().offset, 2);
+    assert_eq!(r.first.unwrap().offset, 5);
+    assert_eq!(r.first.unwrap().column, 6);
     // Las claves no cuentan para el valor.
     let b = compilar(r#"{"additionalProperties": {"maxLength": 2}}"#);
     assert_eq!(v(&b, r#"{"una clave larga": "ok"}"#), Some(0));

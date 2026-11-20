@@ -1,12 +1,15 @@
-//! El corpus de `tests/cases` con M (criterios 1 y 2 de F4.1a): con el
-//! esquema `true` acepta todo payload JSON bien formado y rechaza con ∞ los
-//! malformados en su offset; `valid-recursive-tree-01` da 0,
-//! `invalid-missing-required-01` da 1 de `required` en el offset 64, y los
-//! `non-dpda` dan `Pending` con la tarea de F4.4/F4.5. Bloques de 1, 7 y
-//! 4096 bytes.
+//! El corpus de `tests/cases` con M (criterios 1 y 2 de F4.1a y 1-2 y 6 de
+//! F4.6): con el esquema `true` acepta todo payload JSON bien formado y
+//! rechaza con ∞ los malformados en su offset; todo caso cuyo esquema
+//! compila (JSON y XML) da el `valid`, `errorKind`, `violations` y `offset` de
+//! `expected`, con el mismo reporte en bloques de 1, 7 y 4096 bytes y el
+//! mismo veredicto en fallo temprano; en JSON, el veredicto coincide con la
+//! línea base de F6.7a (D48); y los `non-dpda` que aún no compilan dan
+//! `Pending` con la tarea de F4.4/F4.5.
 
 use automaton::{build, validate, Automaton, BuildError, ErrorKind, Mode, Report};
 use baseline::corpus::{self, Case, ErrorKind as Esperado, Format, Payload};
+use baseline::{run_case, with_stack, Kind};
 use ir::{RuleKind, VerifiedIr};
 use runtime_rs::Weight;
 
@@ -70,7 +73,15 @@ fn esquema_true_sobre_todo_el_corpus() {
     assert!(casos.len() >= 7, "{}", casos.len());
     for (c, payload) in &casos {
         let r = correr(&a, payload);
-        if malformado(c) {
+        if c.expected.error_kind == Some(Esperado::Limit) {
+            // Los límites que dependen del esquema (el lexema) no saltan con
+            // `true`; la profundidad, sí.
+            assert!(
+                r.valid || r.error_kind == Some(ErrorKind::Limit),
+                "{}: {r:?}",
+                c.id
+            );
+        } else if malformado(c) {
             assert_eq!(r.violations, Weight::INFINITY, "{}", c.id);
             let kind = match c.expected.error_kind {
                 Some(Esperado::Lexical) => ErrorKind::Lexical,
@@ -138,6 +149,8 @@ fn non_dpda_da_pending() {
         .filter(|(c, _)| c.category == "non-dpda")
     {
         match compilar(&c.schema_text) {
+            // F4.4b y F4.5a: `pattern` y los combinadores ya compilan.
+            Ok(_) => continue,
             Err(BuildError::Pending { task, .. }) => {
                 let t = task.label();
                 assert!(
@@ -150,67 +163,126 @@ fn non_dpda_da_pending() {
         }
         n += 1;
     }
-    assert_eq!(n, 4);
+    // F4.5b: ya no queda ningún `non-dpda` pendiente.
+    assert_eq!(n, 0);
 }
 
-/// Criterio 5 de F4.1b: todos los casos JSON del corpus sin `Pending` dan el
-/// `valid`, `violations` y `offset` de `expected`.
-#[test]
-fn casos_que_compilan_dan_lo_esperado() {
-    let mut n = 0;
-    for (c, payload) in casos_json() {
-        let Ok(a) = compilar(&c.schema_text) else {
-            continue;
-        };
-        let r = correr(&a, &payload);
-        assert_eq!(r.valid, c.expected.valid, "{}", c.id);
-        if let Some(v) = c.expected.violations {
-            assert_eq!(r.violations.get(), Some(v), "{}", c.id);
-        }
-        if let Some(off) = c.expected.offset {
-            assert_eq!(r.first.map(|f| f.offset), Some(off), "{}", c.id);
-        }
-        n += 1;
+/// El IR de un caso del corpus, JSON o XML (hilo de 8 MiB, D7).
+fn ir_del_caso(c: &Case) -> VerifiedIr {
+    let texto = c.schema_text.clone();
+    let xml = c.format == Format::Xml;
+    std::thread::Builder::new()
+        .stack_size(8 << 20)
+        .spawn(move || {
+            if xml {
+                let s = xsd::parse(&texto).unwrap_or_else(|e| panic!("{e}"));
+                xsd::lower(&xsd::analyze(&s).unwrap_or_else(|e| panic!("{e:?}"))).unwrap()
+            } else {
+                let s = schema_parser::parse(&texto).unwrap_or_else(|e| panic!("{e}"));
+                let t = semantic::analyze(&s).unwrap_or_else(|e| panic!("{e:?}"));
+                semantic::lower(&t).unwrap_or_else(|e| panic!("{e}"))
+            }
+        })
+        .unwrap()
+        .join()
+        .unwrap()
+}
+
+fn clase(k: Esperado) -> ErrorKind {
+    match k {
+        Esperado::Lexical => ErrorKind::Lexical,
+        Esperado::Syntax => ErrorKind::Syntax,
+        Esperado::Schema => ErrorKind::Schema,
+        Esperado::Limit => ErrorKind::Limit,
     }
-    assert!(n >= 4, "{n}");
 }
 
-/// F4.1c: los casos XML del corpus con bytes (`valid-xml-pedido-01` da 0,
-/// `malformed-xml-billion-laughs-01` da `lexical` en su offset) dan lo de
-/// `expected`, en bloques de 1, 7 y 4096 bytes.
+/// Criterio 1 de F4.6 (y 5 de F4.1b, criterio de F4.1c): todo caso del
+/// corpus con bytes cuyo esquema compila, JSON o XML, da el `valid`,
+/// `errorKind`, `violations` y `offset` de `expected`, con un reporte
+/// idéntico en bloques de 1, 7 y 4096 bytes (`correr`). Criterio 6: el
+/// fallo temprano da el mismo veredicto (y, sin error de peso ∞, se
+/// detiene en la primera violación con peso 1).
 #[test]
-fn casos_xml_dan_lo_esperado() {
+fn todo_el_corpus_da_lo_esperado() {
     let mut n = 0;
     for c in corpus::casos().unwrap() {
-        if c.format != Format::Xml {
-            continue;
-        }
         let Payload::Bytes(payload) = &c.payload else {
             continue;
         };
-        let texto = c.schema_text.clone();
-        let ir = std::thread::Builder::new()
-            .stack_size(8 << 20)
-            .spawn(move || {
-                let s = xsd::parse(&texto).unwrap_or_else(|e| panic!("{e}"));
-                xsd::lower(&xsd::analyze(&s).unwrap_or_else(|e| panic!("{e:?}"))).unwrap()
-            })
-            .unwrap()
-            .join()
-            .unwrap();
-        let a = build(&ir).unwrap_or_else(|e| panic!("{}: {e}", c.id));
+        let a = match build(&ir_del_caso(&c)) {
+            Ok(a) => a,
+            Err(BuildError::Pending { .. }) if c.category == "non-dpda" => continue,
+            Err(e) => panic!("{}: {e}", c.id),
+        };
         let r = correr(&a, payload);
         assert_eq!(r.valid, c.expected.valid, "{}: {r:?}", c.id);
-        if let Some(v) = c.expected.violations {
-            assert_eq!(r.violations.get(), Some(v), "{}", c.id);
+        assert_eq!(r.error_kind, c.expected.error_kind.map(clase), "{}", c.id);
+        match c.expected.violations {
+            Some(v) => assert_eq!(r.violations.get(), Some(v), "{}", c.id),
+            None if !c.expected.valid => {
+                assert_eq!(r.violations, Weight::INFINITY, "{}", c.id)
+            }
+            None => {}
         }
         if let Some(off) = c.expected.offset {
             assert_eq!(r.first.map(|f| f.offset), Some(off), "{}", c.id);
         }
-        if let Some(Esperado::Lexical) = c.expected.error_kind {
-            assert_eq!(r.error_kind, Some(ErrorKind::Lexical), "{}", c.id);
+        let e = validate(&a, payload, Mode::EarlyFail, 7);
+        assert_eq!(e.valid, r.valid, "{}: fallo temprano {e:?}", c.id);
+        assert_eq!(e.error_kind, r.error_kind, "{}", c.id);
+        if r.error_kind == Some(ErrorKind::Schema) {
+            assert_eq!(e.violations, Weight::ONE, "{}", c.id);
+            assert_eq!(e.first, r.first, "{}", c.id);
+        } else {
+            assert_eq!(e, r, "{}", c.id);
         }
         n += 1;
     }
-    assert!(n >= 2, "{n}");
+    assert!(n >= 17, "{n}");
+}
+
+/// Casos en que el DPDA y la línea base divergen a propósito, con su motivo
+/// (los mismos que `DIVERGENCIAS` de `crates/baseline/tests/corpus_json.rs`).
+const DIVERGENCIAS: &[(&str, &str)] = &[(
+    "extreme-big-number-01",
+    "lexema de más de 1 024 bytes: `limit` en el DPDA, `Unsupported` en serde_json",
+)];
+
+/// Criterio 2 de F4.6: en JSON, el veredicto de M (válido, malformado,
+/// violación o límite) coincide con el de la línea base DOM de F6.7a
+/// (`serde_json` + `jsonschema`, D48) en cada caso que compila, salvo las
+/// divergencias declaradas; y el recuento, salvo las de F4-U3/U13 (hoy
+/// ninguna en el corpus).
+#[test]
+fn json_coincide_con_la_linea_base() {
+    let casos: Vec<(Case, Vec<u8>)> = casos_json();
+    let mut n = 0;
+    for (c, payload) in &casos {
+        let a = match build(&ir_del_caso(c)) {
+            Ok(a) => a,
+            Err(BuildError::Pending { .. }) => continue,
+            Err(e) => panic!("{}: {e}", c.id),
+        };
+        let r = correr(&a, payload);
+        let o = with_stack(|s| run_case(c, s)).unwrap_or_else(|e| panic!("{}: {e}", c.id));
+        assert_eq!(r.valid, o.valid, "{}: {r:?} / {o:?}", c.id);
+        if DIVERGENCIAS.iter().any(|(id, _)| *id == c.id) {
+            assert_ne!(o.kind, Some(Kind::Limit), "{}: ya no diverge", c.id);
+            continue;
+        }
+        let esperado = match r.error_kind {
+            None => None,
+            Some(ErrorKind::Lexical | ErrorKind::Syntax) => Some(Kind::Malformed),
+            Some(ErrorKind::Schema) => Some(Kind::Schema),
+            Some(ErrorKind::Limit) => Some(Kind::Limit),
+            Some(ErrorKind::Internal) => panic!("{}: interno", c.id),
+        };
+        assert_eq!(o.kind, esperado, "{}: {r:?} / {o:?}", c.id);
+        if let Some(v) = r.violations.get() {
+            assert_eq!(v, o.violation_count() as u64, "{}", c.id);
+        }
+        n += 1;
+    }
+    assert!(n >= 10, "{n}");
 }

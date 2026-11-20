@@ -190,6 +190,9 @@ pub enum ErrorKind {
     /// D26); se informa en la partícula `max` + 1, antes de calcular ningún
     /// conjunto de la UPA.
     TooManyParticles { max: usize },
+    /// Un `xs:pattern` de más de 4 096 posiciones o 256 grupos anidados
+    /// (F4-U16, F4-B19): el constructo citado y el motivo.
+    PatternLimit { found: String, reason: &'static str },
 
     // --- Tipos simples del usuario (tarea 5.6, `docs/fase3/xsd.md` §10).
     /// Derivación circular de tipos simples: la cadena de `base` que empieza
@@ -309,6 +312,7 @@ impl ErrorKind {
             | ErrorKind::UnknownAttribute { name: s, .. }
             | ErrorKind::InvalidValue { found: s, .. }
             | ErrorKind::UnsupportedValue { found: s, .. }
+            | ErrorKind::PatternLimit { found: s, .. }
             | ErrorKind::DuplicateName { name: s, .. }
             | ErrorKind::NotSimpleType { name: s, .. }
             | ErrorKind::CircularBase { name: s, .. }
@@ -396,7 +400,9 @@ impl XsdError {
             ErrorKind::InvalidQName(_)
             | ErrorKind::UndeclaredPrefix(_)
             | ErrorKind::ReservedNamespace(_) => "namespace",
-            ErrorKind::TooDeep { .. } | ErrorKind::TooManyParticles { .. } => "limit",
+            ErrorKind::TooDeep { .. }
+            | ErrorKind::TooManyParticles { .. }
+            | ErrorKind::PatternLimit { .. } => "limit",
             ErrorKind::Unexpected { .. }
             | ErrorKind::TextNotAllowed { .. }
             | ErrorKind::ForeignElement(_)
@@ -633,6 +639,9 @@ impl fmt::Display for XsdError {
                      determinista con contadores",
                     repeat.line, repeat.column, counter.line, counter.column
                 )
+            }
+            ErrorKind::PatternLimit { found, reason } => {
+                write!(f, "límite superado en xs:pattern ({found}): {reason}")
             }
             ErrorKind::TooManyParticles { max } => write!(
                 f,

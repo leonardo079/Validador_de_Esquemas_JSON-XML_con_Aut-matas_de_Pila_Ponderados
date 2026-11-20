@@ -1,0 +1,16 @@
+{
+  "_id": "malformed-json-syntax-01",
+  "category": "malformed",
+  "format": "json",
+  "description": "Falta el ':' entre la clave y el valor.",
+  "phase": 4,
+  "schema": {
+    "type": "object"
+  },
+  "payload": "{\"a\" 1}",
+  "expected": {
+    "valid": false,
+    "errorKind": "syntax",
+    "offset": 5
+  }
+}

@@ -23,6 +23,9 @@ pub enum Flow {
 pub struct JsonValidator<'t, 'm> {
     lexer: JsonLexer,
     core: Core<'t, 'm>,
+    /// Bytes recibidos y su tope ([`crate::Limits::max_payload`]).
+    fed: u64,
+    max_payload: u64,
 }
 
 impl<'t, 'm> JsonValidator<'t, 'm> {
@@ -30,21 +33,31 @@ impl<'t, 'm> JsonValidator<'t, 'm> {
         JsonValidator {
             lexer: JsonLexer::new(),
             core: Core::new(t, opts, mem),
+            fed: 0,
+            max_payload: opts.limits.max_payload,
         }
     }
 
-    /// Consume un bloque de la entrada (de cualquier tamaño).
+    /// Consume un bloque de la entrada (de cualquier tamaño). Lo que pase
+    /// de [`crate::Limits::max_payload`] no se lee: `limit` en el primer
+    /// byte de más.
     pub fn feed(&mut self, chunk: &[u8]) -> Flow {
         if self.core.is_stopped() {
             return Flow::Stop;
         }
-        match self.lexer.feed(chunk, &mut self.core) {
-            Ok(()) => Flow::Continue,
-            Err(e) => {
-                self.record(e);
-                Flow::Stop
-            }
+        let room = self.max_payload.saturating_sub(self.fed);
+        let take = usize::try_from(room).map_or(chunk.len(), |r| r.min(chunk.len()));
+        let (cabe, sobra) = chunk.split_at(take);
+        self.fed = self.fed.saturating_add(take as u64);
+        if let Err(e) = self.lexer.feed(cabe, &mut self.core) {
+            self.record(e);
+            return Flow::Stop;
         }
+        if !sobra.is_empty() {
+            self.core.limit(self.lexer.position());
+            return Flow::Stop;
+        }
+        Flow::Continue
     }
 
     /// Fin de la entrada: cierra el número pendiente y da el reporte.

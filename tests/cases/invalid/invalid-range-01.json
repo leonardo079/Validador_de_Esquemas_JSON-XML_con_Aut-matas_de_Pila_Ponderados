@@ -1,0 +1,23 @@
+{
+  "_id": "invalid-range-01",
+  "category": "invalid",
+  "format": "json",
+  "description": "Número por encima de maximum y entero por debajo de minimum: dos violaciones.",
+  "phase": 4,
+  "schema": {
+    "type": "array",
+    "items": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    }
+  },
+  "payload": "[150, 7, -1]",
+  "expected": {
+    "valid": false,
+    "violations": 2,
+    "errorKind": "schema",
+    "pointer": "/0",
+    "offset": 1
+  }
+}

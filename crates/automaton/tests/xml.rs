@@ -277,14 +277,36 @@ fn tipos_simples_enum_rangos_y_longitudes() {
 #[test]
 fn nombres_de_cierre_y_prefijos() {
     let a = esquema(PEDIDO);
-    // Nombre local: el prefijo no cuenta.
+    // Nombre local: el prefijo no cuenta al despachar (§34)…
     assert_eq!(
         violaciones(
             &a,
-            "<a:pedido id='1'><b:cliente/><total>1</total></c:pedido>"
+            "<a:pedido id='1'><b:cliente/><total>1</total></a:pedido>"
         ),
         Some(0)
     );
+    // …pero el nombre de cierre es el QName de apertura entero, y un nombre
+    // con `:` al principio, al final o dos veces no es un QName (F4.6,
+    // pendientes §33): sintaxis (∞) en el `<` de la etiqueta de cierre, en
+    // el evento que termina el nombre o, si es un atributo repetido, en su
+    // comienzo.
+    for (p, off) in [
+        ("<a:pedido id='1'><cliente/><total>1</total></c:pedido>", 43),
+        ("<pedido id='1'><cliente/><total>1</total></p:pedido>", 41),
+        ("<p:pedido id='1'><cliente/><total>1</total></pedido>", 43),
+        ("<pedido id='1'><x></y><total>1</total></pedido>", 18),
+        ("<:pedido id='1'></:pedido>", 9),
+        ("<pedido: id='1'></pedido:>", 9),
+        ("<a:b:pedido id='1'></a:b:pedido>", 12),
+        ("<pedido :id='1'></pedido>", 12),
+        ("<pedido id='1' xmlns='u' xmlns='v'></pedido>", 25),
+        ("<pedido id='1' xmlns:p='u' xmlns:p='v'></pedido>", 27),
+        ("<pedido id='1' z='1' z='2'></pedido>", 21),
+    ] {
+        let r = correr(&a, p);
+        assert_eq!(r.error_kind, Some(ErrorKind::Syntax), "{p}: {r:?}");
+        assert_eq!(r.first.unwrap().offset, off, "{p}");
+    }
 }
 
 /// Valida bytes (también los que no son UTF-8) en bloques de 1, 7 y 4096
@@ -319,7 +341,7 @@ fn utf8_invalido_es_lexico() {
 fn con_memoria(a: &Automaton, payload: &[u8], words: usize, chunk: usize) -> Report {
     use runtime_rs::{Flow, Options, XmlValidator};
     let mut mem = vec![0u64; words];
-    let mut v = XmlValidator::new(a.tables(), &Options { mode: Mode::Total }, &mut mem);
+    let mut v = XmlValidator::new(a.tables(), &Options::new(Mode::Total), &mut mem);
     for c in payload.chunks(chunk) {
         if v.feed(c) == Flow::Stop {
             break;

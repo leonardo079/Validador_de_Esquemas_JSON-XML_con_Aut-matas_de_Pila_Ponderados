@@ -377,7 +377,17 @@ fn d7_secuencias_anidadas_y_payload_profundo() {
     let payload = format!("{}{}", "<a>".repeat(d), "</a>".repeat(d));
     let r = std::thread::Builder::new()
         .stack_size(256 << 10)
-        .spawn(move || validate(&a, payload.as_bytes(), Mode::Total, 4096))
+        .spawn(move || {
+            // Profundidad 10⁵ con `max_depth` = 10⁵ (F4.6); con el límite
+            // por defecto, `limit` en el 257.º `<a>`.
+            let mut o = automaton::Options::new(Mode::Total);
+            o.limits.max_depth = d;
+            let r = automaton::validate_with(&a, payload.as_bytes(), &o, 4096);
+            let corto = validate(&a, payload.as_bytes(), Mode::Total, 4096);
+            assert_eq!(corto.error_kind, Some(automaton::ErrorKind::Limit));
+            assert_eq!(corto.first.unwrap().offset, 3 * 256);
+            r
+        })
         .unwrap()
         .join()
         .unwrap();

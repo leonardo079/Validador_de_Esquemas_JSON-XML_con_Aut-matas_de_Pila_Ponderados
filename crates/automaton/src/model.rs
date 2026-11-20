@@ -14,7 +14,8 @@
 
 use ir::{NodeId, RuleKind};
 use runtime_rs::tables::{
-    CharRange, Check, CounterOp, Dep, DivisorRef, Frame, Interval, Lexeme, Rule, Trans,
+    CharRange, Check, CounterOp, Dep, DivisorRef, Frame, Gate, Interval, Lexeme, OutMap, Rule,
+    Trans,
 };
 use runtime_rs::Tables;
 
@@ -82,6 +83,13 @@ pub struct Automaton {
     pub(crate) divisors: Vec<DivisorRef>,
     pub(crate) counter_ops: Vec<CounterOp>,
     pub(crate) intervals: Vec<Interval>,
+    /// Puertas, sus entradas, mapas de salidas y sus destinos (F4.5a).
+    pub(crate) gates: Vec<Gate>,
+    pub(crate) gate_inputs: Vec<u32>,
+    pub(crate) outmaps: Vec<OutMap>,
+    pub(crate) out_targets: Vec<u32>,
+    /// Palabras de la zona de salidas de las instancias escalares.
+    pub(crate) scalar_slots: u32,
     pub(crate) ascii: Vec<u32>,
     pub(crate) ranges: Vec<CharRange>,
     pub(crate) rules: Vec<Rule>,
@@ -92,6 +100,10 @@ pub struct Automaton {
     pub(crate) frame_names: Vec<String>,
     /// Subautómatas producto (conjuntos de ≥ 2 componentes).
     pub(crate) products: usize,
+    /// Estados de las partes finitas (AFD) antes y después de minimizarlas
+    /// con Hopcroft (F4.3).
+    pub(crate) dfa_states: usize,
+    pub(crate) dfa_states_min: usize,
 }
 
 /// Tamaños de M (F4-U7: el resumen de `schemac automaton`).
@@ -107,7 +119,8 @@ pub struct Summary {
     pub classes: usize,
     /// Suma de los registros de todos los tipos de marco, en bytes.
     pub register_bytes: usize,
-    /// El marco más grande en la pila (cabecera y registros), en bytes:
+    /// El marco más grande en la pila (registros, palabra de buena formación
+    /// y cabecera, F4.6), en bytes:
     /// la pila de profundidad d ocupa como mucho d veces esto.
     pub max_frame_bytes: usize,
     /// Subautómatas producto: los de un conjunto canónico de ≥ 2 componentes
@@ -117,6 +130,11 @@ pub struct Summary {
     /// Reglas con estrategia de respaldo (verificación diferida, F4.5); 0
     /// hasta entonces. Se llamaba `pending` (F4.1a-CR-S5).
     pub deferred: usize,
+    /// Estados de las partes finitas (tries de nombres y de literales,
+    /// espacios léxicos, declaración XML) antes de minimizarlas (F4.3).
+    pub dfa_states: usize,
+    /// … y después (Hopcroft, sin inalcanzables).
+    pub dfa_states_min: usize,
 }
 
 impl Automaton {
@@ -137,7 +155,11 @@ impl Automaton {
             divisors: &self.divisors,
             counter_ops: &self.counter_ops,
             intervals: &self.intervals,
-            scalar_slots: 0,
+            gates: &self.gates,
+            gate_inputs: &self.gate_inputs,
+            outmaps: &self.outmaps,
+            out_targets: &self.out_targets,
+            scalar_slots: self.scalar_slots,
             ascii: &self.ascii,
             ranges: &self.ranges,
             rules: &self.rules,
@@ -207,7 +229,9 @@ impl Automaton {
         std::str::from_utf8(self.tables().location(rule)).unwrap_or("")
     }
 
-    /// Palabras de pila para `depth` marcos anidados.
+    /// Palabras de pila para `depth` marcos anidados (sin la reserva de la
+    /// capa de buena formación: alcanza para payloads sin claves no
+    /// declaradas ni atributos sin bit).
     pub fn stack_words(&self, depth: usize) -> usize {
         let max = self
             .frames
@@ -215,7 +239,14 @@ impl Automaton {
             .map(|f| f.words as usize)
             .max()
             .unwrap_or(0);
-        depth.saturating_mul(max + 1)
+        (self.scalar_slots as usize)
+            .saturating_add(depth.saturating_mul(max + runtime_rs::FRAME_OVERHEAD))
+    }
+
+    /// Palabras de memoria del ejecutor para `limits`
+    /// (`Tables::state_words`, F4-U18).
+    pub fn state_words(&self, limits: &runtime_rs::Limits) -> usize {
+        self.tables().state_words(limits)
     }
 
     pub fn summary(&self) -> Summary {
@@ -228,11 +259,13 @@ impl Automaton {
             max_frame_bytes: self
                 .frames
                 .iter()
-                .map(|f| (f.words as usize + 1) * 8)
+                .map(|f| (f.words as usize + runtime_rs::FRAME_OVERHEAD) * 8)
                 .max()
                 .unwrap_or(0),
             products: self.products,
             deferred: 0,
+            dfa_states: self.dfa_states,
+            dfa_states_min: self.dfa_states_min,
         }
     }
 }

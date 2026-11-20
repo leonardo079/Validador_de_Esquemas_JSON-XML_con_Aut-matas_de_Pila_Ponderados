@@ -52,6 +52,15 @@ pub enum ErrorKind {
         /// Qué se encontró (texto del usuario ya recortado y escapado).
         found: String,
     },
+    /// Valor que pasa un límite del alcance (`docs/00-alcance.md` §4): hoy,
+    /// un `pattern` de más de 4 096 posiciones o 256 grupos anidados (F4-U16,
+    /// F4-B19).
+    Limit {
+        keyword: &'static str,
+        /// Qué se encontró (texto del usuario ya recortado y escapado).
+        found: String,
+        reason: &'static str,
+    },
     /// `$ref` que no se puede resolver (`docs/fase3/referencias.md`). Se
     /// señala el inicio del valor del `$ref`.
     UnresolvedRef {
@@ -199,6 +208,7 @@ impl SemanticError {
                 "unsupported"
             }
             ErrorKind::InvalidValue { .. } => "meta-schema",
+            ErrorKind::Limit { .. } => "limit",
             ErrorKind::UnresolvedRef { .. } => "reference",
             ErrorKind::DuplicateAnchor { .. } => "duplicate-anchor",
             ErrorKind::NonProductiveCycle { .. } => "cycle",
@@ -244,6 +254,11 @@ impl fmt::Display for SemanticError {
                 "valor inválido para \"{keyword}\" según el meta-esquema: \
                  se esperaba {expected}, se encontró {found}"
             ),
+            ErrorKind::Limit {
+                keyword,
+                found,
+                reason,
+            } => write!(f, "límite superado en \"{keyword}\" ({found}): {reason}"),
             ErrorKind::UnresolvedRef { reference, problem } => {
                 write!(
                     f,

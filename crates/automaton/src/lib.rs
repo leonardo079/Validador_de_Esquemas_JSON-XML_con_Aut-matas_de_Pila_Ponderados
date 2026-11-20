@@ -20,13 +20,16 @@
 //! Teoría: `docs/fase4/automata.md`; pendientes: `docs/fase4/pendientes.md`.
 
 mod conj;
+pub mod determinism;
 pub mod dfa;
 mod emit;
 mod export;
 mod glushkov;
 mod json;
 mod location;
+pub mod minimize;
 mod model;
+pub mod pattern;
 mod text;
 pub mod weight;
 mod xml;
@@ -42,7 +45,7 @@ pub use location::{location_clipped, LOCATION_MAX};
 pub use model::{
     Automaton, ClassId, FrameId, PayloadFormat, StateId, StateInfo, Summary, TransId, ERROR,
 };
-pub use runtime_rs::{ErrorAt, ErrorKind, Mode, Options, Report};
+pub use runtime_rs::{ErrorAt, ErrorKind, Limits, Mode, Options, Report};
 
 /// Tarea del plan que implementará una regla pendiente, en el orden en que
 /// llegan (F4-U5 con las etiquetas de D51).
@@ -174,23 +177,52 @@ pub fn build(ir: &VerifiedIr) -> Result<Automaton, BuildError> {
 
 /// [`build`] con un tope de productos distinto.
 pub fn build_with(ir: &VerifiedIr, opts: &BuildOptions) -> Result<Automaton, BuildError> {
-    match ir.format() {
+    let a = match ir.format() {
         ir::Format::Json => json::build(ir, opts),
         ir::Format::Xml { .. } => xml::build(ir, opts),
-    }
+    }?;
+    // F4-B16: el determinismo de δ se verifica en cada construcción.
+    determinism::check(&a).map_err(|e| {
+        let lista: Vec<String> = e.iter().map(ToString::to_string).collect();
+        BuildError::Internal(format!("M no es determinista: {}", lista.join("; ")))
+    })?;
+    Ok(a)
 }
 
-/// Valida `payload` con M partiéndolo en bloques de `chunk` bytes (F4-B24,
-/// solo para pruebas y herramientas: reserva la pila). La pila admite tantos
-/// marcos como `{` y `[` tiene el payload, así que nunca da `limit` (los
-/// límites son de F4.6).
+/// Valida `payload` con M partiéndolo en bloques de `chunk` bytes, con los
+/// límites por defecto de `docs/00-alcance.md` §4 (F4-B24: pruebas,
+/// herramientas, arnés de métricas y servidor).
 pub fn validate(a: &Automaton, payload: &[u8], mode: Mode, chunk: usize) -> Report {
-    let opts = Options { mode };
+    validate_with(a, payload, &Options::new(mode), chunk)
+}
+
+/// [`validate`] con otros límites. La memoria del ejecutor sale de
+/// `opts.limits` (`Tables::state_words`, F4.1a-CR-S3), no del payload; si
+/// no se puede reservar (límites absurdos), el reporte es `limit` en el
+/// offset 0 sin leer nada.
+pub fn validate_with(a: &Automaton, payload: &[u8], opts: &Options, chunk: usize) -> Report {
+    let words = a.state_words(&opts.limits);
+    let mut mem = Vec::new();
+    if mem.try_reserve_exact(words).is_err() {
+        let mut sin = [0u64; 0];
+        let mut l = *opts;
+        l.limits.max_payload = 0;
+        return feed_all(a, &[0], &l, &mut sin, chunk);
+    }
+    mem.resize(words, 0);
+    feed_all(a, payload, opts, &mut mem, chunk)
+}
+
+fn feed_all(
+    a: &Automaton,
+    payload: &[u8],
+    opts: &Options,
+    mem: &mut [u64],
+    chunk: usize,
+) -> Report {
     match a.format() {
         PayloadFormat::Json => {
-            let depth = payload.iter().filter(|&&b| b == b'{' || b == b'[').count() + 1;
-            let mut mem = vec![0u64; a.stack_words(depth)];
-            let mut v = JsonValidator::new(a.tables(), &opts, &mut mem);
+            let mut v = JsonValidator::new(a.tables(), opts, mem);
             for c in payload.chunks(chunk.max(1)) {
                 if v.feed(c) == Flow::Stop {
                     break;
@@ -199,10 +231,7 @@ pub fn validate(a: &Automaton, payload: &[u8], mode: Mode, chunk: usize) -> Repo
             v.finish()
         }
         PayloadFormat::Xml => {
-            // Un marco por `<` como mucho.
-            let depth = payload.iter().filter(|&&b| b == b'<').count() + 1;
-            let mut mem = vec![0u64; a.stack_words(depth)];
-            let mut v = XmlValidator::new(a.tables(), &opts, &mut mem);
+            let mut v = XmlValidator::new(a.tables(), opts, mem);
             for c in payload.chunks(chunk.max(1)) {
                 if v.feed(c) == Flow::Stop {
                     break;

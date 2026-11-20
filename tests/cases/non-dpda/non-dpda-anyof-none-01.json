@@ -1,0 +1,31 @@
+{
+  "_id": "non-dpda-anyof-none-01",
+  "category": "non-dpda",
+  "format": "json",
+  "description": "anyOf: ninguna rama acepta el objeto, 1 violación al cerrarlo.",
+  "phase": 4,
+  "strategy": "bounded-determinization",
+  "schema": {
+    "anyOf": [
+      {
+        "type": "object",
+        "required": [
+          "a"
+        ]
+      },
+      {
+        "type": "object",
+        "required": [
+          "b"
+        ]
+      }
+    ]
+  },
+  "payload": "{\"c\": 1}",
+  "expected": {
+    "valid": false,
+    "violations": 1,
+    "errorKind": "schema",
+    "offset": 7
+  }
+}
