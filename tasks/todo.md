@@ -689,3 +689,15 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [x] `lint OK`; 720 pruebas del workspace en verde (8 binarios bloqueados por Smart App Control repetidos en `--release`).
 
 **Estado (20 nov):** hecha. Pendiente para F5.x: añadir el código generado como otra columna de validador; para E1: las gráficas contra k y n con el CSV.
+
+# Tarea F5.4: generador de payloads válidos desde la IR (pista B, Bayron; 20 nov, D66)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario).
+
+- [x] `crates/bench/src/generar.rs`: generador con semilla (splitmix64) que recorre la IR (`$ref`, `allOf`, rama de `anyOf`/`oneOf`, `const`, `enum`, `type`, cotas numéricas y `multipleOf`, longitudes, `pattern` por paseo en el Glushkov, `prefixItems`/`items`/`uniqueItems`, `required`/`dependentRequired`/`min/maxProperties`).
+- [x] `generar_valido` solo acepta lo que dan por válido el DPDA y la línea base DOM (D48).
+- [x] CLI `cargo run -p bench --release --bin generar [-- --escribir --n N --semilla S]`; 20 casos `tests/cases/valid/valid-gen-*.json` (`phase: 5`), que pasan `validar_formato` y las pruebas de corpus de todos los crates.
+- [x] 7 pruebas deterministas en `crates/bench/tests/generar.rs` (misma semilla da el mismo payload; validez frente al DPDA y la línea base en 8 esquemas × 5 semillas; `pattern` por construcción; `const`; escapes; `Azar`; XSD → `None`).
+- [x] Doc en `docs/fase5/generador.md`; `lint OK`; 727 pruebas del workspace en verde.
+
+**Estado (20 nov):** hecha. Pendiente: generador XML (F5.4-P1, opcional en F6.3); F6.3 parte de estos válidos para mutarlos.

@@ -1,0 +1,19 @@
+{
+  "_id": "valid-gen-conjunto-02",
+  "category": "valid",
+  "format": "json",
+  "description": "Generado desde la IR de «conjunto» con la semilla 2 (F5.4); válido para el DPDA y la línea base.",
+  "phase": 5,
+  "schema": {
+    "type": "array",
+    "minItems": 3,
+    "maxItems": 6,
+    "uniqueItems": true,
+    "items": { "type": "integer", "minimum": 0, "maximum": 100 }
+  },
+  "payload": "[3,6,32,84,66,90]",
+  "expected": {
+    "valid": true,
+    "violations": 0
+  }
+}

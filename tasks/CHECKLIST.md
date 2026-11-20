@@ -43,7 +43,7 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 
 ## Cuentas y equipo
 
-- [ ] **S0** · Clúster MongoDB Atlas M0 y cuenta AWS con alerta de presupuesto (compartir accesos) — *Pista:* B · *Depende:* — · *Resp.:* — · *Estado:* libre
+- [ ] **S0** · Clúster MongoDB Atlas M0 y cuenta AWS con alerta de presupuesto (compartir accesos) — *Pista:* B · *Depende:* — · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
 - [x] **S1** · Acordar fecha real de entrega y reparto de pistas; reprogramar el cronograma del plan si cambia — *Pista:* AB · *Depende:* — · *Resp.:* ambos · *Estado:* hecha (13 nov) · entrega dom 22 nov, cronograma sin cambios; pista A Leonardo, pista B Bayron
 
 ## Tarea 5 — frontal XSD (resto)
@@ -73,14 +73,14 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 - [ ] **F5.1** · Emisor Rust: tablas de M como `const` + el núcleo `no_std` (D51), pila acotada `SV_MAX_DEPTH`, sin asignación dinámica — *Pista:* A · *Depende:* F4.6 · *Resp.:* — · *Estado:* libre
 - [ ] **F5.2** · Emisor C11 con la API C-ABI (`sv_init`/`sv_feed`/`sv_finish`); header con cbindgen — *Pista:* A · *Depende:* F5.1 · *Resp.:* — · *Estado:* libre
 - [ ] **F5.3** · Prueba diferencial intérprete / C / Rust en todo el corpus (bloques de 1, 7 y 4096 bytes) — *Pista:* A · *Depende:* F5.2 · *Resp.:* — · *Estado:* libre
-- [ ] **F5.4** · Generador de payloads válidos desde la IR, con semilla; 20 primeros casos al corpus — *Pista:* AB · *Depende:* PC-C · *Resp.:* — · *Estado:* libre
-- [ ] **F5.5** · Exportar árboles de derivación de payloads (JSON para d3-hierarchy, DOT para docs) — *Pista:* AB · *Depende:* — · *Resp.:* — · *Estado:* libre
+- [x] **F5.4** · Generador de payloads válidos desde la IR, con semilla; 20 primeros casos al corpus — *Pista:* AB · *Depende:* PC-C · *Resp.:* Bayron · *Estado:* hecha (20 nov) · D66 · sin rondas (sin agentes) · `cargo run -p bench --release --bin generar`; doc en `docs/fase5/generador.md`; pendiente XML (F5.4-P1)
+- [ ] **F5.5** · Exportar árboles de derivación de payloads (JSON para d3-hierarchy, DOT para docs) — *Pista:* AB · *Depende:* — · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
 
 ## Fase 6 — validación en tiempo real y métricas (`crates/bench`)
 
 - [ ] **F6.1** · Reporte de error con puntero JSON, offset y línea/columna desde la pila — *Pista:* A · *Depende:* F5.1 · *Resp.:* — · *Estado:* libre
 - [ ] **F6.2** · Límites configurables: profundidad, tamaño, cadena, dígitos, tiempo — *Pista:* A · *Depende:* F5.1 · *Resp.:* — · *Estado:* libre
-- [ ] **F6.3** · Generador de payloads inválidos y malformados (mutaciones) — *Pista:* B · *Depende:* F5.4 · *Resp.:* — · *Estado:* libre
+- [ ] **F6.3** · Generador de payloads inválidos y malformados (mutaciones) — *Pista:* B · *Depende:* F5.4 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
 - [ ] **F6.4** · Mitigaciones (DTD/entidades, `pattern` como AFD, `$ref` cíclico) y fuzzing con cargo-fuzz — *Pista:* AB · *Depende:* F5.3 · *Resp.:* — · *Estado:* libre
 - [x] **F6.5** · Arnés de métricas: MB/s, ciclos/byte, pico de memoria, asignaciones, profundidad, estados — *Pista:* B · *Depende:* F6.7 · *Resp.:* Bayron · *Estado:* hecha (20 nov) · D65 · `cargo run -p bench --release --bin metricas`; resultados en `docs/fase6/metricas.md`
 - [x] **F6.6** · Benchmark criterion del parser de esquemas con N y 4N claves (sustituye la prueba ignorada, D1) — *Pista:* B · *Depende:* — · *Resp.:* Bayron · *Estado:* hecha (19 nov) · D58 · `crates/bench/benches/parser_claves.rs`; razones 4,6-5,4 (lineal); `docs/fase2/pendientes.md` §1
@@ -89,17 +89,17 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 ## Fase 7 — aplicación web (`server/`, `web/`, `sandbox/`, `infra/`)
 
 - [x] **F7.1** · Backend axum: `POST /api/schemas` con `check`/`ir` en hilo propio con `stack_size` (D7), topes de subida, CPU y memoria (`docs/fase3/pendientes.md` §1-§2) — *Pista:* B · *Depende:* — · *Resp.:* Bayron · *Estado:* hecha (19 nov) · 3 rondas (D55) · observaciones en `docs/fase7/pendientes.md` §1-§12 (tope duro de memoria → F7.3/F7.7; Caddy → F7.7); contrato por confirmar con Leonardo (§9)
-- [ ] **F7.2** · Persistencia en MongoDB Atlas y carga de `tests/cases/` con script local (D32) — *Pista:* B · *Depende:* S0, F7.1 · *Resp.:* — · *Estado:* libre
-- [ ] **F7.3** · Sandbox Docker (`--network none`, límites, no root, FS de solo lectura) para compilar y ejecutar el código generado — *Pista:* B · *Depende:* — · *Resp.:* — · *Estado:* libre
+- [ ] **F7.2** · Persistencia en MongoDB Atlas y carga de `tests/cases/` con script local (D32) — *Pista:* B · *Depende:* S0, F7.1 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
+- [ ] **F7.3** · Sandbox Docker (`--network none`, límites, no root, FS de solo lectura) para compilar y ejecutar el código generado — *Pista:* B · *Depende:* — · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
 - [x] **F7.4** · Frontend: editor Monaco, compilar, ver la IR (JSON v2, D17; tratar como no confiable) — *Pista:* B · *Depende:* F7.1 · *Resp.:* Bayron · *Estado:* hecha (19 nov) · D56 · `web/README.md`; `docs/fase7/pendientes.md` §5 resuelto salvo §9 de la Fase 3
-- [ ] **F7.5** · Descarga del código, `POST /api/validate` y WebSocket de validación por bloques — *Pista:* B · *Depende:* F5.3, F7.3 · *Resp.:* — · *Estado:* libre
-- [ ] **F7.6** · Vistas del autómata (Cytoscape), árbol de derivación y panel de métricas DPDA vs línea base — *Pista:* B · *Depende:* F7.4, F5.5, F6.5 · *Resp.:* — · *Estado:* libre
-- [ ] **F7.7** · Despliegue en EC2 con Docker Compose y Caddy (primera versión lo antes posible) — *Pista:* B · *Depende:* S0, F7.1 · *Resp.:* — · *Estado:* libre
+- [ ] **F7.5** · Descarga del código, `POST /api/validate` y WebSocket de validación por bloques — *Pista:* B · *Depende:* F5.3, F7.3 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
+- [ ] **F7.6** · Vistas del autómata (Cytoscape), árbol de derivación y panel de métricas DPDA vs línea base — *Pista:* B · *Depende:* F7.4, F5.5, F6.5 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
+- [ ] **F7.7** · Despliegue en EC2 con Docker Compose y Caddy (primera versión lo antes posible) — *Pista:* B · *Depende:* S0, F7.1 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
 
 ## Entrega (semana 5)
 
-- [ ] **E1** · Pruebas de bombeo u·vᵏ·x·yᵏ·z y casos extremos; gráficas de tiempo, pila y memoria contra k — *Pista:* AB · *Depende:* F6.5 · *Resp.:* — · *Estado:* libre
-- [ ] **E2** · Cargar todos los casos y sus métricas en Atlas — *Pista:* B · *Depende:* F7.2, F6.5 · *Resp.:* — · *Estado:* libre
+- [ ] **E1** · Pruebas de bombeo u·vᵏ·x·yᵏ·z y casos extremos; gráficas de tiempo, pila y memoria contra k — *Pista:* AB · *Depende:* F6.5 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
+- [ ] **E2** · Cargar todos los casos y sus métricas en Atlas — *Pista:* B · *Depende:* F7.2, F6.5 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
 - [ ] **E3** · Revisión de seguridad consolidada de las Fases 4-7 (D35) — *Pista:* AB · *Depende:* F6.4, F7.5 · *Resp.:* — · *Estado:* libre
 - [ ] **E4** · Informe final: complejidad, explosión al determinizar, decisiones, vulnerabilidades, bombeo — *Pista:* AB · *Depende:* E1 · *Resp.:* — · *Estado:* libre
 - [ ] **E5** · Cerrar documentación técnica (diagramas finales, DPDA de 2 esquemas, árboles de derivación) — *Pista:* AB · *Depende:* F5.3 · *Resp.:* — · *Estado:* libre

@@ -1,0 +1,17 @@
+{
+  "_id": "valid-gen-alternativas-01",
+  "category": "valid",
+  "format": "json",
+  "description": "Generado desde la IR de «alternativas» con la semilla 1 (F5.4); válido para el DPDA y la línea base.",
+  "phase": 5,
+  "schema": {
+    "type": "array",
+    "minItems": 2,
+    "items": { "oneOf": [ { "type": "string", "maxLength": 3 }, { "type": "integer", "exclusiveMinimum": 0 } ] }
+  },
+  "payload": "[\"bsk\",\"nud\",\"xl\"]",
+  "expected": {
+    "valid": true,
+    "violations": 0
+  }
+}

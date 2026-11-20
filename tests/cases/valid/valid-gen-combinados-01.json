@@ -1,0 +1,19 @@
+{
+  "_id": "valid-gen-combinados-01",
+  "category": "valid",
+  "format": "json",
+  "description": "Generado desde la IR de «combinados» con la semilla 1 (F5.4); válido para el DPDA y la línea base.",
+  "phase": 5,
+  "schema": {
+    "allOf": [
+      { "type": "object", "required": ["nombre"] },
+      { "properties": { "nombre": { "type": "string", "minLength": 3 }, "edad": { "type": "integer", "minimum": 18 } } }
+    ],
+    "anyOf": [ { "required": ["edad"] }, { "properties": { "menor": { "const": false } }, "required": ["menor"] } ]
+  },
+  "payload": "{\"menor\":false,\"nombre\":\"kozln\"}",
+  "expected": {
+    "valid": true,
+    "violations": 0
+  }
+}

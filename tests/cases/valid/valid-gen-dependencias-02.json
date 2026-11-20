@@ -1,0 +1,22 @@
+{
+  "_id": "valid-gen-dependencias-02",
+  "category": "valid",
+  "format": "json",
+  "description": "Generado desde la IR de «dependencias» con la semilla 2 (F5.4); válido para el DPDA y la línea base.",
+  "phase": 5,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "tarjeta": { "type": "string", "pattern": "^[0-9]{4}$" },
+      "titular": { "type": "string", "minLength": 1 },
+      "cvv": { "type": "integer", "minimum": 100, "maximum": 999 }
+    },
+    "dependentRequired": { "tarjeta": ["titular", "cvv"] },
+    "minProperties": 1
+  },
+  "payload": "{\"cvv\":162,\"titular\":\"wbbr\"}",
+  "expected": {
+    "valid": true,
+    "violations": 0
+  }
+}

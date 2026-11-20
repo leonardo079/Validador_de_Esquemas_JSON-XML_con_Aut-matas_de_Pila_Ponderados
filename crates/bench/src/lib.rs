@@ -16,7 +16,10 @@
 //! Teoría y cifras: `docs/fase6/metricas.md`.
 
 use automaton::{Automaton, PayloadFormat};
+use ir::VerifiedIr;
 use runtime_rs::{Flow, JsonValidator, Mode, Options, XmlValidator};
+
+pub mod generar;
 
 /// Pila de los hilos que recorren entrada del usuario (D7), como `schemac`.
 pub const STACK_SIZE: usize = 8 << 20;
@@ -25,20 +28,37 @@ pub const STACK_SIZE: usize = 8 << 20;
 /// pruebas de bloques del proyecto (1, 7 y 4096).
 pub const BLOQUE: usize = 4096;
 
-/// Compila un esquema (JSON Schema o XSD, detectado por contenido, D22) a su
-/// autómata M. El error es el texto que daría `schemac`.
-pub fn automata(esquema: &[u8]) -> Result<Automaton, String> {
-    let esquema = esquema.to_vec();
+/// Ejecuta `f` en un hilo con pila de 8 MiB (D7).
+fn en_hilo<T: Send + 'static>(
+    f: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
     std::thread::Builder::new()
         .stack_size(STACK_SIZE)
-        .spawn(move || compilar(&esquema))
+        .spawn(f)
         .map_err(|e| format!("no se pudo crear el hilo: {e}"))?
         .join()
         .unwrap_or_else(|_| Err("pánico al compilar el esquema".into()))
 }
 
-fn compilar(esquema: &[u8]) -> Result<Automaton, String> {
-    let ir = if es_xsd(esquema) {
+/// Compila un esquema (JSON Schema o XSD, detectado por contenido, D22) a su
+/// autómata M. El error es el texto que daría `schemac`.
+pub fn automata(esquema: &[u8]) -> Result<Automaton, String> {
+    let esquema = esquema.to_vec();
+    en_hilo(move || automaton::build(&bajar(&esquema)?).map_err(|e| e.to_string()))
+}
+
+/// La IR verificada de un esquema y su autómata (F5.4 necesita las dos).
+pub fn ir_y_automata(esquema: &[u8]) -> Result<(VerifiedIr, Automaton), String> {
+    let esquema = esquema.to_vec();
+    en_hilo(move || {
+        let ir = bajar(&esquema)?;
+        let m = automaton::build(&ir).map_err(|e| e.to_string())?;
+        Ok((ir, m))
+    })
+}
+
+fn bajar(esquema: &[u8]) -> Result<VerifiedIr, String> {
+    Ok(if es_xsd(esquema) {
         let s = xsd::parse(esquema).map_err(|e| e.to_string())?;
         let a = xsd::analyze(&s).map_err(|e| primero(&e))?;
         xsd::lower(&a).map_err(|e| e.to_string())?
@@ -47,8 +67,7 @@ fn compilar(esquema: &[u8]) -> Result<Automaton, String> {
         // `lower` exige la tabla de `analyze` (`docs/fase3/pendientes.md` §13).
         let t = semantic::analyze(&s).map_err(|e| primero(&e))?;
         semantic::lower(&t).map_err(|e| e.to_string())?
-    };
-    automaton::build(&ir).map_err(|e| e.to_string())
+    })
 }
 
 fn primero<E: std::fmt::Display>(errores: &[E]) -> String {

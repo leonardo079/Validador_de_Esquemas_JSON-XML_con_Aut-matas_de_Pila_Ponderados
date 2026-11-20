@@ -1,0 +1,28 @@
+{
+  "_id": "valid-gen-arbol-recursivo-02",
+  "category": "valid",
+  "format": "json",
+  "description": "Generado desde la IR de «arbol-recursivo» con la semilla 2 (F5.4); válido para el DPDA y la línea base.",
+  "phase": 5,
+  "schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+      "node": {
+        "$anchor": "nodo",
+        "type": "object",
+        "properties": {
+          "value": { "type": "integer" },
+          "children": { "type": "array", "items": { "$ref": "#/$defs/node" } }
+        },
+        "required": ["value"],
+        "additionalProperties": false
+      }
+    },
+    "$ref": "#/$defs/node"
+  },
+  "payload": "{\"value\":-1,\"children\":[{\"value\":56},{\"value\":-6,\"children\":[{\"value\":80,\"children\":[{\"value\":56},{\"value\":51}]}]},{\"value\":67,\"children\":[{\"value\":-9}]}]}",
+  "expected": {
+    "valid": true,
+    "violations": 0
+  }
+}

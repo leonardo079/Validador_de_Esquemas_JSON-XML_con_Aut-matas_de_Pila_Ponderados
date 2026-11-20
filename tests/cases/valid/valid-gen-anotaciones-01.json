@@ -1,0 +1,28 @@
+{
+  "_id": "valid-gen-anotaciones-01",
+  "category": "valid",
+  "format": "json",
+  "description": "Generado desde la IR de «anotaciones» con la semilla 1 (F5.4); válido para el DPDA y la línea base.",
+  "phase": 5,
+  "schema": {
+    "$comment": "Todas las anotaciones de la lista blanca (docs/00-alcance.md §2.1).",
+    "title": "Producto",
+    "description": "Un producto del catálogo",
+    "default": { "nombre": "sin nombre" },
+    "examples": [{ "nombre": "Café" }, "cualquier cosa", 3],
+    "deprecated": false,
+    "readOnly": true,
+    "writeOnly": false,
+    "definitions": {
+      "nombre": { "type": "string", "$comment": "alias de $defs" }
+    },
+    "properties": {
+      "nombre": { "$ref": "#/definitions/nombre" }
+    }
+  },
+  "payload": "{\"nombre\":\"nbskoz\"}",
+  "expected": {
+    "valid": true,
+    "violations": 0
+  }
+}

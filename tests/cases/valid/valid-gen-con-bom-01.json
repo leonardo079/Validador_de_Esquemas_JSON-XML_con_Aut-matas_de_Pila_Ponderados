@@ -1,0 +1,13 @@
+{
+  "_id": "valid-gen-con-bom-01",
+  "category": "valid",
+  "format": "json",
+  "description": "Generado desde la IR de «con-bom» con la semilla 1 (F5.4); válido para el DPDA y la línea base.",
+  "phase": 5,
+  "schema": {"type": "string"},
+  "payload": "\"ugnb\"",
+  "expected": {
+    "valid": true,
+    "violations": 0
+  }
+}

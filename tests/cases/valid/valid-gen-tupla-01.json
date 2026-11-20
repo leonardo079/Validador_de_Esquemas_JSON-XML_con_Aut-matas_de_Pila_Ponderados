@@ -1,0 +1,17 @@
+{
+  "_id": "valid-gen-tupla-01",
+  "category": "valid",
+  "format": "json",
+  "description": "Generado desde la IR de «tupla» con la semilla 1 (F5.4); válido para el DPDA y la línea base.",
+  "phase": 5,
+  "schema": {
+    "type": "array",
+    "prefixItems": [ { "type": "string" }, { "type": "integer", "minimum": 0, "maximum": 120 }, { "type": "boolean" } ],
+    "items": false
+  },
+  "payload": "[\"nbskoz\"]",
+  "expected": {
+    "valid": true,
+    "violations": 0
+  }
+}

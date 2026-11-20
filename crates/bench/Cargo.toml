@@ -38,3 +38,9 @@ path = "src/bin/metricas.rs"
 
 [lints]
 workspace = true
+
+# F5.4: genera payloads válidos desde la IR (con semilla) y los escribe al
+# corpus. `cargo run -p bench --release --bin generar -- --escribir`.
+[[bin]]
+name = "generar"
+path = "src/bin/generar.rs"
