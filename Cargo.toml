@@ -12,6 +12,7 @@ members = [
     "crates/bench",
     "crates/baseline",
     "crates/cli",
+    "crates/derivation",
     "server",
 ]
 

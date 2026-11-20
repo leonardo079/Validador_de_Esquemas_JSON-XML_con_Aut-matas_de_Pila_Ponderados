@@ -724,3 +724,14 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [x] Doc en `docs/fase7/sandbox.md`; `docs/fase7/pendientes.md` §1 y §12 anotados y §13-§14 nuevos; `lint OK`; 736 pruebas del workspace en verde (9 ignoradas).
 
 **Estado (20 nov):** hecha. Pendiente: F7.3-P1 (caché del binario por esquema, F7.5) y F7.3-P2 (código generado sin dependencias, F5.1, pista A).
+
+# Tarea F5.5: árbol de derivación de payloads (pista B, Bayron; 20 nov, D69)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario).
+
+- [x] Crate `crates/derivation`: parser predictivo LL(1) con pila explícita sobre `json.ll1` y `xml.ll1`, con los tokens del lexer de la Fase 1. Los nodos llevan su rango de bytes, el lexema y el JSON Pointer; en XML, una pila de nombres comprueba que cada etiqueta cierre la suya.
+- [x] Topes de 5 000 nodos y de 256 niveles de profundidad (`00-alcance.md` §4). El de profundidad evita que los punteros sumen O(n²) bytes; se encontró con una prueba de 10⁵ niveles.
+- [x] Salidas iterativas: JSON para `d3.hierarchy` y DOT. Binario `arbol`; ejemplos `docs/fase5/arbol-pedido.{json,xml}.dot`, que regeneran `make docs` y comprueba `make docs-check` (`DERIV_DOT`).
+- [x] 11 pruebas en `crates/derivation/tests/arbol.rs`: gramática, frontera, punteros, rangos, errores con offset, topes, JSON para d3, DOT, recorte y todo el corpus `valid`. Doc en `docs/fase5/arbol-derivacion.md`; `lint OK`.
+
+**Estado (20 nov):** hecha. Pendiente: endpoint y vista con d3 (F7.6, con el visto bueno de Leonardo para la API, D42); los `.svg` de los ejemplos, con `make docs` donde haya Graphviz.

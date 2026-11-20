@@ -74,7 +74,7 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 - [ ] **F5.2** · Emisor C11 con la API C-ABI (`sv_init`/`sv_feed`/`sv_finish`); header con cbindgen — *Pista:* A · *Depende:* F5.1 · *Resp.:* — · *Estado:* libre
 - [ ] **F5.3** · Prueba diferencial intérprete / C / Rust en todo el corpus (bloques de 1, 7 y 4096 bytes) — *Pista:* A · *Depende:* F5.2 · *Resp.:* — · *Estado:* libre
 - [x] **F5.4** · Generador de payloads válidos desde la IR, con semilla; 20 primeros casos al corpus — *Pista:* AB · *Depende:* PC-C · *Resp.:* Bayron · *Estado:* hecha (20 nov) · D66 · sin rondas (sin agentes) · `cargo run -p bench --release --bin generar`; doc en `docs/fase5/generador.md`; pendiente XML (F5.4-P1)
-- [ ] **F5.5** · Exportar árboles de derivación de payloads (JSON para d3-hierarchy, DOT para docs) — *Pista:* AB · *Depende:* — · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
+- [x] **F5.5** · Exportar árboles de derivación de payloads (JSON para d3-hierarchy, DOT para docs) — *Pista:* AB · *Depende:* — · *Resp.:* Bayron · *Estado:* hecha (20 nov) · D69 · sin rondas (sin agentes) · `cargo run -p derivation --bin arbol`; doc en `docs/fase5/arbol-derivacion.md`; endpoint y vista en F7.6
 
 ## Fase 6 — validación en tiempo real y métricas (`crates/bench`)
 

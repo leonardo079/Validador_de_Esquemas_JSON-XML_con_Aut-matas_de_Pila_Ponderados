@@ -94,6 +94,9 @@ AUT_DOT := objeto-cerrado
 # `valid-xml-pedido-01` es el esquema del caso del corpus del mismo nombre.
 # `-Gnewrank=true`: sin él, `dot` pierde aristas entre clústeres de ese grafo.
 AUT_DOT_XSD := valid-xml-pedido-01
+# DERIV_DOT: payloads de docs/fase5/ejemplos cuyo árbol de derivación (F5.5,
+# `arbol --dot`) se dibuja en docs/fase5/arbol-<archivo>.dot.
+DERIV_DOT := pedido.json pedido.xml
 docs:
 	for a in utf8 json xml; do \
 		cargo run -q -p cli -- dot $$a > docs/fase1/afd-$$a.dot && \
@@ -114,6 +117,10 @@ docs:
 	for e in $(AUT_DOT_XSD); do \
 		cargo run -q -p cli -- automaton --dot tests/schemas/xsd/parse-ok/$$e.xsd > docs/fase4/automata-$$e.dot && \
 		dot -Tsvg -Gnewrank=true docs/fase4/automata-$$e.dot -o docs/fase4/automata-$$e.svg; \
+	done
+	for e in $(DERIV_DOT); do \
+		cargo run -q -p derivation --bin arbol -- --dot docs/fase5/ejemplos/$$e > docs/fase5/arbol-$$e.dot && \
+		dot -Tsvg docs/fase5/arbol-$$e.dot -o docs/fase5/arbol-$$e.svg; \
 	done
 	python3 scripts/ll1.py docs/fase2/json.ll1 > docs/fase2/ll1-json.md
 	python3 scripts/ll1.py docs/fase2/xml.ll1 > docs/fase2/ll1-xml.md
@@ -156,6 +163,10 @@ docs-check:
 		cargo run -q -p cli -- automaton --dot tests/schemas/xsd/parse-ok/$$e.xsd > $(DOCS_TMP)/automata-$$e.dot || exit 1; \
 		diff -u docs/fase4/automata-$$e.dot $(DOCS_TMP)/automata-$$e.dot || fallo=1; \
 	done; \
+	for e in $(DERIV_DOT); do \
+		cargo run -q -p derivation --bin arbol -- --dot docs/fase5/ejemplos/$$e > $(DOCS_TMP)/arbol-$$e.dot || exit 1; \
+		diff -u docs/fase5/arbol-$$e.dot $(DOCS_TMP)/arbol-$$e.dot || fallo=1; \
+	done; \
 	for g in json xml esquema xsd; do \
 		python3 scripts/ll1.py docs/fase2/$$g.ll1 > $(DOCS_TMP)/ll1-$$g.md || exit 1; \
 		diff -u docs/fase2/ll1-$$g.md $(DOCS_TMP)/ll1-$$g.md || fallo=1; \
@@ -166,7 +177,7 @@ docs-check:
 		echo "docs/ desincronizado con el código: ejecutar 'make docs' y versionar el resultado"; \
 		exit 1; \
 	fi; \
-	echo "docs-check: .dot de la Fase 1, ll1-*.md de la Fase 2, .dot de la IR (Fase 3) y del autómata (Fase 4) sincronizados"
+	echo "docs-check: .dot de la Fase 1, ll1-*.md de la Fase 2, .dot de la IR (Fase 3), del autómata (Fase 4) y de los árboles de derivación (Fase 5) sincronizados"
 
 # Regenera las IR doradas de tests/ir (`schemac ir` de cada esquema de
 # tests/schemas/parse-ok con el mismo nombre), las XSD de tests/ir/xsd (de

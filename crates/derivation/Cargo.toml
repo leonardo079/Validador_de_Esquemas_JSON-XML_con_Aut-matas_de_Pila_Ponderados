@@ -1,0 +1,21 @@
+[package]
+name = "derivation"
+description = "F5.5: árbol de derivación de un payload JSON/XML (LL(1) iterativo) en JSON para d3-hierarchy y en DOT"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+lexer.workspace = true
+
+[dev-dependencies]
+serde_json = "1.0.154"
+
+[[bin]]
+name = "arbol"
+path = "src/main.rs"
+
+[lints]
+workspace = true
