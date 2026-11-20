@@ -14,8 +14,10 @@ mod json;
 pub mod num;
 pub mod tables;
 mod weight;
+mod xml;
 
 pub use crate::core::{Core, ErrorAt, ErrorKind, Mode, Options, Report, Stop, LEXEME_MAX};
 pub use json::{Flow, JsonValidator};
 pub use tables::Tables;
 pub use weight::Weight;
+pub use xml::XmlValidator;

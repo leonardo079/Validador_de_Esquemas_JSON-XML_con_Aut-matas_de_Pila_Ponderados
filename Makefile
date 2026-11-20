@@ -84,6 +84,10 @@ IR_DOT_XSD := pedido
 # `schemac automaton --dot`) se dibuja en docs/fase4/automata-<nombre>.dot;
 # `objeto-cerrado` es la dorada contada a mano en docs/fase4/automata.md §8.
 AUT_DOT := objeto-cerrado
+# AUT_DOT_XSD: lo mismo con los XSD de tests/schemas/xsd/parse-ok (F4.1c);
+# `valid-xml-pedido-01` es el esquema del caso del corpus del mismo nombre.
+# `-Gnewrank=true`: sin él, `dot` pierde aristas entre clústeres de ese grafo.
+AUT_DOT_XSD := valid-xml-pedido-01
 docs:
 	for a in utf8 json xml; do \
 		cargo run -q -p cli -- dot $$a > docs/fase1/afd-$$a.dot && \
@@ -100,6 +104,10 @@ docs:
 	for e in $(AUT_DOT); do \
 		cargo run -q -p cli -- automaton --dot tests/schemas/parse-ok/$$e.json > docs/fase4/automata-$$e.dot && \
 		dot -Tsvg docs/fase4/automata-$$e.dot -o docs/fase4/automata-$$e.svg; \
+	done
+	for e in $(AUT_DOT_XSD); do \
+		cargo run -q -p cli -- automaton --dot tests/schemas/xsd/parse-ok/$$e.xsd > docs/fase4/automata-$$e.dot && \
+		dot -Tsvg -Gnewrank=true docs/fase4/automata-$$e.dot -o docs/fase4/automata-$$e.svg; \
 	done
 	python3 scripts/ll1.py docs/fase2/json.ll1 > docs/fase2/ll1-json.md
 	python3 scripts/ll1.py docs/fase2/xml.ll1 > docs/fase2/ll1-xml.md
@@ -136,6 +144,10 @@ docs-check:
 	done; \
 	for e in $(AUT_DOT); do \
 		cargo run -q -p cli -- automaton --dot tests/schemas/parse-ok/$$e.json > $(DOCS_TMP)/automata-$$e.dot || exit 1; \
+		diff -u docs/fase4/automata-$$e.dot $(DOCS_TMP)/automata-$$e.dot || fallo=1; \
+	done; \
+	for e in $(AUT_DOT_XSD); do \
+		cargo run -q -p cli -- automaton --dot tests/schemas/xsd/parse-ok/$$e.xsd > $(DOCS_TMP)/automata-$$e.dot || exit 1; \
 		diff -u docs/fase4/automata-$$e.dot $(DOCS_TMP)/automata-$$e.dot || fallo=1; \
 	done; \
 	for g in json xml esquema xsd; do \

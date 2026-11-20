@@ -4,7 +4,7 @@
 
 use std::fmt::Write;
 
-use runtime_rs::tables::{Op, Test};
+use runtime_rs::tables::{CountOp, CounterOp, Op, Test};
 
 use crate::model::{Automaton, ClassId, StateId, TransId, ERROR};
 
@@ -17,7 +17,7 @@ impl Automaton {
         let s = self.summary();
         writeln!(w, "{{")?;
         writeln!(w, "  \"automatonVersion\": {SUMMARY_VERSION},")?;
-        writeln!(w, "  \"format\": \"json\",")?;
+        writeln!(w, "  \"format\": \"{}\",", self.format.name())?;
         writeln!(w, "  \"states\": {},", s.states)?;
         writeln!(w, "  \"transitions\": {},", s.transitions)?;
         writeln!(w, "  \"frames\": {},", s.frames)?;
@@ -99,8 +99,30 @@ impl Automaton {
         if tr.bit != runtime_rs::tables::NO_BIT {
             let _ = write!(suffix, " / bit {}", tr.bit);
         }
-        if tr.count {
-            suffix.push_str(" / +1");
+        // Con tablas incoherentes, ninguna operación (nunca un desborde ni
+        // un pánico al dibujar).
+        let ops = (tr.counts as usize)
+            .checked_add(tr.n_counts as usize)
+            .and_then(|fin| self.counter_ops.get(tr.counts as usize..fin))
+            .unwrap_or(&[]);
+        match ops {
+            [] => {}
+            // JSON: el único contador del marco (miembros o elementos).
+            [CounterOp {
+                counter: 0,
+                op: CountOp::Add,
+            }] => suffix.push_str(" / +1"),
+            _ => {
+                for o in ops {
+                    let _ = match o.op {
+                        CountOp::Add => write!(suffix, " / c{}+1", o.counter),
+                        CountOp::Restart => write!(suffix, " / c{}:=1", o.counter),
+                    };
+                }
+            }
+        }
+        if tr.mark != runtime_rs::tables::NO_BIT {
+            let _ = write!(suffix, " / marca {}", tr.mark);
         }
         let checks: Vec<String> = self
             .checks_of(t)
@@ -112,8 +134,12 @@ impl Automaton {
                     Test::Integer => "entero".to_owned(),
                     Test::Mask => "máscara".to_owned(),
                     Test::Dependent => "dependencias".to_owned(),
-                    Test::CountMin => format!("n ≥ {}", c.bound()),
-                    Test::CountMax => format!("n ≤ {}", c.bound()),
+                    Test::CountMin if c.counter == 0 => format!("n ≥ {}", c.bound()),
+                    Test::CountMax if c.counter == 0 => format!("n ≤ {}", c.bound()),
+                    Test::CountMin => format!("c{} ≥ {}", c.counter, c.bound()),
+                    Test::CountMax => format!("c{} ≤ {}", c.counter, c.bound()),
+                    Test::Unset => format!("sin {}", c.arg),
+                    Test::NumIn => format!("∈ {} intervalos", c.len),
                     Test::LengthMin => format!("|s| ≥ {}", c.bound()),
                     Test::LengthMax => format!("|s| ≤ {}", c.bound()),
                     Test::NumMin => format!("≥ {}", self.num_text(c.arg)),

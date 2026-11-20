@@ -12,10 +12,11 @@
 //! son globales, de tamaño fijo (`docs/fase4/automata.md` §3).
 
 use lexer::json::Event;
+use lexer::xml::Event as XmlEvent;
 use lexer::{LexError, Pos, Sink, Span};
 
 use crate::num::{self, Number};
-use crate::tables::{class, Check, Fault, Op, Tables, Test, Trans, NO_BIT};
+use crate::tables::{class, xclass, Check, CountOp, Fault, Op, Tables, Test, Trans, NO_BIT};
 use crate::weight::Weight;
 
 /// Modo de ejecución (F4-U3): los dos sobre el mismo M.
@@ -102,6 +103,9 @@ pub struct Core<'t, 'm> {
     lex_len: usize,
     /// Puntos de código de la cadena abierta (tras los escapes), saturado.
     chars: u64,
+    /// Se lee el nombre de una instrucción de procesamiento (XML): su primer
+    /// carácter de contenido va precedido de `xclass::PI_BODY`.
+    pi_target: bool,
     mode: Mode,
     weight: Weight,
     first: Option<ErrorAt>,
@@ -129,6 +133,7 @@ impl<'t, 'm> Core<'t, 'm> {
             lex: [0; LEXEME_MAX],
             lex_len: 0,
             chars: 0,
+            pi_target: false,
             mode: opts.mode,
             weight: Weight::ZERO,
             first: None,
@@ -187,6 +192,79 @@ impl<'t, 'm> Core<'t, 'm> {
             Event::NumberEnd => class::NUMBER_END,
         };
         self.step(a, span.start)
+    }
+
+    /// Procesa un evento del lexer XML (F4.1c). Los caracteres de nombres,
+    /// valores, texto e instrucciones van a su clase de carácter; los de un
+    /// texto (valor de atributo o contenido) actualizan además los registros
+    /// globales del texto abierto: el contador de puntos de código (todos)
+    /// y el lexema (sin los espacios XML: el texto de un tipo numérico tras
+    /// el *collapse* no los tiene, `docs/fase4/automata.md` §14). Un texto
+    /// empieza en la comilla de apertura de un valor o en el `>`/`/>` de una
+    /// etiqueta de apertura.
+    pub fn xml_event(&mut self, ev: XmlEvent, span: Span) -> Result<(), Stop> {
+        if self.stopped {
+            return Err(Stop);
+        }
+        let a = match ev {
+            XmlEvent::StartTagOpen => xclass::START_TAG,
+            XmlEvent::EndTagOpen => xclass::END_TAG,
+            XmlEvent::AttrBegin => xclass::ATTR,
+            XmlEvent::AttrValueBegin => {
+                self.text_begin();
+                xclass::VALUE_BEGIN
+            }
+            XmlEvent::AttrValueEnd => xclass::VALUE_END,
+            XmlEvent::StartTagClose => {
+                self.text_begin();
+                xclass::TAG_CLOSE
+            }
+            XmlEvent::EmptyTagClose => {
+                self.text_begin();
+                xclass::EMPTY_CLOSE
+            }
+            XmlEvent::EndTagClose => xclass::END_CLOSE,
+            XmlEvent::PiOpen => {
+                self.pi_target = true;
+                xclass::PI_OPEN
+            }
+            XmlEvent::PiClose => {
+                self.pi_target = false;
+                xclass::PI_CLOSE
+            }
+            XmlEvent::PiChar(c) => {
+                if self.pi_target {
+                    self.pi_target = false;
+                    self.step(xclass::PI_BODY, span.start)?;
+                }
+                class::CHAR.saturating_add(self.t.char_class(c))
+            }
+            XmlEvent::NameChar(c) => class::CHAR.saturating_add(self.t.char_class(c)),
+            XmlEvent::AttrValueChar(c) | XmlEvent::TextChar(c) => {
+                self.text_char(c);
+                class::CHAR.saturating_add(self.t.char_class(c))
+            }
+        };
+        self.step(a, span.start)
+    }
+
+    fn text_begin(&mut self) {
+        self.chars = 0;
+        self.lex_len = 0;
+    }
+
+    fn text_char(&mut self, c: char) {
+        self.chars = self.chars.saturating_add(1);
+        if matches!(c, ' ' | '\t' | '\n' | '\r') {
+            return;
+        }
+        let mut buf = [0u8; 4];
+        for &b in c.encode_utf8(&mut buf).as_bytes() {
+            if let Some(x) = self.lex.get_mut(self.lex_len) {
+                *x = b;
+            }
+            self.lex_len = self.lex_len.saturating_add(1);
+        }
     }
 
     /// Error léxico del lexer que va delante: peso ∞.
@@ -255,10 +333,13 @@ impl<'t, 'm> Core<'t, 'm> {
                 None => return self.fail(Fault::Internal, at),
             }
         }
-        if tr.count && self.count().is_none() {
+        self.run_checks(&tr, at)?;
+        if tr.mark != NO_BIT && self.set_bit(tr.mark).is_none() {
             return self.fail(Fault::Internal, at);
         }
-        self.run_checks(&tr, at)?;
+        if tr.n_counts > 0 && self.counters(&tr).is_none() {
+            return self.fail(Fault::Internal, at);
+        }
         match tr.op {
             Op::Move => self.state = tr.next,
             Op::Push => {
@@ -331,8 +412,9 @@ impl<'t, 'm> Core<'t, 'm> {
                 }
                 true
             }
-            Test::CountMin => self.counter().ok_or(internal)? >= c.bound(),
-            Test::CountMax => self.counter().ok_or(internal)? <= c.bound(),
+            Test::CountMin => self.counter(c.counter).ok_or(internal)? >= c.bound(),
+            Test::CountMax => self.counter(c.counter).ok_or(internal)? <= c.bound(),
+            Test::Unset => !self.bit(c.arg).ok_or(internal)?,
             Test::LengthMin => self.chars >= c.bound(),
             Test::LengthMax => self.chars <= c.bound(),
             Test::NumMin | Test::NumExMin | Test::NumMax | Test::NumExMax => {
@@ -367,6 +449,40 @@ impl<'t, 'm> Core<'t, 'm> {
                 let dl = self.t.num(d.lexeme).ok_or(internal)?;
                 num::is_multiple(self.lexeme()?, dl, &d.div)
             }
+            Test::NumIn => {
+                let x = self.lexeme()?;
+                let ini = c.arg as usize;
+                let list = self
+                    .t
+                    .intervals
+                    .get(ini..ini.checked_add(c.len as usize).ok_or(internal)?)
+                    .ok_or(internal)?;
+                // El último intervalo cuyo extremo inferior no pasa de x
+                // (bisección: O(log n) comparaciones); x está en la unión
+                // solo si está en ese.
+                let (mut lo, mut hi) = (0usize, list.len());
+                while lo < hi {
+                    let mid = lo + (hi - lo) / 2;
+                    let l = self.t.num(list[mid].lo).ok_or(internal)?;
+                    if num::compare(l, x).is_le() {
+                        lo = mid + 1;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                match lo.checked_sub(1).map(|i| list[i]) {
+                    None => false,
+                    Some(iv) => {
+                        let a = num::compare(x, self.t.num(iv.lo).ok_or(internal)?);
+                        let b = num::compare(x, self.t.num(iv.hi).ok_or(internal)?);
+                        if iv.closed {
+                            a.is_ge() && b.is_le()
+                        } else {
+                            a.is_gt() && b.is_lt()
+                        }
+                    }
+                }
+            }
         })
     }
 
@@ -395,23 +511,35 @@ impl<'t, 'm> Core<'t, 'm> {
         Some((ini, words, mask))
     }
 
-    /// El contador del marco de la cima (la palabra tras la máscara).
-    fn counter(&self) -> Option<u64> {
+    /// El contador `k` del marco de la cima (la palabra `mask + k`).
+    fn counter(&self, k: u32) -> Option<u64> {
         let (ini, words, mask) = self.top()?;
-        if words <= mask {
+        let w = mask.checked_add(k as usize)?;
+        if w >= words {
             return None;
         }
-        self.mem.get(ini + mask).copied()
+        self.mem.get(ini + w).copied()
     }
 
-    /// Suma 1 al contador del marco de la cima (saturado).
-    fn count(&mut self) -> Option<()> {
+    /// Las operaciones de contador de `tr` sobre el marco de la cima.
+    fn counters(&mut self, tr: &Trans) -> Option<()> {
         let (ini, words, mask) = self.top()?;
-        if words <= mask {
-            return None;
+        let i = tr.counts as usize;
+        let ops = self
+            .t
+            .counter_ops
+            .get(i..i.checked_add(tr.n_counts as usize)?)?;
+        for o in ops {
+            let w = mask.checked_add(o.counter as usize)?;
+            if w >= words {
+                return None;
+            }
+            let x = self.mem.get_mut(ini + w)?;
+            *x = match o.op {
+                CountOp::Add => x.saturating_add(1),
+                CountOp::Restart => 1,
+            };
         }
-        let w = self.mem.get_mut(ini + mask)?;
-        *w = w.saturating_add(1);
         Some(())
     }
 
@@ -478,6 +606,14 @@ impl Sink<Event> for Core<'_, '_> {
 
     fn event(&mut self, ev: Event, span: Span) -> Result<(), Stop> {
         Core::event(self, ev, span)
+    }
+}
+
+impl Sink<XmlEvent> for Core<'_, '_> {
+    type Error = Stop;
+
+    fn event(&mut self, ev: XmlEvent, span: Span) -> Result<(), Stop> {
+        Core::xml_event(self, ev, span)
     }
 }
 

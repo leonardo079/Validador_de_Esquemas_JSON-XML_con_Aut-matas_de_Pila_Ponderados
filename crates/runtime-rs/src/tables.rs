@@ -55,7 +55,47 @@ pub mod class {
     ];
 }
 
-/// Sin bit de máscara que fijar ([`Trans::bit`]).
+/// Clases fijas de Σ en XML (F4.1c): los eventos del lexer XML que no son
+/// caracteres. Los caracteres (de nombres, valores de atributo, texto e
+/// instrucciones de procesamiento) van, como en JSON, a [`class::CHAR`] +
+/// la clase del punto de código; el estado distingue el contexto. Las
+/// clases 10-13 no se usan en XML.
+pub mod xclass {
+    /// `<` de una etiqueta de apertura (`StartTagOpen`).
+    pub const START_TAG: u32 = 0;
+    /// `</` (`EndTagOpen`).
+    pub const END_TAG: u32 = 1;
+    /// Comienzo del nombre de un atributo (`AttrBegin`).
+    pub const ATTR: u32 = 2;
+    /// Comilla de apertura del valor (`AttrValueBegin`).
+    pub const VALUE_BEGIN: u32 = 3;
+    /// Comilla de cierre del valor (`AttrValueEnd`).
+    pub const VALUE_END: u32 = 4;
+    /// `>` de una etiqueta de apertura (`StartTagClose`).
+    pub const TAG_CLOSE: u32 = 5;
+    /// `/>` (`EmptyTagClose`).
+    pub const EMPTY_CLOSE: u32 = 6;
+    /// `>` de una etiqueta de cierre (`EndTagClose`).
+    pub const END_CLOSE: u32 = 7;
+    /// `<?` (`PiOpen`).
+    pub const PI_OPEN: u32 = 8;
+    /// `?>` (`PiClose`).
+    pub const PI_CLOSE: u32 = 9;
+    /// Comienzo del contenido de una instrucción: el núcleo la pone delante
+    /// del primer carácter tras el nombre, que el lexer da con la misma
+    /// clase que los del nombre (`<?xmla?>` frente a `<?xml a?>`).
+    pub const PI_BODY: u32 = 10;
+
+    /// Nombres de las clases fijas en XML (DOT y mensajes).
+    pub const NAMES: [&str; super::class::CHAR as usize] = [
+        "<", "</", "@", "=\"", "\"$", ">", "/>", "</…>", "<?", "?>", "<?… ", "—", "—", "—",
+    ];
+
+    /// Las clases que terminan el nombre de una etiqueta de apertura.
+    pub const NAME_ENDS: [u32; 3] = [ATTR, TAG_CLOSE, EMPTY_CLOSE];
+}
+
+/// Sin bit de máscara que fijar ([`Trans::bit`], [`Trans::mark`]).
 pub const NO_BIT: u32 = u32::MAX;
 
 /// Mapa de salidas identidad ([`Trans::outs`]; F4.5a añadirá otros).
@@ -104,11 +144,18 @@ pub struct Trans {
     /// Tipo de marco que apila ([`Op::Push`]).
     pub frame: u32,
     /// Bit de la máscara del marco de la cima que se fija; si ya estaba,
-    /// la clave está repetida ([`Fault::Duplicate`]). [`NO_BIT`] si no.
+    /// la clave (o el atributo XML) está repetida ([`Fault::Duplicate`]).
+    /// [`NO_BIT`] si no. Se fija antes de las comprobaciones.
     pub bit: u32,
-    /// Suma 1 (saturado) al contador del marco de la cima (miembros de un
-    /// objeto o elementos de un arreglo) **antes** de apilar nada.
-    pub count: bool,
+    /// Bit de la máscara de la cima que se fija **sin** error si ya estaba
+    /// (hijos de `xs:all`: la repetición la cuenta [`Test::Unset`]); se fija
+    /// después de las comprobaciones. [`NO_BIT`] si no.
+    pub mark: u32,
+    /// Operaciones de contador `counter_ops[counts .. counts + n_counts]`
+    /// sobre el marco de la cima (F4.1b-CR-S5: k contadores por marco), en
+    /// orden, **después** de las comprobaciones y antes de apilar nada.
+    pub counts: u32,
+    pub n_counts: u32,
     /// Comprobaciones `checks[checks .. checks + n_checks]`, ordenadas por
     /// costo.
     pub checks: u32,
@@ -130,12 +177,16 @@ pub enum Test {
     /// Para cada `deps[arg .. arg + len]` cuyo bit está, la máscara
     /// contiene la suya.
     Dependent,
-    /// El contador del marco de la cima es ≥ [`Check::bound`]
-    /// (`minProperties`, `minItems`).
+    /// El contador [`Check::counter`] del marco de la cima es ≥
+    /// [`Check::bound`] (`minProperties`, `minItems`, el mínimo de una
+    /// partícula XSD al salir de ella).
     CountMin,
-    /// El contador del marco de la cima es ≤ [`Check::bound`]
-    /// (`maxProperties`, `maxItems`).
+    /// … ≤ [`Check::bound`] (`maxProperties`, `maxItems`, el máximo de una
+    /// partícula XSD al volver a empezarla).
     CountMax,
+    /// El bit `arg` de la máscara de la cima no está (un hijo de `xs:all`
+    /// que no se repite).
+    Unset,
     /// Los puntos de código de la cadena que se cierra son ≥
     /// [`Check::bound`] (`minLength`).
     LengthMin,
@@ -154,6 +205,10 @@ pub enum Test {
     NumEnum,
     /// … es múltiplo de `divisors[arg]` (`multipleOf`).
     MultipleOf,
+    /// … está en uno de los intervalos `intervals[arg .. arg + len]`,
+    /// ordenados y disjuntos (`enum`/`fixed` de `xs:float`/`xs:double`: el
+    /// intervalo de redondeo de cada valor, F4.1c).
+    NumIn,
 }
 
 /// Una comprobación de una regla del esquema; si falla suma 1 al peso.
@@ -167,6 +222,9 @@ pub struct Check {
     pub cost: u32,
     /// Salida a la que cuenta (F4.5a); siempre 0.
     pub slot: u32,
+    /// Contador del marco que leen [`Test::CountMin`] y [`Test::CountMax`]
+    /// (F4.1b-CR-S5); 0 en las demás.
+    pub counter: u32,
     pub arg: u32,
     pub len: u32,
 }
@@ -185,21 +243,48 @@ impl Check {
 }
 
 /// Tipo de marco: disposición de sus registros en la pila. Las palabras
-/// de registros son `[máscara (mask_words)] [contador (0 o 1)]`: la máscara
-/// de nombres va primero y el contador de miembros o de elementos, si lo
-/// hay, en la palabra `mask_words` (F4.1a-CR-S1: [`Test::Mask`] y
-/// [`Test::Dependent`] solo leen las `mask_words` primeras).
+/// de registros son `[máscara (mask_words)] [contadores (k)]`: la máscara
+/// de nombres va primero y el contador i, en la palabra `mask_words + i`
+/// (F4.1a-CR-S1: [`Test::Mask`] y [`Test::Dependent`] solo leen las
+/// `mask_words` primeras; F4.1b-CR-S5: k = `words − mask_words`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Frame {
-    /// Palabras `u64` de registros (máscara y contador).
+    /// Palabras `u64` de registros (máscara y contadores).
     pub words: u32,
-    /// Palabras de la máscara (`words − mask_words` ≤ 1 es el contador).
+    /// Palabras de la máscara (`words − mask_words` son los contadores).
     pub mask_words: u32,
     /// Salidas (F4.5a); 0.
     pub slots: u32,
     /// Puertas `gates[gates .. gates + n_gates]` (F4.5a); vacías.
     pub gates: u32,
     pub n_gates: u32,
+}
+
+/// Qué hace una [`CounterOp`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum CountOp {
+    /// Suma 1, saturado.
+    Add,
+    /// Reinicio: el contador pasa a 1 (empieza la primera vuelta de una
+    /// partícula XSD).
+    Restart,
+}
+
+/// Una operación sobre el contador `counter` del marco de la cima.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct CounterOp {
+    pub counter: u32,
+    pub op: CountOp,
+}
+
+/// Un intervalo de lexemas `[nums[lo], nums[hi]]` ([`Test::NumIn`]),
+/// cerrado si `closed` y abierto si no (los dos extremos a la vez: el
+/// intervalo de redondeo de un flotante de mantisa par es cerrado).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Interval {
+    pub lo: u32,
+    pub hi: u32,
+    pub closed: bool,
 }
 
 /// Una entrada de `dependentRequired`: si está `bit`, deben estar los de
@@ -266,6 +351,10 @@ pub struct Tables<'a> {
     pub nums: &'a [Lexeme],
     pub lexemes: &'a [u8],
     pub divisors: &'a [DivisorRef],
+    /// Operaciones de contador de las transiciones ([`Trans::counts`]).
+    pub counter_ops: &'a [CounterOp],
+    /// Intervalos de [`Test::NumIn`].
+    pub intervals: &'a [Interval],
     /// Palabras de la zona global de salidas de la instancia escalar
     /// abierta, al principio de la memoria del llamador (F4.5a; 0 en
     /// F4.1b). La pila de marcos empieza detrás.

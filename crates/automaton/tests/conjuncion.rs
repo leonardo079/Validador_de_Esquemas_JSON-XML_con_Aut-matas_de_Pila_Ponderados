@@ -228,6 +228,7 @@ fn tope_de_estados_por_producto() {
     let objetos = bajar(r#"{"allOf": [{"properties": {"a": true}}, {"properties": {"b": true}}]}"#);
     let ocho = BuildOptions {
         max_product_states: 8,
+        ..BuildOptions::default()
     };
     match build_with(&objetos, &ocho) {
         Err(e @ BuildError::ProductLimit { .. }) => {

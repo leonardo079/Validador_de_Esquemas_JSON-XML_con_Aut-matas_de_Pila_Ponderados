@@ -21,29 +21,33 @@
 
 mod conj;
 pub mod dfa;
+mod emit;
 mod export;
+mod glushkov;
 mod json;
 mod location;
 mod model;
+mod text;
 pub mod weight;
+mod xml;
 
 use std::fmt;
 
 use ir::{NodeId, RuleKind, VerifiedIr};
-use runtime_rs::{Flow, JsonValidator};
+use runtime_rs::{Flow, JsonValidator, XmlValidator};
 
 pub use conj::MAX_CLOSURE_WORK;
 pub use json::{MAX_DELTA, MAX_NAMES, MAX_PRODUCT_STATES};
 pub use location::{location_clipped, LOCATION_MAX};
-pub use model::{Automaton, ClassId, FrameId, StateId, StateInfo, Summary, TransId, ERROR};
+pub use model::{
+    Automaton, ClassId, FrameId, PayloadFormat, StateId, StateInfo, Summary, TransId, ERROR,
+};
 pub use runtime_rs::{ErrorAt, ErrorKind, Mode, Options, Report};
 
 /// Tarea del plan que implementará una regla pendiente, en el orden en que
 /// llegan (F4-U5 con las etiquetas de D51).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Task {
-    /// F4.1c: XML.
-    Xml,
     /// F4.4b: `pattern`.
     Pattern,
     /// F4.5a: `anyOf`, `oneOf`, `not`, `dependentSchemas`.
@@ -56,7 +60,6 @@ impl Task {
     /// Identificador de la tarea en el plan.
     pub const fn label(self) -> &'static str {
         match self {
-            Task::Xml => "F4.1c",
             Task::Pattern => "F4.4b",
             Task::Combinators => "F4.5a",
             Task::Literals => "F4.5b",
@@ -148,12 +151,17 @@ pub struct BuildOptions {
     /// Tope de estados de cada producto (L-1; 4 096 por defecto,
     /// `docs/00-alcance.md` §4).
     pub max_product_states: usize,
+    /// Presupuesto de entradas de las tablas por esquema (F4-U6, precisado
+    /// en F4.1b: |Q| · |Σ| más comprobaciones, máscaras, dependencias y
+    /// lexemas; 2²⁰ por defecto). Configurable a la baja para las pruebas.
+    pub max_delta: usize,
 }
 
 impl Default for BuildOptions {
     fn default() -> BuildOptions {
         BuildOptions {
             max_product_states: MAX_PRODUCT_STATES,
+            max_delta: MAX_DELTA,
         }
     }
 }
@@ -166,7 +174,10 @@ pub fn build(ir: &VerifiedIr) -> Result<Automaton, BuildError> {
 
 /// [`build`] con un tope de productos distinto.
 pub fn build_with(ir: &VerifiedIr, opts: &BuildOptions) -> Result<Automaton, BuildError> {
-    json::build(ir, opts)
+    match ir.format() {
+        ir::Format::Json => json::build(ir, opts),
+        ir::Format::Xml { .. } => xml::build(ir, opts),
+    }
 }
 
 /// Valida `payload` con M partiéndolo en bloques de `chunk` bytes (F4-B24,
@@ -174,13 +185,30 @@ pub fn build_with(ir: &VerifiedIr, opts: &BuildOptions) -> Result<Automaton, Bui
 /// marcos como `{` y `[` tiene el payload, así que nunca da `limit` (los
 /// límites son de F4.6).
 pub fn validate(a: &Automaton, payload: &[u8], mode: Mode, chunk: usize) -> Report {
-    let depth = payload.iter().filter(|&&b| b == b'{' || b == b'[').count() + 1;
-    let mut mem = vec![0u64; a.stack_words(depth)];
-    let mut v = JsonValidator::new(a.tables(), &Options { mode }, &mut mem);
-    for c in payload.chunks(chunk.max(1)) {
-        if v.feed(c) == Flow::Stop {
-            break;
+    let opts = Options { mode };
+    match a.format() {
+        PayloadFormat::Json => {
+            let depth = payload.iter().filter(|&&b| b == b'{' || b == b'[').count() + 1;
+            let mut mem = vec![0u64; a.stack_words(depth)];
+            let mut v = JsonValidator::new(a.tables(), &opts, &mut mem);
+            for c in payload.chunks(chunk.max(1)) {
+                if v.feed(c) == Flow::Stop {
+                    break;
+                }
+            }
+            v.finish()
+        }
+        PayloadFormat::Xml => {
+            // Un marco por `<` como mucho.
+            let depth = payload.iter().filter(|&&b| b == b'<').count() + 1;
+            let mut mem = vec![0u64; a.stack_words(depth)];
+            let mut v = XmlValidator::new(a.tables(), &opts, &mut mem);
+            for c in payload.chunks(chunk.max(1)) {
+                if v.feed(c) == Flow::Stop {
+                    break;
+                }
+            }
+            v.finish()
         }
     }
-    v.finish()
 }

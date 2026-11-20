@@ -418,21 +418,32 @@ fn lo_no_implementado_es_pending_con_su_tarea() {
     .is_ok());
 }
 
+/// Desde F4.1c un XSD compila; solo su `pattern` queda pendiente (F4.4b).
 #[test]
-fn xsd_es_pending_de_f4_1c() {
-    let src = "<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'>\
-               <xs:element name='e' type='xs:int'/></xs:schema>";
-    let ir = std::thread::Builder::new()
-        .stack_size(8 << 20)
-        .spawn(move || {
-            let s = xsd::parse(src.as_bytes()).unwrap();
-            xsd::lower(&xsd::analyze(&s).unwrap()).unwrap()
-        })
-        .unwrap()
-        .join()
-        .unwrap();
+fn xsd_compila_y_su_pattern_es_pending() {
+    let ir_de = |src: &'static str| {
+        std::thread::Builder::new()
+            .stack_size(8 << 20)
+            .spawn(move || {
+                let s = xsd::parse(src.as_bytes()).unwrap();
+                xsd::lower(&xsd::analyze(&s).unwrap()).unwrap()
+            })
+            .unwrap()
+            .join()
+            .unwrap()
+    };
+    let ir = ir_de(
+        "<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'>\
+         <xs:element name='e' type='xs:int'/></xs:schema>",
+    );
+    assert!(build(&ir).is_ok());
+    let ir = ir_de(
+        "<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'>\
+         <xs:element name='e'><xs:simpleType><xs:restriction base='xs:string'>\
+         <xs:pattern value='a+'/></xs:restriction></xs:simpleType></xs:element></xs:schema>",
+    );
     match build(&ir) {
-        Err(BuildError::Pending { task, .. }) => assert_eq!(task, Task::Xml),
+        Err(BuildError::Pending { task, .. }) => assert_eq!(task, Task::Pattern),
         otro => panic!("{otro:?}"),
     }
 }

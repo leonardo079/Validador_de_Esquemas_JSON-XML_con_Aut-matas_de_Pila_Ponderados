@@ -13,7 +13,9 @@
 //!   comprobaciones de cada transición.
 
 use ir::{NodeId, RuleKind};
-use runtime_rs::tables::{CharRange, Check, Dep, DivisorRef, Frame, Lexeme, Rule, Trans};
+use runtime_rs::tables::{
+    CharRange, Check, CounterOp, Dep, DivisorRef, Frame, Interval, Lexeme, Rule, Trans,
+};
 use runtime_rs::Tables;
 
 /// Estado de control.
@@ -44,9 +46,28 @@ pub struct StateInfo {
     pub name: String,
 }
 
+/// Formato del payload que lee M: decide el lexer que va delante (Σ son
+/// sus eventos, F4-U1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PayloadFormat {
+    Json,
+    Xml,
+}
+
+impl PayloadFormat {
+    /// Nombre en el resumen de `schemac automaton` (`format`).
+    pub const fn name(self) -> &'static str {
+        match self {
+            PayloadFormat::Json => "json",
+            PayloadFormat::Xml => "xml",
+        }
+    }
+}
+
 /// El autómata construido: tablas propias más metadatos.
 #[derive(Clone, Debug)]
 pub struct Automaton {
+    pub(crate) format: PayloadFormat,
     pub(crate) n_classes: u32,
     pub(crate) start: u32,
     pub(crate) accept: u32,
@@ -59,6 +80,8 @@ pub struct Automaton {
     pub(crate) nums: Vec<Lexeme>,
     pub(crate) lexemes: Vec<u8>,
     pub(crate) divisors: Vec<DivisorRef>,
+    pub(crate) counter_ops: Vec<CounterOp>,
+    pub(crate) intervals: Vec<Interval>,
     pub(crate) ascii: Vec<u32>,
     pub(crate) ranges: Vec<CharRange>,
     pub(crate) rules: Vec<Rule>,
@@ -112,12 +135,19 @@ impl Automaton {
             nums: &self.nums,
             lexemes: &self.lexemes,
             divisors: &self.divisors,
+            counter_ops: &self.counter_ops,
+            intervals: &self.intervals,
             scalar_slots: 0,
             ascii: &self.ascii,
             ranges: &self.ranges,
             rules: &self.rules,
             text: &self.text,
         }
+    }
+
+    /// Formato del payload (el lexer que va delante).
+    pub fn format(&self) -> PayloadFormat {
+        self.format
     }
 
     pub fn n_states(&self) -> usize {

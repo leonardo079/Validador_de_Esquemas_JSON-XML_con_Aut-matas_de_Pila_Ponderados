@@ -24,16 +24,15 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use ir::{JsonType, LitToken, Literal, Node, NodeId, Rule, RuleKind, TypeSet, VerifiedIr};
 use runtime_rs::num::{Divisor, DivisorError};
-use runtime_rs::tables::{
-    class, CharRange, Check, Dep, DivisorRef, Fault, Frame, Lexeme, Op, Rule as RuleRef, Test,
-    Trans, NO_BIT, OUT_IDENTITY,
-};
+use runtime_rs::tables::{class, Check, CountOp, CounterOp, Dep, DivisorRef, Op, Test, Trans};
 
 use crate::conj::{Closures, SetId, ANY, CLOSURE_WHAT};
 use crate::dfa::Dfa;
+use crate::emit::{
+    budget, clip, delta_limit, label, plain, table_index, trie_size, Bound, Emitter, TrieStates,
+};
 use crate::location::{location_clipped, LOCATION_MAX};
-use crate::model::{Automaton, StateInfo};
-use crate::weight::cost;
+use crate::model::Automaton;
 use crate::{BuildError, BuildOptions, Task};
 
 /// Presupuesto de entradas de δ (|Q| · |Σ|) por esquema (F4-U6): 2²⁰.
@@ -53,14 +52,11 @@ pub const MAX_PRODUCT_STATES: usize = 4096;
 const FIXED_STATES: usize = 13;
 
 pub(crate) fn build(ir: &VerifiedIr, opts: &BuildOptions) -> Result<Automaton, BuildError> {
-    if let ir::Format::Xml { .. } = ir.format() {
-        return Err(pending(ir, NodeId::ROOT, RuleKind::Content, Task::Xml));
-    }
     check_pending(ir)?;
     let an = Analysis::run(ir, opts)?;
-    let mut b = Builder::new(ir, an)?;
+    let mut b = Builder::new(ir, an, opts)?;
     b.fill();
-    b.finish()
+    b.t.finish()
 }
 
 // ------------------------------------------------------- 1. pendientes ---
@@ -94,9 +90,8 @@ fn task_of(rule: &Rule) -> Option<Task> {
         Rule::AnyOf(_) | Rule::OneOf(_) | Rule::Not(_) | Rule::DependentSchemas(_) => {
             Some(Task::Combinators)
         }
-        Rule::Attributes(_) | Rule::Content(_) | Rule::SimpleContent(_) | Rule::Lexical(_) => {
-            Some(Task::Xml)
-        }
+        // XML (F4.1c): el constructor de `crate::xml`.
+        Rule::Attributes(_) | Rule::Content(_) | Rule::SimpleContent(_) | Rule::Lexical(_) => None,
     }
 }
 
@@ -111,7 +106,7 @@ fn scalar(lit: &Literal) -> bool {
 /// Recorre todo lo alcanzable desde la raíz (por todas las aristas) y
 /// rechaza la regla pendiente de la tarea **más tardía** (la que fija cuándo
 /// compilará el esquema); a igualdad, la primera en el recorrido.
-fn check_pending(ir: &VerifiedIr) -> Result<(), BuildError> {
+pub(crate) fn check_pending(ir: &VerifiedIr) -> Result<(), BuildError> {
     let n = ir.nodes().len();
     let mut seen = vec![false; n];
     let mut queue = std::collections::VecDeque::from([NodeId::ROOT]);
@@ -155,10 +150,6 @@ fn pending(ir: &VerifiedIr, node: NodeId, rule: RuleKind, task: Task) -> BuildEr
 
 /// Una entrada de `dependentRequired`: propiedad → las que exige.
 type Dependencia = (String, Vec<String>);
-
-/// Una comprobación de contador o longitud: (nodo, índice de la regla,
-/// prueba, cota).
-type Bound = (NodeId, usize, Test, u64);
 
 /// Las reglas de objeto de un nodo, juntas.
 struct ObjectRules<'a> {
@@ -321,46 +312,6 @@ struct Analysis<'a> {
     divisors: HashMap<(NodeId, usize), Divisor>,
 }
 
-/// Estados del trie de `words` (uno por prefijo distinto, más el muerto),
-/// contados sin construirlo: con las palabras ordenadas, cada una añade sus
-/// caracteres menos el prefijo común con la anterior.
-fn trie_size(words: &[&str]) -> usize {
-    let mut v: Vec<&str> = words.to_vec();
-    v.sort_unstable();
-    v.dedup();
-    let mut n = 2;
-    for (i, w) in v.iter().enumerate() {
-        let lcp = if i == 0 {
-            0
-        } else {
-            w.chars()
-                .zip(v[i - 1].chars())
-                .take_while(|(a, b)| a == b)
-                .count()
-        };
-        n += w.chars().count() - lcp;
-    }
-    n
-}
-
-/// Nombre de un conjunto para el DOT y los errores: las ubicaciones de sus
-/// componentes (hasta tres) unidas con «∧».
-fn label(ir: &VerifiedIr, comps: &[NodeId]) -> String {
-    let mut parts: Vec<String> = comps
-        .iter()
-        .take(3)
-        .map(|&id| location_clipped(ir, id, 64))
-        .collect();
-    if comps.len() > 3 {
-        parts.push("…".to_owned());
-    }
-    if parts.is_empty() {
-        "#".to_owned()
-    } else {
-        parts.join(" ∧ ")
-    }
-}
-
 impl<'a> Analysis<'a> {
     fn run(ir: &'a VerifiedIr, opts: &BuildOptions) -> Result<Analysis<'a>, BuildError> {
         let mut cl = Closures::new(ir.nodes())?;
@@ -404,11 +355,12 @@ impl<'a> Analysis<'a> {
             // crece): un grafo de conjuntos que crece sin parar se corta
             // antes de agotar la memoria.
             let k = class::CHAR as usize + 1 + an.chars.len();
-            if budget(an.upper, k, an.extra) > MAX_DELTA {
+            if budget(an.upper, k, an.extra) > opts.max_delta {
                 return Err(delta_limit(
                     an.upper,
                     k,
                     an.extra,
+                    opts.max_delta,
                     label(ir, an.cl.sets.get(s)),
                 ));
             }
@@ -426,7 +378,8 @@ impl<'a> Analysis<'a> {
         Ok(an)
     }
 
-    /// Analiza el conjunto `s` y devuelve sus subautómatas y sus hijos.
+    /// Analiza el conjunto `s` y devuelve sus subautómatas y sus hijos
+    /// (F4.1b-CR-S6: un método por subautómata).
     fn set(
         &mut self,
         ir: &'a VerifiedIr,
@@ -434,131 +387,167 @@ impl<'a> Analysis<'a> {
         opts: &BuildOptions,
     ) -> Result<(SetInfo<'a>, Vec<SetId>), BuildError> {
         let comps: Vec<NodeId> = self.cl.sets.get(s).to_vec();
-        let mut info = SetInfo::default();
+        let comps = &comps[..];
         let mut children = Vec::new();
-        let product = |b: &mut Self, n: usize, states: usize, scalar: bool| {
-            if n < 2 {
-                return Ok(());
-            }
-            b.products += 1;
-            if states > opts.max_product_states {
-                return Err(BuildError::ProductLimit {
-                    states,
-                    limit: opts.max_product_states,
-                    scalar,
-                    location: label(ir, &comps),
-                });
-            }
-            Ok(())
-        };
-
         // Comprobaciones de las 7 transiciones de entrada de un valor del
         // conjunto (una lista por clase, compartida por todos los retornos).
-        for &id in &comps {
+        for &id in comps {
             for (i, c) in ir.node(id).rules.iter().enumerate() {
                 self.extra += self.entry_mask(id, i, &c.rule).count_ones() as usize;
             }
         }
+        let info = SetInfo {
+            obj: self.object(ir, comps, opts, &mut children)?,
+            arr: self.array(ir, comps, opts, &mut children)?,
+            num: self.number(ir, comps, opts)?,
+            string: self.string(ir, comps, opts)?,
+        };
+        children.retain(|&c| c != ANY);
+        Ok((info, children))
+    }
 
-        // Objeto.
+    /// Cuenta un subautómata producto (de `n` ≥ 2 componentes que aportan
+    /// a él) y comprueba su tope de estados antes de reservar (L-1).
+    fn product(
+        &mut self,
+        ir: &VerifiedIr,
+        comps: &[NodeId],
+        opts: &BuildOptions,
+        n: usize,
+        states: usize,
+        scalar: bool,
+    ) -> Result<(), BuildError> {
+        if n < 2 {
+            return Ok(());
+        }
+        self.products += 1;
+        if states > opts.max_product_states {
+            return Err(BuildError::ProductLimit {
+                states,
+                limit: opts.max_product_states,
+                scalar,
+                location: label(ir, comps),
+            });
+        }
+        Ok(())
+    }
+
+    /// El subautómata de objeto del conjunto de `comps`, si alguno tiene
+    /// reglas de objeto; sus hijos van a `children`.
+    fn object(
+        &mut self,
+        ir: &'a VerifiedIr,
+        comps: &[NodeId],
+        opts: &BuildOptions,
+        children: &mut Vec<SetId>,
+    ) -> Result<Option<ObjSpec<'a>>, BuildError> {
         let objs: Vec<(NodeId, ObjectRules<'a>)> = comps
             .iter()
             .filter_map(|&id| object_rules(id, ir.node(id)).map(|o| (id, o)))
             .collect();
-        if !objs.is_empty() {
-            let mut names: Vec<&'a str> = Vec::new();
-            let mut idx: HashMap<&'a str, usize> = HashMap::new();
-            for (_, o) in &objs {
-                for n in o.names() {
-                    if !idx.contains_key(n) {
-                        idx.insert(n, names.len());
-                        names.push(n);
-                    }
+        if objs.is_empty() {
+            return Ok(None);
+        }
+        let mut names: Vec<&'a str> = Vec::new();
+        let mut idx: HashMap<&'a str, usize> = HashMap::new();
+        for (_, o) in &objs {
+            for n in o.names() {
+                if !idx.contains_key(n) {
+                    idx.insert(n, names.len());
+                    names.push(n);
                 }
             }
-            if names.len() > MAX_NAMES {
-                return Err(BuildError::Limit {
-                    what: "nombres por objeto",
-                    limit: MAX_NAMES,
-                    found: names.len(),
-                    location: label(ir, &comps),
+        }
+        if names.len() > MAX_NAMES {
+            return Err(BuildError::Limit {
+                what: "nombres por objeto",
+                limit: MAX_NAMES,
+                found: names.len(),
+                location: label(ir, comps),
+            });
+        }
+        // El tamaño del producto solo depende de los nombres y del número
+        // de componentes: el tope y el trabajo (nombres × componentes) se
+        // comprueban **antes** de reservar nada proporcional al producto
+        // (L-1). Estados: primero, siguiente, trie, 2 por nombre, 2 de la
+        // clave desconocida, después.
+        let states = 2 + trie_size(&names) + 2 * names.len() + 2 + 1;
+        self.product(ir, comps, opts, objs.len(), states, false)?;
+        self.cl.spend(names.len().saturating_mul(objs.len()))?;
+        // Al cerrar: una comprobación por `required`, `dependentRequired`
+        // y contador de cada componente, y sus máscaras sobre la unión.
+        let mask_words = names.len().div_ceil(64);
+        for (_, o) in &objs {
+            let req = o.required.map_or(0, |(_, r)| usize::from(!r.is_empty()));
+            let deps = o
+                .dependent
+                .map_or(0, |(_, d)| d.iter().filter(|(_, l)| !l.is_empty()).count());
+            self.extra += req + usize::from(deps > 0) + o.counts.len();
+            self.extra += (req + deps).saturating_mul(mask_words) + deps;
+        }
+        let mut spec = ObjSpec {
+            names: Vec::new(),
+            children: Vec::new(),
+            unknown: ANY,
+            required: Vec::new(),
+            dependent: Vec::new(),
+            counts: Vec::new(),
+        };
+        // Por componente: su `additionalProperties` y sus declarados (lo
+        // que ya ocupa la IR).
+        let mut comp: Vec<(SetId, HashMap<&str, NodeId>)> = Vec::with_capacity(objs.len());
+        for &(id, ref o) in &objs {
+            let add = match o.additional {
+                Some(t) => self.cl.of(t)?,
+                None => ANY,
+            };
+            comp.push((
+                add,
+                o.declared.iter().map(|(n, t)| (n.as_str(), *t)).collect(),
+            ));
+            if let Some((i, r)) = o.required {
+                spec.required.push((id, i, r));
+            }
+            if let Some((i, d)) = o.dependent {
+                spec.dependent.push((id, i, d));
+            }
+            spec.counts.extend(o.counts.iter().copied());
+        }
+        // Hijo de cada nombre: la unión de los cierres de lo que le asigna
+        // cada componente, con un solo vector temporal.
+        let mut parts = Vec::with_capacity(objs.len());
+        for n in &names {
+            parts.clear();
+            for (add, declared) in &comp {
+                parts.push(match declared.get(n) {
+                    Some(&t) => self.cl.of(t)?,
+                    None => *add,
                 });
             }
-            // El tamaño del producto solo depende de los nombres y del número
-            // de componentes: el tope y el trabajo (nombres × componentes) se
-            // comprueban **antes** de reservar nada proporcional al producto
-            // (L-1). Estados: primero, siguiente, trie, 2 por nombre, 2 de la
-            // clave desconocida, después.
-            let states = 2 + trie_size(&names) + 2 * names.len() + 2 + 1;
-            product(self, objs.len(), states, false)?;
-            self.cl.spend(names.len().saturating_mul(objs.len()))?;
-            // Al cerrar: una comprobación por `required`, `dependentRequired`
-            // y contador de cada componente, y sus máscaras sobre la unión.
-            let mask_words = names.len().div_ceil(64);
-            for (_, o) in &objs {
-                let req = o.required.map_or(0, |(_, r)| usize::from(!r.is_empty()));
-                let deps = o
-                    .dependent
-                    .map_or(0, |(_, d)| d.iter().filter(|(_, l)| !l.is_empty()).count());
-                self.extra += req + usize::from(deps > 0) + o.counts.len();
-                self.extra += (req + deps).saturating_mul(mask_words) + deps;
-            }
-            let mut spec = ObjSpec {
-                names: Vec::new(),
-                children: Vec::new(),
-                unknown: ANY,
-                required: Vec::new(),
-                dependent: Vec::new(),
-                counts: Vec::new(),
-            };
-            // Por componente: su `additionalProperties` y sus declarados (lo
-            // que ya ocupa la IR).
-            let mut comp: Vec<(SetId, HashMap<&str, NodeId>)> = Vec::with_capacity(objs.len());
-            for &(id, ref o) in &objs {
-                let add = match o.additional {
-                    Some(t) => self.cl.of(t)?,
-                    None => ANY,
-                };
-                comp.push((
-                    add,
-                    o.declared.iter().map(|(n, t)| (n.as_str(), *t)).collect(),
-                ));
-                if let Some((i, r)) = o.required {
-                    spec.required.push((id, i, r));
-                }
-                if let Some((i, d)) = o.dependent {
-                    spec.dependent.push((id, i, d));
-                }
-                spec.counts.extend(o.counts.iter().copied());
-            }
-            // Hijo de cada nombre: la unión de los cierres de lo que le asigna
-            // cada componente, con un solo vector temporal.
-            let mut parts = Vec::with_capacity(objs.len());
-            for n in &names {
-                parts.clear();
-                for (add, declared) in &comp {
-                    parts.push(match declared.get(n) {
-                        Some(&t) => self.cl.of(t)?,
-                        None => *add,
-                    });
-                }
-                spec.children.push(self.cl.union(&parts)?);
-            }
-            let unknown: Vec<SetId> = comp.iter().map(|(add, _)| *add).collect();
-            spec.unknown = self.cl.union(&unknown)?;
-            self.upper += states;
-            self.chars.extend(names.iter().flat_map(|n| n.chars()));
-            children.extend(&spec.children);
-            children.push(spec.unknown);
-            spec.names = names;
-            info.obj = Some(spec);
+            spec.children.push(self.cl.union(&parts)?);
         }
+        let unknown: Vec<SetId> = comp.iter().map(|(add, _)| *add).collect();
+        spec.unknown = self.cl.union(&unknown)?;
+        self.upper += states;
+        self.chars.extend(names.iter().flat_map(|n| n.chars()));
+        children.extend(&spec.children);
+        children.push(spec.unknown);
+        spec.names = names;
+        Ok(Some(spec))
+    }
 
-        // Arreglo.
+    /// El subautómata de arreglo; sus hijos van a `children`.
+    fn array(
+        &mut self,
+        ir: &'a VerifiedIr,
+        comps: &[NodeId],
+        opts: &BuildOptions,
+        children: &mut Vec<SetId>,
+    ) -> Result<Option<ArrSpec>, BuildError> {
         let mut items: Vec<(&'a [NodeId], Option<NodeId>)> = Vec::new();
         let mut counts = Vec::new();
         let mut n_arr = 0;
-        for &id in &comps {
+        for &id in comps {
             let mut here = false;
             for (i, c) in ir.node(id).rules.iter().enumerate() {
                 match &c.rule {
@@ -571,36 +560,44 @@ impl<'a> Analysis<'a> {
             }
             n_arr += usize::from(here);
         }
-        if n_arr > 0 {
-            let p = items.iter().map(|(pre, _)| pre.len()).max().unwrap_or(0);
-            // primero, siguientes (al menos uno), uno tras cada valor: el tope
-            // y el trabajo se comprueban antes de calcular los hijos.
-            let states = 1 + p.max(1) + p + 1;
-            product(self, n_arr, states, false)?;
-            self.cl.spend((p + 1).saturating_mul(items.len()))?;
-            self.extra += counts.len();
-            let mut slots = Vec::with_capacity(p + 1);
-            let mut parts = Vec::with_capacity(items.len());
-            for i in 0..=p {
-                parts.clear();
-                for (pre, rest) in &items {
-                    let t = if i < pre.len() { Some(pre[i]) } else { *rest };
-                    parts.push(match t {
-                        Some(t) => self.cl.of(t)?,
-                        None => ANY,
-                    });
-                }
-                slots.push(self.cl.union(&parts)?);
-            }
-            self.upper += states;
-            children.extend(&slots);
-            info.arr = Some(ArrSpec { slots, counts });
+        if n_arr == 0 {
+            return Ok(None);
         }
+        let p = items.iter().map(|(pre, _)| pre.len()).max().unwrap_or(0);
+        // primero, siguientes (al menos uno), uno tras cada valor: el tope
+        // y el trabajo se comprueban antes de calcular los hijos.
+        let states = 1 + p.max(1) + p + 1;
+        self.product(ir, comps, opts, n_arr, states, false)?;
+        self.cl.spend((p + 1).saturating_mul(items.len()))?;
+        self.extra += counts.len();
+        let mut slots = Vec::with_capacity(p + 1);
+        let mut parts = Vec::with_capacity(items.len());
+        for i in 0..=p {
+            parts.clear();
+            for (pre, rest) in &items {
+                let t = if i < pre.len() { Some(pre[i]) } else { *rest };
+                parts.push(match t {
+                    Some(t) => self.cl.of(t)?,
+                    None => ANY,
+                });
+            }
+            slots.push(self.cl.union(&parts)?);
+        }
+        self.upper += states;
+        children.extend(&slots);
+        Ok(Some(ArrSpec { slots, counts }))
+    }
 
-        // Número.
+    /// El estado de número propio y sus comprobaciones al cerrarlo.
+    fn number(
+        &mut self,
+        ir: &'a VerifiedIr,
+        comps: &[NodeId],
+        opts: &BuildOptions,
+    ) -> Result<Option<NumSpec<'a>>, BuildError> {
         let mut num = Vec::new();
         let mut n_num = 0;
-        for &id in &comps {
+        for &id in comps {
             let node = ir.node(id);
             let antes = num.len();
             if let Some(i) = integer_only(node) {
@@ -641,18 +638,26 @@ impl<'a> Analysis<'a> {
             }
             n_num += usize::from(num.len() > antes);
         }
-        if !num.is_empty() {
-            product(self, n_num, 1, true)?;
-            self.upper += 1;
-            self.extra += num.len();
-            info.num = Some(NumSpec { checks: num });
+        if num.is_empty() {
+            return Ok(None);
         }
+        self.product(ir, comps, opts, n_num, 1, true)?;
+        self.upper += 1;
+        self.extra += num.len();
+        Ok(Some(NumSpec { checks: num }))
+    }
 
-        // Cadena.
+    /// El subautómata de cadena: el trie de la unión de los literales.
+    fn string(
+        &mut self,
+        ir: &'a VerifiedIr,
+        comps: &[NodeId],
+        opts: &BuildOptions,
+    ) -> Result<Option<StrSpec<'a>>, BuildError> {
         let mut lits = Vec::new();
         let mut lens = Vec::new();
         let mut n_str = 0;
-        for &id in &comps {
+        for &id in comps {
             let antes = lits.len() + lens.len();
             for (i, c) in ir.node(id).rules.iter().enumerate() {
                 match &c.rule {
@@ -673,32 +678,31 @@ impl<'a> Analysis<'a> {
             }
             n_str += usize::from(lits.len() + lens.len() > antes);
         }
-        if !lits.is_empty() || !lens.is_empty() {
-            let mut words: Vec<&'a str> = Vec::new();
-            let mut seen = HashSet::new();
-            for &(_, _, k) in &lits {
-                let mut v: Vec<&'a str> = self.strsets[k as usize].iter().copied().collect();
-                v.sort_unstable();
-                for w in v {
-                    if seen.insert(w) {
-                        words.push(w);
-                    }
+        if lits.is_empty() && lens.is_empty() {
+            return Ok(None);
+        }
+        let mut words: Vec<&'a str> = Vec::new();
+        let mut seen = HashSet::new();
+        for &(_, _, k) in &lits {
+            let mut v: Vec<&'a str> = self.strsets[k as usize].iter().copied().collect();
+            v.sort_unstable();
+            for w in v {
+                if seen.insert(w) {
+                    words.push(w);
                 }
             }
-            let states = trie_size(&words);
-            product(self, n_str, states, true)?;
-            self.upper += states;
-            // El cierre de cada estado del trie lleva una comprobación por
-            // literal que no contiene su palabra y una por longitud: como
-            // mucho estados × (literales + longitudes).
-            self.extra = self
-                .extra
-                .saturating_add(states.saturating_mul(lits.len() + lens.len()));
-            self.chars.extend(words.iter().flat_map(|w| w.chars()));
-            info.string = Some(StrSpec { lits, lens, words });
         }
-        children.retain(|&c| c != ANY);
-        Ok((info, children))
+        let states = trie_size(&words);
+        self.product(ir, comps, opts, n_str, states, true)?;
+        self.upper += states;
+        // El cierre de cada estado del trie lleva una comprobación por
+        // literal que no contiene su palabra y una por longitud: como
+        // mucho estados × (literales + longitudes).
+        self.extra = self
+            .extra
+            .saturating_add(states.saturating_mul(lits.len() + lens.len()));
+        self.chars.extend(words.iter().flat_map(|w| w.chars()));
+        Ok(Some(StrSpec { lits, lens, words }))
     }
 
     /// La máscara de [`entry_fails`] de la regla `i` de `id` sobre las 7
@@ -768,22 +772,6 @@ impl<'a> Analysis<'a> {
     }
 }
 
-/// `n` como índice `u32` de una tabla del análisis, o `limit`.
-fn table_index(n: usize) -> Result<u32, BuildError> {
-    u32::try_from(n).map_err(|_| BuildError::Limit {
-        what: "entradas de una tabla de M (índices de 32 bits)",
-        limit: u32::MAX as usize,
-        found: n,
-        location: "#".to_owned(),
-    })
-}
-
-/// Entradas del presupuesto de F4-U6 (precisado en F4.1b): las de δ
-/// (|Q| · |Σ|) más las de las tablas que crecen con los productos.
-fn budget(upper: usize, n_classes: usize, extra: usize) -> usize {
-    upper.saturating_mul(n_classes).saturating_add(extra)
-}
-
 /// Si la regla falla al empezar un valor con la clase `a` (decidido al
 /// compilar): `false`, `type` y el tipo de los literales de `enum`/`const`.
 fn entry_fails(rule: &Rule, a: u32) -> bool {
@@ -843,17 +831,6 @@ fn literal_admits(lit: &Literal, a: u32) -> bool {
     }
 }
 
-/// El presupuesto de F4-U6 agotado, con la ubicación del conjunto que lo
-/// agotó (o la raíz, en la comprobación final).
-fn delta_limit(upper: usize, n_classes: usize, extra: usize, location: String) -> BuildError {
-    BuildError::Limit {
-        what: "entradas de las tablas como mucho (cota de estados × clases de δ, más comprobaciones, máscaras y lexemas)",
-        limit: MAX_DELTA,
-        found: budget(upper, n_classes, extra),
-        location,
-    }
-}
-
 /// F4-U6: el divisor de `multipleOf` pasa del tope (`limit` con la
 /// ubicación de la regla).
 fn divisor_limit(ir: &VerifiedIr, id: NodeId, e: DivisorError) -> BuildError {
@@ -876,9 +853,6 @@ fn divisor_limit(ir: &VerifiedIr, id: NodeId, e: DivisorError) -> BuildError {
 }
 
 // ------------------------------------------------------------ builder ---
-
-/// Un trie incrustado: el estado de M de cada estado del trie, y el trie.
-type TrieStates = (Vec<u32>, Dfa<Option<u32>>);
 
 /// Estados de entrada de un conjunto (o de «cualquiera»).
 #[derive(Clone, Copy)]
@@ -924,26 +898,17 @@ struct ObjectStatesAny {
 struct Builder<'a> {
     ir: &'a VerifiedIr,
     an: Analysis<'a>,
-    n_classes: u32,
-    /// Punto de código → clase de carácter (1..; 0 es «otro»).
-    char_class: HashMap<char, u32>,
-    a: Automaton,
-    trans_ids: HashMap<Trans, u32>,
-    rule_ids: HashMap<(NodeId, usize), u32>,
-    loc_ids: HashMap<NodeId, (u32, u32)>,
+    /// Las tablas en construcción y sus memorias comunes (F4.1b-CR-S6).
+    t: Emitter<'a>,
     entry_ids: HashMap<(SetId, u32, u32, bool), u32>,
     /// Comprobaciones de la entrada de un valor de cada conjunto con cada
     /// clase, compartidas por todas las transiciones de entrada con
     /// retornos distintos (ronda 2 de F4.1b, I1).
     entry_checks: HashMap<(SetId, u32), (u32, u32)>,
-    /// Lexema de cada cota, divisor de cada `multipleOf` y rango de cada
-    /// `enum` numérico en las tablas: una vez por regla.
-    lexeme_ids: HashMap<(NodeId, usize), u32>,
+    /// Divisor de cada `multipleOf` y rango de cada `enum` numérico en las
+    /// tablas: una vez por regla (los lexemas de las cotas, en `t`).
     divisor_ids: HashMap<(NodeId, usize), u32>,
     enum_ranges: HashMap<u32, u32>,
-    /// El primer error al rellenar (un índice que no cabe en `u32`, un nombre
-    /// fuera de la unión): `finish` lo devuelve.
-    error: Option<BuildError>,
     any: SetStates,
     sets: Vec<Option<SetStates>>,
     objects: Vec<Option<(ObjectStates, Dfa<Option<u32>>)>>,
@@ -958,69 +923,25 @@ struct Builder<'a> {
 }
 
 impl<'a> Builder<'a> {
-    fn new(ir: &'a VerifiedIr, an: Analysis<'a>) -> Result<Self, BuildError> {
+    fn new(ir: &'a VerifiedIr, an: Analysis<'a>, opts: &BuildOptions) -> Result<Self, BuildError> {
         // Clases de carácter: un punto de código distinto por carácter de
         // algún nombre con bit o de alguna cadena de un `enum`/`const`
         // (F4-B3, partición común de claves y valores); los demás, la 0.
         let n_classes = class::CHAR as usize + 1 + an.chars.len();
-        if budget(an.upper, n_classes, an.extra) > MAX_DELTA {
+        if budget(an.upper, n_classes, an.extra) > opts.max_delta {
             return Err(delta_limit(
                 an.upper,
                 n_classes,
                 an.extra,
+                opts.max_delta,
                 location_clipped(ir, NodeId::ROOT, LOCATION_MAX),
             ));
         }
         // Desde aquí |Q|, |Σ|, los estados de cada trie y las clases son
         // ≤ 2²⁰, así que sus conversiones a `u32` no truncan; las longitudes
         // de las tablas pasan por `idx`.
-        let char_class: HashMap<char, u32> = an
-            .chars
-            .iter()
-            .enumerate()
-            .map(|(i, &c)| (c, i as u32 + 1))
-            .collect();
-        let mut class_names: Vec<String> = class::NAMES.iter().map(|s| (*s).to_owned()).collect();
-        class_names.push("otro".to_owned());
-        class_names.extend(an.chars.iter().map(|c| format!("'{c}'")));
-        let mut ascii = vec![0u32; 128];
-        let mut ranges = Vec::new();
-        for (&c, &k) in &char_class {
-            if (c as u32) < 128 {
-                ascii[c as usize] = k;
-            } else {
-                ranges.push(CharRange {
-                    lo: c as u32,
-                    hi: c as u32,
-                    class: k,
-                });
-            }
-        }
-        ranges.sort_by_key(|r| r.lo);
+        let t = Emitter::new(ir, &an.chars, &class::NAMES, an.upper, an.products);
         let n_sets = an.cl.sets.len();
-        let a = Automaton {
-            n_classes: n_classes as u32,
-            start: 0,
-            accept: 0,
-            delta: Vec::with_capacity(an.upper * n_classes),
-            trans: Vec::new(),
-            checks: Vec::new(),
-            frames: Vec::new(),
-            masks: Vec::new(),
-            deps: Vec::new(),
-            nums: Vec::new(),
-            lexemes: Vec::new(),
-            divisors: Vec::new(),
-            ascii,
-            ranges,
-            rules: Vec::new(),
-            text: Vec::new(),
-            states: Vec::new(),
-            groups: Vec::new(),
-            class_names,
-            frame_names: Vec::new(),
-            products: an.products,
-        };
         let empty = SetStates {
             obj_first: 0,
             obj_frame: 0,
@@ -1032,18 +953,11 @@ impl<'a> Builder<'a> {
         let mut b = Builder {
             ir,
             an,
-            n_classes: n_classes as u32,
-            char_class,
-            a,
-            trans_ids: HashMap::new(),
-            rule_ids: HashMap::new(),
-            loc_ids: HashMap::new(),
+            t,
             entry_ids: HashMap::new(),
             entry_checks: HashMap::new(),
-            lexeme_ids: HashMap::new(),
             divisor_ids: HashMap::new(),
             enum_ranges: HashMap::new(),
-            error: None,
             any: empty,
             sets: (0..n_sets).map(|_| None).collect(),
             objects: (0..n_sets).map(|_| None).collect(),
@@ -1067,135 +981,51 @@ impl<'a> Builder<'a> {
             root_start: 0,
             root_done: 0,
         };
-        // La transición 0 es el error de sintaxis (model::ERROR).
-        b.simple(Op::Fail(Fault::Syntax), 0);
         b.reserve();
         Ok(b)
     }
 
     // ----------------------------------------------------- reservas ---
 
-    /// `n` como índice `u32` de las tablas; si no cabe, guarda un `limit`
-    /// (que devuelve `finish`) en vez de truncar: un índice truncado
-    /// señalaría otra entrada válida y daría un veredicto incorrecto.
-    fn idx(&mut self, n: usize) -> u32 {
-        match u32::try_from(n) {
-            Ok(v) => v,
-            Err(_) => {
-                if self.error.is_none() {
-                    self.error = Some(BuildError::Limit {
-                        what: "entradas de una tabla de M (índices de 32 bits)",
-                        limit: u32::MAX as usize,
-                        found: n,
-                        location: "#".to_owned(),
-                    });
-                }
-                u32::MAX
-            }
-        }
-    }
-
-    /// El último índice de una tabla de `len` entradas.
-    fn last(&mut self, len: usize) -> u32 {
-        self.idx(len.saturating_sub(1))
-    }
-
-    fn internal(&mut self, m: String) {
-        if self.error.is_none() {
-            self.error = Some(BuildError::Internal(m));
-        }
-    }
-
-    fn group(&mut self, name: String) -> u32 {
-        self.a.groups.push(name);
-        self.last(self.a.groups.len())
-    }
-
-    fn state(&mut self, group: u32, name: impl Into<String>) -> u32 {
-        self.a.states.push(StateInfo {
-            group,
-            name: name.into(),
-        });
-        self.a
-            .delta
-            .extend(std::iter::repeat_n(0, self.n_classes as usize));
-        self.last(self.a.states.len())
-    }
-
-    fn frame(&mut self, words: u32, mask_words: u32, name: String) -> u32 {
-        self.a.frames.push(Frame {
-            words,
-            mask_words,
-            slots: 0,
-            gates: 0,
-            n_gates: 0,
-        });
-        self.a.frame_names.push(name);
-        self.last(self.a.frames.len())
-    }
-
     fn array_states(&mut self, g: u32, p: usize) -> ArrayStates {
-        let first = self.state(g, "[ primero");
+        let first = self.t.state(g, "[ primero");
         let next = if p == 0 {
-            vec![self.state(g, "[ tras ,")]
+            vec![self.t.state(g, "[ tras ,")]
         } else {
             std::iter::once(u32::MAX)
-                .chain((1..=p).map(|i| self.state(g, format!("[ valor {i}"))))
+                .chain((1..=p).map(|i| self.t.state(g, format!("[ valor {i}"))))
                 .collect()
         };
         let after = (0..=p)
-            .map(|i| self.state(g, format!("[ tras valor {i}")))
+            .map(|i| self.t.state(g, format!("[ tras valor {i}")))
             .collect();
         ArrayStates { first, next, after }
     }
 
-    fn classes_of(&self, w: &str) -> Vec<usize> {
-        w.chars()
-            .map(|c| self.char_class.get(&c).copied().unwrap_or(0) as usize)
-            .collect()
-    }
-
-    /// Un trie como grupo de estados: (estado de cada estado del trie, trie).
-    fn trie_states(&mut self, g: u32, words: &[&str], pre: &str, dead: &str) -> TrieStates {
-        let ws: Vec<Vec<usize>> = words.iter().map(|w| self.classes_of(w)).collect();
-        let trie = Dfa::trie(self.n_classes as usize - class::CHAR as usize, &ws);
-        let prefixes = prefix_names(&trie, words, &ws);
-        let mut states = Vec::with_capacity(trie.n_states());
-        for s in 0..trie.n_states() as u32 {
-            let name = if trie.is_dead(s) {
-                dead.to_owned()
-            } else {
-                format!("{pre}«{}»", prefixes[s as usize])
-            };
-            states.push(self.state(g, name));
-        }
-        (states, trie)
-    }
-
     /// Reserva todos los estados y marcos (sin rellenar δ).
     fn reserve(&mut self) {
-        let g = self.group("raíz (Z₀)".to_owned());
-        self.root_start = self.state(g, "q₀");
-        self.root_done = self.state(g, "fin");
-        self.a.start = self.root_start;
-        self.a.accept = self.root_done;
+        let g = self.t.group("raíz (Z₀)".to_owned());
+        self.root_start = self.t.state(g, "q₀");
+        self.root_done = self.t.state(g, "fin");
+        self.t.a.start = self.root_start;
+        self.t.a.accept = self.root_done;
 
-        let g = self.group("cualquiera: objeto".to_owned());
+        let g = self.t.group("cualquiera: objeto".to_owned());
         self.any_object = ObjectStatesAny {
-            first: self.state(g, "{ primero"),
-            next: self.state(g, "{ tras ,"),
-            key: self.state(g, "clave"),
-            colon: self.state(g, "tras clave"),
-            value: self.state(g, "tras :"),
-            after: self.state(g, "tras valor"),
+            first: self.t.state(g, "{ primero"),
+            next: self.t.state(g, "{ tras ,"),
+            key: self.t.state(g, "clave"),
+            colon: self.t.state(g, "tras clave"),
+            value: self.t.state(g, "tras :"),
+            after: self.t.state(g, "tras valor"),
         };
-        let any_obj_frame = self.frame(0, 0, "cualquiera: objeto".to_owned());
-        let g = self.group("cualquiera: arreglo".to_owned());
+        let any_obj_frame = self.t.frame(0, 0, "cualquiera: objeto".to_owned());
+        let g = self.t.group("cualquiera: arreglo".to_owned());
         self.any_array = self.array_states(g, 0);
-        let any_arr_frame = self.frame(0, 0, "cualquiera: arreglo".to_owned());
-        let g = self.group("cualquiera: escalares".to_owned());
-        self.any_string = self.state(g, "cadena");
-        self.any_number = self.state(g, "número");
+        let any_arr_frame = self.t.frame(0, 0, "cualquiera: arreglo".to_owned());
+        let g = self.t.group("cualquiera: escalares".to_owned());
+        self.any_string = self.t.state(g, "cadena");
+        self.any_number = self.t.state(g, "número");
         self.any = SetStates {
             obj_first: self.any_object.first,
             obj_frame: any_obj_frame,
@@ -1213,30 +1043,31 @@ impl<'a> Builder<'a> {
             let loc = label(self.ir, self.an.cl.sets.get(s));
             let mut st = self.any;
             if let Some(o) = &info.obj {
-                let g = self.group(format!("objeto {loc}"));
-                let first = self.state(g, "{ primero");
-                let next = self.state(g, "{ tras ,");
+                let g = self.t.group(format!("objeto {loc}"));
+                let first = self.t.state(g, "{ primero");
+                let next = self.t.state(g, "{ tras ,");
                 let (trie_states, trie) =
-                    self.trie_states(g, &o.names, "clave ", "clave desconocida");
+                    self.t
+                        .trie_states(g, &o.names, "clave ", "clave desconocida");
                 let after_key = o
                     .names
                     .iter()
                     .map(|n| {
                         (
-                            self.state(g, format!("tras «{}»", clip(n))),
-                            self.state(g, format!("valor «{}»", clip(n))),
+                            self.t.state(g, format!("tras «{}»", clip(n))),
+                            self.t.state(g, format!("valor «{}»", clip(n))),
                         )
                     })
                     .collect();
                 let unk_key = (
-                    self.state(g, "tras clave desconocida"),
-                    self.state(g, "valor desconocido"),
+                    self.t.state(g, "tras clave desconocida"),
+                    self.t.state(g, "valor desconocido"),
                 );
-                let after = self.state(g, "tras valor");
+                let after = self.t.state(g, "tras valor");
                 let mask = o.names.len().div_ceil(64) as u32;
                 let words = mask + u32::from(!o.counts.is_empty());
                 st.obj_first = first;
-                st.obj_frame = self.frame(words, mask, format!("objeto {loc}"));
+                st.obj_frame = self.t.frame(words, mask, format!("objeto {loc}"));
                 self.objects[s as usize] = Some((
                     ObjectStates {
                         first,
@@ -1250,15 +1081,15 @@ impl<'a> Builder<'a> {
                 ));
             }
             if let Some(arr) = &info.arr {
-                let g = self.group(format!("arreglo {loc}"));
+                let g = self.t.group(format!("arreglo {loc}"));
                 let states = self.array_states(g, arr.slots.len() - 1);
                 st.arr_first = states.first;
                 let words = u32::from(!arr.counts.is_empty());
-                st.arr_frame = self.frame(words, 0, format!("arreglo {loc}"));
+                st.arr_frame = self.t.frame(words, 0, format!("arreglo {loc}"));
                 self.arrays[s as usize] = Some(states);
             }
             if info.num.is_some() {
-                let g = self.group(format!("número {loc}"));
+                let g = self.t.group(format!("número {loc}"));
                 let name = if info
                     .num
                     .as_ref()
@@ -1268,11 +1099,13 @@ impl<'a> Builder<'a> {
                 } else {
                     "número"
                 };
-                st.number = self.state(g, name);
+                st.number = self.t.state(g, name);
             }
             if let Some(sp) = &info.string {
-                let g = self.group(format!("cadena {loc}"));
-                let (states, trie) = self.trie_states(g, &sp.words, "", "fuera de los literales");
+                let g = self.t.group(format!("cadena {loc}"));
+                let (states, trie) = self
+                    .t
+                    .trie_states(g, &sp.words, "", "fuera de los literales");
                 st.string = states[trie.start as usize];
                 self.strings[s as usize] = Some((states, trie));
             }
@@ -1282,122 +1115,6 @@ impl<'a> Builder<'a> {
     }
 
     // --------------------------------------------------- rellenado ---
-
-    fn set(&mut self, q: u32, a: u32, t: u32) {
-        self.a.delta[q as usize * self.n_classes as usize + a as usize] = t;
-    }
-
-    fn trans(&mut self, t: Trans) -> u32 {
-        if let Some(&id) = self.trans_ids.get(&t) {
-            return id;
-        }
-        self.a.trans.push(t);
-        let id = self.last(self.a.trans.len());
-        self.trans_ids.insert(t, id);
-        id
-    }
-
-    fn with_checks(&mut self, op: Op, next: u32, list: Vec<Check>) -> u32 {
-        let (checks, n_checks) = self.checks(list);
-        self.trans(Trans {
-            op,
-            next,
-            ret: 0,
-            frame: 0,
-            bit: NO_BIT,
-            count: false,
-            checks,
-            n_checks,
-            outs: OUT_IDENTITY,
-        })
-    }
-
-    fn simple(&mut self, op: Op, next: u32) -> u32 {
-        self.with_checks(op, next, Vec::new())
-    }
-
-    fn mv(&mut self, next: u32) -> u32 {
-        self.simple(Op::Move, next)
-    }
-
-    /// Índice de la regla `i` del nodo en la tabla de reglas: la
-    /// comprobación se **atribuye a su componente** (su nodo y su regla).
-    fn rule(&mut self, node: NodeId, i: usize) -> u32 {
-        if let Some(&r) = self.rule_ids.get(&(node, i)) {
-            return r;
-        }
-        let (loc, loc_len) = match self.loc_ids.get(&node) {
-            Some(&l) => l,
-            None => {
-                let s = location_clipped(self.ir, node, LOCATION_MAX);
-                let l = (self.idx(self.a.text.len()), self.idx(s.len()));
-                self.a.text.extend_from_slice(s.as_bytes());
-                self.loc_ids.insert(node, l);
-                l
-            }
-        };
-        let kind = self.ir.node(node).rules[i].rule.kind();
-        let node_ix = self.idx(node.index());
-        self.a.rules.push(RuleRef {
-            node: node_ix,
-            kind: kind as u32,
-            loc,
-            loc_len,
-        });
-        let r = self.last(self.a.rules.len());
-        self.rule_ids.insert((node, i), r);
-        r
-    }
-
-    fn check(&mut self, node: NodeId, i: usize, test: Test, arg: u32, len: u32) -> Check {
-        let kind = self.ir.node(node).rules[i].rule.kind();
-        Check {
-            test,
-            rule: self.rule(node, i),
-            cost: cost(kind),
-            slot: 0,
-            arg,
-            len,
-        }
-    }
-
-    fn bound(&mut self, (id, i, test, n): Bound) -> Check {
-        let (arg, len) = Check::split(n);
-        self.check(id, i, test, arg, len)
-    }
-
-    /// Guarda las comprobaciones ordenadas por costo (estable: a igualdad,
-    /// el orden de las reglas) y devuelve (inicio, número).
-    fn checks(&mut self, mut list: Vec<Check>) -> (u32, u32) {
-        if list.is_empty() {
-            return (0, 0);
-        }
-        list.sort_by_key(|c| c.cost);
-        let ini = self.idx(self.a.checks.len());
-        let n = self.idx(list.len());
-        self.a.checks.extend(list);
-        (ini, n)
-    }
-
-    /// El lexema de la regla `i` de `id` (una cota o un divisor), guardado
-    /// una sola vez aunque lo lean muchos conjuntos.
-    fn rule_lexeme(&mut self, id: NodeId, i: usize, l: &str) -> u32 {
-        if let Some(&k) = self.lexeme_ids.get(&(id, i)) {
-            return k;
-        }
-        let k = self.lexeme(l);
-        self.lexeme_ids.insert((id, i), k);
-        k
-    }
-
-    /// Guarda un lexema del esquema y devuelve su índice en `nums`.
-    fn lexeme(&mut self, l: &str) -> u32 {
-        let off = self.idx(self.a.lexemes.len());
-        let len = self.idx(l.len());
-        self.a.nums.push(Lexeme { off, len });
-        self.a.lexemes.extend_from_slice(l.as_bytes());
-        self.last(self.a.nums.len())
-    }
 
     fn states_of(&self, s: SetId) -> SetStates {
         self.sets
@@ -1422,21 +1139,27 @@ impl<'a> Builder<'a> {
             None => {
                 let comps = self.an.cl.sets.get(s).to_vec();
                 let mut list = Vec::new();
-                let bit = class::VALUE_STARTS
-                    .iter()
-                    .position(|&x| x == a)
-                    .unwrap_or(0);
+                // `entry` solo se llama con las clases que empiezan un valor;
+                // otra es un error interno, nunca el bit de `{` en silencio
+                // (F4.1b-CR3-S3).
+                let bit = match class::VALUE_STARTS.iter().position(|&x| x == a) {
+                    Some(b) => b,
+                    None => {
+                        self.t.internal(format!("clase {a} al empezar un valor"));
+                        0
+                    }
+                };
                 for id in comps {
                     let node = self.ir.node(id);
                     for (i, c) in node.rules.iter().enumerate() {
                         // La máscara ya calculada en el análisis: O(reglas)
                         // por conjunto, sin volver a recorrer los literales.
                         if self.an.entry_mask(id, i, &c.rule) & (1 << bit) != 0 {
-                            list.push(self.check(id, i, Test::Fails, 0, 0));
+                            list.push(self.t.check(id, i, Test::Fails, 0, 0));
                         }
                     }
                 }
-                let c = self.checks(list);
+                let c = self.t.checks(list);
                 self.entry_checks.insert((s, a), c);
                 c
             }
@@ -1448,33 +1171,44 @@ impl<'a> Builder<'a> {
             class::NUMBER_BEGIN => (Op::Enter, st.number, 0),
             _ => (Op::Move, ret, 0),
         };
-        let t = self.trans(Trans {
-            op,
-            next,
+        let (counts, n_counts) = self.count_op(count);
+        let t = self.t.trans(Trans {
             ret: if op == Op::Move { 0 } else { ret },
             frame,
-            bit: NO_BIT,
-            count,
+            counts,
+            n_counts,
             checks,
             n_checks,
-            outs: OUT_IDENTITY,
+            ..plain(op, next)
         });
         self.entry_ids.insert((s, a, ret, count), t);
         t
+    }
+
+    /// La operación «suma 1 al contador del marco» (el único de un objeto o
+    /// un arreglo JSON, el 0), o ninguna.
+    fn count_op(&mut self, count: bool) -> (u32, u32) {
+        if !count {
+            return (0, 0);
+        }
+        self.t.counter_ops(&[CounterOp {
+            counter: 0,
+            op: CountOp::Add,
+        }])
     }
 
     /// Las siete clases que empiezan un valor de `s`, en `q`.
     fn value(&mut self, q: u32, s: SetId, ret: u32, count: bool) {
         for a in class::VALUE_STARTS {
             let t = self.entry(s, a, ret, count);
-            self.set(q, a, t);
+            self.t.set(q, a, t);
         }
     }
 
     fn chars(&mut self, q: u32, to: u32) {
-        let t = self.mv(to);
-        for a in class::CHAR..self.n_classes {
-            self.set(q, a, t);
+        let t = self.t.mv(to);
+        for a in class::CHAR..self.t.n_classes {
+            self.t.set(q, a, t);
         }
     }
 
@@ -1486,21 +1220,21 @@ impl<'a> Builder<'a> {
         let o = &self.any_object;
         let (first, next, key, colon, value, after) =
             (o.first, o.next, o.key, o.colon, o.value, o.after);
-        let pop = self.simple(Op::Pop, 0);
-        let to_key = self.mv(key);
+        let pop = self.t.simple(Op::Pop, 0);
+        let to_key = self.t.mv(key);
         for q in [first, next] {
-            self.set(q, class::STRING_BEGIN, to_key);
+            self.t.set(q, class::STRING_BEGIN, to_key);
         }
-        self.set(first, class::END_OBJECT, pop);
+        self.t.set(first, class::END_OBJECT, pop);
         self.chars(key, key);
-        let t = self.mv(colon);
-        self.set(key, class::STRING_END, t);
-        let t = self.mv(value);
-        self.set(colon, class::COLON, t);
+        let t = self.t.mv(colon);
+        self.t.set(key, class::STRING_END, t);
+        let t = self.t.mv(value);
+        self.t.set(colon, class::COLON, t);
         self.value(value, ANY, after, false);
-        let t = self.mv(next);
-        self.set(after, class::COMMA, t);
-        self.set(after, class::END_OBJECT, pop);
+        let t = self.t.mv(next);
+        self.t.set(after, class::COMMA, t);
+        self.t.set(after, class::END_OBJECT, pop);
 
         // Arreglo «cualquiera», cadena y número.
         let arr = std::mem::replace(
@@ -1515,11 +1249,11 @@ impl<'a> Builder<'a> {
         self.any_array = arr;
         let (s, n) = (self.any_string, self.any_number);
         self.chars(s, s);
-        let leave = self.simple(Op::Leave, 0);
-        self.set(s, class::STRING_END, leave);
-        let t = self.mv(n);
-        self.set(n, class::NUMBER_BYTE, t);
-        self.set(n, class::NUMBER_END, leave);
+        let leave = self.t.simple(Op::Leave, 0);
+        self.t.set(s, class::STRING_END, leave);
+        let t = self.t.mv(n);
+        self.t.set(n, class::NUMBER_BYTE, t);
+        self.t.set(n, class::NUMBER_END, leave);
 
         for k in 0..self.an.order.len() {
             let s = self.an.order[k];
@@ -1547,16 +1281,16 @@ impl<'a> Builder<'a> {
 
     fn fill_array(&mut self, arr: &ArrayStates, slots: &[SetId], counts: &[Bound]) {
         let p = slots.len() - 1;
-        let list: Vec<Check> = counts.iter().map(|&b| self.bound(b)).collect();
+        let list: Vec<Check> = counts.iter().map(|&b| self.t.bound(b)).collect();
         let count = !counts.is_empty();
-        let pop = self.with_checks(Op::Pop, 0, list);
-        self.set(arr.first, class::END_ARRAY, pop);
+        let pop = self.t.with_checks(Op::Pop, 0, list);
+        self.t.set(arr.first, class::END_ARRAY, pop);
         self.value(arr.first, slots[0], arr.after[0], count);
         for i in 0..=p {
             let n = arr.next[(i + 1).min(p)];
-            let t = self.mv(n);
-            self.set(arr.after[i], class::COMMA, t);
-            self.set(arr.after[i], class::END_ARRAY, pop);
+            let t = self.t.mv(n);
+            self.t.set(arr.after[i], class::COMMA, t);
+            self.t.set(arr.after[i], class::END_ARRAY, pop);
         }
         // Con `prefixItems`, el elemento 0 lo espera «primero» y los demás
         // `next[i]`; sin ellos, `next[0]` espera todos los siguientes.
@@ -1570,48 +1304,48 @@ impl<'a> Builder<'a> {
         let mut list = Vec::new();
         for &(id, i, ref t) in &spec.checks {
             let c = match *t {
-                NumTest::Integer => self.check(id, i, Test::Integer, 0, 0),
+                NumTest::Integer => self.t.check(id, i, Test::Integer, 0, 0),
                 NumTest::Cmp(test, l) => {
-                    let arg = self.rule_lexeme(id, i, l);
-                    self.check(id, i, test, arg, 0)
+                    let arg = self.t.rule_lexeme(id, i, l);
+                    self.t.check(id, i, test, arg, 0)
                 }
                 NumTest::Multiple(l, div) => {
                     let arg = match self.divisor_ids.get(&(id, i)) {
                         Some(&d) => d,
                         None => {
-                            let lexeme = self.rule_lexeme(id, i, l);
-                            self.a.divisors.push(DivisorRef { lexeme, div });
-                            let d = self.last(self.a.divisors.len());
+                            let lexeme = self.t.rule_lexeme(id, i, l);
+                            self.t.a.divisors.push(DivisorRef { lexeme, div });
+                            let d = self.t.last(self.t.a.divisors.len());
                             self.divisor_ids.insert((id, i), d);
                             d
                         }
                     };
-                    self.check(id, i, Test::MultipleOf, arg, 0)
+                    self.t.check(id, i, Test::MultipleOf, arg, 0)
                 }
                 NumTest::Enum(k) => {
                     let n = self.an.enums[k as usize].len();
                     let arg = match self.enum_ranges.get(&k) {
                         Some(&a) => a,
                         None => {
-                            let a = self.idx(self.a.nums.len());
+                            let a = self.t.idx(self.t.a.nums.len());
                             for j in 0..n {
                                 let l = self.an.enums[k as usize][j];
-                                self.lexeme(l);
+                                self.t.lexeme(l);
                             }
                             self.enum_ranges.insert(k, a);
                             a
                         }
                     };
-                    let len = self.idx(n);
-                    self.check(id, i, Test::NumEnum, arg, len)
+                    let len = self.t.idx(n);
+                    self.t.check(id, i, Test::NumEnum, arg, len)
                 }
             };
             list.push(c);
         }
-        let leave = self.with_checks(Op::Leave, 0, list);
-        let t = self.mv(q);
-        self.set(q, class::NUMBER_BYTE, t);
-        self.set(q, class::NUMBER_END, leave);
+        let leave = self.t.with_checks(Op::Leave, 0, list);
+        let t = self.t.mv(q);
+        self.t.set(q, class::NUMBER_BYTE, t);
+        self.t.set(q, class::NUMBER_END, leave);
     }
 
     fn fill_string(&mut self, s: SetId, spec: &StrSpec<'_>) {
@@ -1622,22 +1356,22 @@ impl<'a> Builder<'a> {
         for ts in 0..trie.n_states() as u32 {
             let q = states[ts as usize];
             for a in 0..k {
-                let t = self.mv(states[trie.next(ts, a) as usize]);
-                self.set(q, class::CHAR + a as u32, t);
+                let t = self.t.mv(states[trie.next(ts, a) as usize]);
+                self.t.set(q, class::CHAR + a as u32, t);
             }
             let word = trie.out[ts as usize].map(|w| spec.words[w as usize]);
             let mut list = Vec::new();
             for &(id, i, k) in &spec.lits {
                 let set = &self.an.strsets[k as usize];
                 if !word.is_some_and(|w| set.contains(w)) {
-                    list.push(self.check(id, i, Test::Fails, 0, 0));
+                    list.push(self.t.check(id, i, Test::Fails, 0, 0));
                 }
             }
             for &b in &spec.lens {
-                list.push(self.bound(b));
+                list.push(self.t.bound(b));
             }
-            let leave = self.with_checks(Op::Leave, 0, list);
-            self.set(q, class::STRING_END, leave);
+            let leave = self.t.with_checks(Op::Leave, 0, list);
+            self.t.set(q, class::STRING_END, leave);
         }
         self.strings[s as usize] = Some((states, trie));
     }
@@ -1660,104 +1394,85 @@ impl<'a> Builder<'a> {
         let bit = |b: &mut Self, n: &str| match bits.get(n) {
             Some(&k) => k,
             None => {
-                b.internal(format!("el nombre {n:?} no está en la unión del objeto"));
+                b.t.internal(format!("el nombre {n:?} no está en la unión del objeto"));
                 0
             }
         };
         // Máscaras de `required` y de cada lista de `dependentRequired`.
         let mask_of = |b: &mut Self, list: &[String]| -> u32 {
-            let ini = b.a.masks.len();
-            b.a.masks.extend(std::iter::repeat_n(0, words));
+            let ini = b.t.a.masks.len();
+            b.t.a.masks.extend(std::iter::repeat_n(0, words));
             for n in list {
                 let k = bit(b, n) as usize;
-                b.a.masks[ini + k / 64] |= 1 << (k % 64);
+                b.t.a.masks[ini + k / 64] |= 1 << (k % 64);
             }
-            b.idx(ini)
+            b.t.idx(ini)
         };
         let mut pops = Vec::new();
         for &(id, i, req) in &o.required {
             if !req.is_empty() {
                 let m = mask_of(self, req);
-                pops.push(self.check(id, i, Test::Mask, m, 0));
+                pops.push(self.t.check(id, i, Test::Mask, m, 0));
             }
         }
         for &(id, i, dep) in &o.dependent {
-            let ini = self.idx(self.a.deps.len());
+            let ini = self.t.idx(self.t.a.deps.len());
             for (k, l) in dep {
                 if l.is_empty() {
                     continue;
                 }
                 let m = mask_of(self, l);
                 let b = bit(self, k);
-                self.a.deps.push(Dep { bit: b, mask: m });
+                self.t.a.deps.push(Dep { bit: b, mask: m });
             }
-            let n = self.idx(self.a.deps.len()).saturating_sub(ini);
+            let n = self.t.idx(self.t.a.deps.len()).saturating_sub(ini);
             if n > 0 {
-                pops.push(self.check(id, i, Test::Dependent, ini, n));
+                pops.push(self.t.check(id, i, Test::Dependent, ini, n));
             }
         }
         for &b in &o.counts {
-            pops.push(self.bound(b));
+            pops.push(self.t.bound(b));
         }
-        let pop = self.with_checks(Op::Pop, 0, pops);
+        let pop = self.t.with_checks(Op::Pop, 0, pops);
         let start = st.trie[trie.start as usize];
-        let to_key = self.trans(Trans {
-            op: Op::Move,
-            next: start,
-            ret: 0,
-            frame: 0,
-            bit: NO_BIT,
-            count: !o.counts.is_empty(),
-            checks: 0,
-            n_checks: 0,
-            outs: OUT_IDENTITY,
+        let (counts, n_counts) = self.count_op(!o.counts.is_empty());
+        let to_key = self.t.trans(Trans {
+            counts,
+            n_counts,
+            ..plain(Op::Move, start)
         });
-        self.set(st.first, class::STRING_BEGIN, to_key);
-        self.set(st.next, class::STRING_BEGIN, to_key);
-        self.set(st.first, class::END_OBJECT, pop);
+        self.t.set(st.first, class::STRING_BEGIN, to_key);
+        self.t.set(st.next, class::STRING_BEGIN, to_key);
+        self.t.set(st.first, class::END_OBJECT, pop);
         let k = trie.n_classes;
         for ts in 0..trie.n_states() as u32 {
             let q = st.trie[ts as usize];
             for a in 0..k {
-                let t = self.mv(st.trie[trie.next(ts, a) as usize]);
-                self.set(q, class::CHAR + a as u32, t);
+                let t = self.t.mv(st.trie[trie.next(ts, a) as usize]);
+                self.t.set(q, class::CHAR + a as u32, t);
             }
             let end = match trie.out[ts as usize] {
-                Some(j) => self.trans(Trans {
-                    op: Op::Move,
-                    next: st.after_key[j as usize].0,
-                    ret: 0,
-                    frame: 0,
+                Some(j) => self.t.trans(Trans {
                     bit: j,
-                    count: false,
-                    checks: 0,
-                    n_checks: 0,
-                    outs: OUT_IDENTITY,
+                    ..plain(Op::Move, st.after_key[j as usize].0)
                 }),
-                None => self.mv(st.unk_key.0),
+                None => self.t.mv(st.unk_key.0),
             };
-            self.set(q, class::STRING_END, end);
+            self.t.set(q, class::STRING_END, end);
         }
         for (j, &child) in o.children.iter().enumerate() {
             let (k_state, v_state) = st.after_key[j];
-            let t = self.mv(v_state);
-            self.set(k_state, class::COLON, t);
+            let t = self.t.mv(v_state);
+            self.t.set(k_state, class::COLON, t);
             self.value(v_state, child, st.after, false);
         }
-        let t = self.mv(st.unk_key.1);
-        self.set(st.unk_key.0, class::COLON, t);
+        let t = self.t.mv(st.unk_key.1);
+        self.t.set(st.unk_key.0, class::COLON, t);
         self.value(st.unk_key.1, o.unknown, st.after, false);
-        let t = self.mv(st.next);
-        self.set(st.after, class::COMMA, t);
-        self.set(st.after, class::END_OBJECT, pop);
+        let t = self.t.mv(st.next);
+        self.t.set(st.after, class::COMMA, t);
+        self.t.set(st.after, class::END_OBJECT, pop);
         self.objects[s as usize] = Some((st, trie));
-    }
-
-    fn finish(self) -> Result<Automaton, BuildError> {
-        match self.error {
-            Some(e) => Err(e),
-            None => Ok(self.a),
-        }
     }
 }
 
@@ -1774,37 +1489,6 @@ fn admits(set: TypeSet, a: u32) -> bool {
         _ => return set.contains(JsonType::Number) || set.contains(JsonType::Integer),
     };
     set.contains(t)
-}
-
-/// `s` recortado a 32 caracteres para los nombres de estados.
-fn clip(s: &str) -> String {
-    let mut out: String = s.chars().take(32).collect();
-    if s.chars().nth(32).is_some() {
-        out.push('…');
-    }
-    out
-}
-
-/// Prefijo que lee cada estado del trie (para el nombre del estado), de la
-/// primera palabra que pasa por él y recortado a 32 caracteres: O(Σ |w|).
-fn prefix_names(trie: &Dfa<Option<u32>>, names: &[&str], words: &[Vec<usize>]) -> Vec<String> {
-    const MAX: usize = 32;
-    let mut out: Vec<Option<String>> = vec![None; trie.n_states()];
-    out[trie.start as usize] = Some(String::new());
-    for (name, w) in names.iter().zip(words) {
-        let mut q = trie.start;
-        for (i, &a) in w.iter().enumerate() {
-            q = trie.next(q, a);
-            if out[q as usize].is_none() {
-                let mut p: String = name.chars().take((i + 1).min(MAX)).collect();
-                if i + 1 > MAX {
-                    p.push('…');
-                }
-                out[q as usize] = Some(p);
-            }
-        }
-    }
-    out.into_iter().map(Option::unwrap_or_default).collect()
 }
 
 #[cfg(test)]

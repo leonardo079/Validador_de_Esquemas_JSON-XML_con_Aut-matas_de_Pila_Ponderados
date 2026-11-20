@@ -1040,7 +1040,8 @@ las salidas de `schemac` y las doradas de `tests/ir/` no cambian.
     monótono ([numeros-xsd.md](numeros-xsd.md) §6; 5.5-CR-S2). Equivale a comparar
     `round_f32`/`round_f64` de los dos `Num` (nunca NaN tras D24).
   - **Destino:** tarea 5.6.
-- **5.5-P3 (comparadores del payload, Fase 4).**
+- **5.5-P3 (comparadores del payload, Fase 4) — RESUELTO (F4.1c).**
+  - **Resolución (F4.1c):** [fase4/automata.md](../fase4/automata.md) §14: cada estado del AFD de un texto `xs:float`/`xs:double` sabe si leyó un número, `INF`, `-INF` o `NaN`; NaN viola toda faceta de rango y todo `enum`, `INF`/`-INF` se ordenan por encima/debajo de todo valor finito, decidido al compilar (`float_umbral_ieee_nan_e_inf`, `crates/automaton/tests/xml.rs`). Matiz (ronda 1 de F4.1c): lo de «todo `enum`» es el comportamiento del constructor sobre una enumeración finita, pero no se puede probar desde un XSD, porque `xsd::analyze` rechaza `NaN`, `INF` y `-INF` en `xs:enumeration` (D24, `NumError::Special`), así que un `enum` de `xs:float`/`xs:double` solo tiene valores finitos y un NaN o un INF del payload nunca está en él; `fixed='INF'`/`'-INF'`/`'NaN'` sí se prueban (`fixed_infinito_en_flotantes`, `atributos_fixed_por_valor_y_xmlns`).
   - **Dónde:** [ir.md](ir.md) §7, fila Q (`Minimum`…`ExclusiveMaximum` y `Enum` de un texto
     `Float`/`Double`).
   - **Estado:** el contrato está escrito ([numeros-xsd.md](numeros-xsd.md) §6): el texto del
@@ -1076,7 +1077,8 @@ documentación, corregidos en el cierre: la falsa desviación de −0 y la regla
 constantes 768/113 del corte en 800 cifras en `crates/ir/src/num.rs:583-590` y
 [numeros-xsd.md](numeros-xsd.md) §6).
 
-- **5.5-CR-S1 (contrato de la Fase 4 no implementable en el validador generado) → 5.5-P3 / F4.1.**
+- **5.5-CR-S1 (contrato de la Fase 4 no implementable en el validador generado) → 5.5-P3 / F4.1 — RESUELTO (F4.1c).**
+  - **Resolución (F4.1c):** cada cota IEEE se compila a su umbral decimal exacto (punto medio diádico con el vecino y la regla del empate, `crates/automaton/src/text.rs`, `rounding`); `enum` y `fixed` de flotantes, a sus intervalos de redondeo (`Test::NumIn`). El núcleo solo compara lexemas decimales, sin flotantes ni `ir::num` ([fase4/automata.md](../fase4/automata.md) §14).
   - **Dónde:** [numeros-xsd.md](numeros-xsd.md) §6 («Contrato para la Fase 4») y [ir.md](ir.md) §7,
     fila Q.
   - **Estado:** «el comparador redondea el texto del payload con `round_f32`/`round_f64`»
@@ -1152,7 +1154,8 @@ constantes 768/113 del corte en 800 cifras en `crates/ir/src/num.rs:583-590` y
   - **Arreglo:** con el AFD de la tarea `pattern`, comprobar cada enumeración, `default` y `fixed`
     contra las `pattern` de toda la cadena.
   - **Destino:** tarea `pattern` → AFD (Fase 4).
-- **5.6-P3 (`default`/`fixed` sin normalizar en la IR) → F4.1.**
+- **5.6-P3 (`default`/`fixed` sin normalizar en la IR) → F4.1 — RESUELTO (F4.1c).**
+  - **Resolución (F4.1c):** el `fixed` se lee en compilación con `ir::num` (*collapse*, `parse_boolean`, `xsd_number`, `INF`/`-INF`/`NaN` y el desborde como ±INF) y se compara en el espacio de valores; `default` no afecta (`atributos_fixed_por_valor_y_xmlns`, `crates/automaton/tests/xml.rs`; [fase4/automata.md](../fase4/automata.md) §14).
   - **Dónde:** `crates/xsd/src/lower.rs` (`type_rules`, `Attribute::default`/`fixed` sin tocar).
   - **Estado:** el frontal comprueba que son valores del tipo pero los baja tal como los dejó el
     lector (`fixed=" 1 "` en `xs:boolean`, `+09` en `xs:int`; en `xs:float`/`xs:double` pueden ser
@@ -1251,7 +1254,8 @@ S-1, de documentación, corregidos en la ronda).
   - **Arreglo:** si se pone un tope (como el de §1 para JSON Schema), aplicarlo a las tres etapas
     por igual.
   - **Destino:** Fase 7 (servidor) o tarea 5.7.
-- **5.6-CR-S6 (enumeraciones repetidas por valor, nit) → opcional.**
+- **5.6-CR-S6 (enumeraciones repetidas por valor, nit) → opcional — RESUELTO (F4.1c).**
+  - **Resolución (F4.1c):** los `enum` numéricos se ordenan y se quitan los repetidos por valor una vez por regla (`1` y `1.0` en un `xs:decimal` son uno; los de `xs:float`/`xs:double`, por intervalo de redondeo); prueba `tipos_simples_enum_rangos_y_longitudes` (`Talla`, `crates/automaton/tests/xml.rs`).
   - **Dónde:** `crates/xsd/src/lower.rs` (`simple_node`, `Rule::Enum` desde `Own::enums`).
   - **Estado:** `1`, `1.0` y `01` en `xs:decimal` bajan a `[1, 1, 1]`; en `xs:float`, `0.1` y
     `0.10000000149011612` dan dos veces `0.1`. `verify` los admite y el trie de la Fase 4 los
@@ -1305,7 +1309,8 @@ Critical y 0 Important; tres Suggestions).
 
 ### 38. Lo que deja la 5.7
 
-- **5.7-P1 (Glushkov con contadores) → Fase 4 (construcción del autómata de cada modelo).**
+- **5.7-P1 (Glushkov con contadores) → Fase 4 (construcción del autómata de cada modelo) — RESUELTO (F4.1c).**
+  - **Resolución (F4.1c):** [fase4/automata.md](../fase4/automata.md) §12 (`crates/automaton/src/glushkov.rs`): Glushkov sin determinizar con un contador por partícula, transiciones de vuelta y de hermana, guardas como comprobaciones, salida sin el mínimo si el cuerpo es anulable, UPA y determinismo fuerte vueltos a comprobar (`Internal`), y el presupuesto de transiciones de F4-U6 contado antes de materializar los pares. Pruebas: `opcional_con_contador`, `dos_contadores_con_reinicio`, `ir_que_viola_la_upa_da_internal`, `eleccion_ancha_da_limit` (`crates/automaton/tests/glushkov.rs`).
   - **Dónde:** [ir.md](ir.md) §7 (fila Q, `Content`; fila Γ, contadores por partícula) y
     [xsd.md](xsd.md) §11.2.
   - **Estado:** el frontal garantiza dos cosas (corregido en la ronda 1 de la 5.7, I-1): la UPA, que

@@ -67,7 +67,8 @@ fn dot_de_la_dorada() {
 }
 
 /// F4-U5: una regla pendiente es un error del esquema (1) con la tarea y la
-/// ubicación; también un XSD (F4.1c) y los errores de `check`.
+/// ubicación; también el `pattern` de un XSD (F4.4b) y los errores de
+/// `check`.
 #[test]
 fn pendiente_y_errores_dan_1() {
     let p = temporal(
@@ -84,12 +85,13 @@ fn pendiente_y_errores_dan_1() {
     );
     let x = temporal(
         "e.xsd",
-        "<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'><xs:element name='e' type='xs:int'/></xs:schema>",
+        "<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'><xs:element name='e'><xs:simpleType>\
+         <xs:restriction base='xs:string'><xs:pattern value='a+'/></xs:restriction></xs:simpleType></xs:element></xs:schema>",
     );
     let (code, _, err) = schemac(&["automaton".as_ref(), x.as_os_str()]);
     let _ = std::fs::remove_file(&x);
     assert_eq!(code, 1);
-    assert!(err.contains("(F4.1c)"), "{err}");
+    assert!(err.contains("pattern (F4.4b)"), "{err}");
     let (code, _, err) = schemac(&[
         "automaton".as_ref(),
         ruta("schemas/parse-error/coma-final.json").as_os_str(),

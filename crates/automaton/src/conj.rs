@@ -13,6 +13,7 @@
 //! Teoría: `docs/fase4/automata.md` §6.4.
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use ir::{Node, NodeId, Rule};
 
@@ -111,28 +112,32 @@ pub(crate) fn resolve_aliases(nodes: &[Node]) -> Result<Vec<u32>, BuildError> {
     Ok(out)
 }
 
-/// Los conjuntos canónicos, cada uno una vez.
+/// Los conjuntos canónicos, cada uno una vez: la lista y la tabla de ids
+/// comparten la misma copia (`Rc`; F4D-M1 de la ronda 3 de F4.1c: antes cada
+/// conjunto se guardaba dos veces).
 #[derive(Debug)]
 pub(crate) struct Sets {
-    list: Vec<Vec<NodeId>>,
-    ids: HashMap<Vec<NodeId>, SetId>,
+    list: Vec<Rc<[NodeId]>>,
+    ids: HashMap<Rc<[NodeId]>, SetId>,
 }
 
 impl Sets {
     fn new() -> Sets {
+        let vacio: Rc<[NodeId]> = Rc::from(Vec::new());
         Sets {
-            list: vec![Vec::new()],
-            ids: HashMap::from([(Vec::new(), ANY)]),
+            list: vec![Rc::clone(&vacio)],
+            ids: HashMap::from([(vacio, ANY)]),
         }
     }
 
     /// Id de `v` (ya ordenado y sin repetir).
     fn intern(&mut self, v: Vec<NodeId>) -> SetId {
-        if let Some(&id) = self.ids.get(&v) {
+        if let Some(&id) = self.ids.get(v.as_slice()) {
             return id;
         }
         let id = self.list.len() as SetId;
-        self.list.push(v.clone());
+        let v: Rc<[NodeId]> = Rc::from(v);
+        self.list.push(Rc::clone(&v));
         self.ids.insert(v, id);
         id
     }

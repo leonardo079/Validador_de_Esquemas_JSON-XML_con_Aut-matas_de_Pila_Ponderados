@@ -310,13 +310,13 @@ Detalle y decisiones en `tasks/plan.md` («Plan de F4.1»). Una subtarea por vez
 - Presupuesto de transiciones (F4-U6).
 
 **Criterios de aceptación:**
-- [ ] `valid-xml-pedido-01` da 0.
-- [ ] `(a?){2,3}`: `<r/>`, `<r><a/></r>` y tres `a` son válidos; cuatro `a` dan 1 violación. `(a{1,2}, b){2,2}` exige sus mínimos.
-- [ ] `xs:all` acepta cualquier orden; el hijo requerido que falta y el repetido dan violación.
-- [ ] Atributos: el requerido que falta, el no declarado y el `fixed` distinto por valor dan violación; iguales por valor y por tanto válidos: `fixed="1"` en `xs:boolean` frente a `true`, y `+01` frente a `1` en `xs:int`; NaN en `fixed`; `xmlns` se ignora.
-- [ ] `xs:float maxInclusive="0.1"` acepta `0.10000000000000000001` y rechaza el flotante siguiente; NaN viola toda faceta de rango; `INF` viola un máximo finito y cumple un mínimo.
-- [ ] Una IR hecha a mano que viola la UPA da `Internal`, sin pánico. Con el presupuesto bajado, `(e₁|…|e₄₀₉₅)*` da `limit` antes de reservar.
-- [ ] Un XSD con 10⁴ secuencias anidadas se construye en un hilo de 256 KiB, y el simulador recorre un XML de 10⁵ niveles.
+- [x] `valid-xml-pedido-01` da 0. *(`corpus.rs::casos_xml_dan_lo_esperado`, `xml.rs::pedido_valido_e_invalidos`)*
+- [x] `(a?){2,3}`: `<r/>`, `<r><a/></r>` y tres `a` son válidos; cuatro `a` dan 1 violación. `(a{1,2}, b){2,2}` exige sus mínimos. *(`glushkov.rs::opcional_con_contador`, `dos_contadores_con_reinicio`)*
+- [x] `xs:all` acepta cualquier orden; el hijo requerido que falta y el repetido dan violación. *(`glushkov.rs::all_en_cualquier_orden`)*
+- [x] Atributos: el requerido que falta, el no declarado y el `fixed` distinto por valor dan violación; iguales por valor y por tanto válidos: `fixed="1"` en `xs:boolean` frente a `true`, y `+01` frente a `1` en `xs:int`; NaN en `fixed`; `xmlns` se ignora. *(`xml.rs::atributos_fixed_por_valor_y_xmlns`, `fixed_infinito_en_flotantes`)*
+- [x] `xs:float maxInclusive="0.1"` acepta `0.10000000000000000001` y rechaza el flotante siguiente; NaN viola toda faceta de rango; `INF` viola un máximo finito y cumple un mínimo. *(`xml.rs::float_umbral_ieee_nan_e_inf`, `text.rs::intervalos_de_redondeo`)*
+- [x] Una IR hecha a mano que viola la UPA da `Internal`, sin pánico. Con el presupuesto bajado, `(e₁|…|e₄₀₉₅)*` da `limit` antes de reservar. *(`glushkov.rs::ir_que_viola_la_upa_da_internal`, `eleccion_ancha_da_limit`; `sin_reservas.rs::glushkov_ancho_da_limit_antes_de_reservar`)*
+- [x] Un XSD con 10⁴ secuencias anidadas se construye en un hilo de 256 KiB, y el simulador recorre un XML de 10⁵ niveles. *(`glushkov.rs::d7_secuencias_anidadas_y_payload_profundo`, con IR a mano: el lector XSD limita a 256 niveles, `pendientes.md` §42)*
 
 **Verificación:** `cargo test -p automaton`, `make lint`, `make test`, `make docs-check`. Manual: `schemac automaton --dot` sobre el pedido.
 
@@ -329,9 +329,11 @@ Detalle y decisiones en `tasks/plan.md` («Plan de F4.1»). Una subtarea por vez
 **Arrastra:** `docs/fase3/pendientes.md` §36 (5.5-P3, CR-S1); §37 (5.6-P3, y 5.6-CR-S6: las enumeraciones repetidas por valor las absorbe el comparador, con una prueba); §38 (5.7-P1 y su presupuesto).
 
 **Heredado de la revisión de F4.1b (17 nov, D38; detalle en `docs/fase4/pendientes.md`):**
-- [ ] F4.1b-CR-S5: el marco admite hoy un solo contador (`Trans::count: bool`, disposición `[máscara][contador 0 o 1]`, `tables.rs:109-111`, `194-197`, `core.rs:398-416`); el Glushkov con contadores de 5.7-P1 necesita k contadores por elemento y su reinicio al volver a entrar: índice de contador en `Trans` y en `Check` más una operación de reinicio, documentado en `automata.md` §3.1.
-- [ ] F4.1b-CR2-S3: el presupuesto de transiciones de F4.1c usa la misma cuenta que la precisión de F4-U6 de F4.1b (`docs/fase4/pendientes.md` §22.5): las transiciones y guardas del Glushkov entran en `extra` y se comprueban antes de reservar, para que la regla sea única en JSON y XML; y ningún recorrido por literal, cota o nombre se repite por conjunto (memo por (nodo, regla), como el arreglo de F4.1b ronda 3).
-- [ ] F4.1b-CR-S6: antes de escribir `xml.rs`, extraer las utilidades genéricas de las tablas de `json.rs` (`Builder::{group, state, frame, trans, rule, check, checks, lexeme, trie_states}`, `trie_size`, `label`) a un módulo común, y partir `Analysis::set` (~235 líneas) en objeto, arreglo, número y cadena, para no duplicarlas.
+- [x] F4.1b-CR-S5: el marco admite hoy un solo contador (`Trans::count: bool`, disposición `[máscara][contador 0 o 1]`, `tables.rs:109-111`, `194-197`, `core.rs:398-416`); el Glushkov con contadores de 5.7-P1 necesita k contadores por elemento y su reinicio al volver a entrar: índice de contador en `Trans` y en `Check` más una operación de reinicio, documentado en `automata.md` §3.1. *(`glushkov.rs::dos_contadores_con_reinicio`, `opcional_con_contador`; `automata.md` §3.1)*
+- [x] F4.1b-CR2-S3: el presupuesto de transiciones de F4.1c usa la misma cuenta que la precisión de F4-U6 de F4.1b (`docs/fase4/pendientes.md` §22.5): las transiciones y guardas del Glushkov entran en `extra` y se comprueban antes de reservar, para que la regla sea única en JSON y XML; y ningún recorrido por literal, cota o nombre se repite por conjunto (memo por (nodo, regla), como el arreglo de F4.1b ronda 3). *(`sin_reservas.rs`: 9 pruebas de `limit` antes de reservar y la propiedad `presupuesto_cubre_lo_emitido_en_parse_ok`; `automata.md` §15)*
+- [x] F4.1b-CR-S6: antes de escribir `xml.rs`, extraer las utilidades genéricas de las tablas de `json.rs` (`Builder::{group, state, frame, trans, rule, check, checks, lexeme, trie_states}`, `trie_size`, `label`) a un módulo común, y partir `Analysis::set` (~235 líneas) en objeto, arreglo, número y cadena, para no duplicarlas. *(`emit.rs`; suite JSON, dorada y `.dot` sin cambios)*
+
+**Estado:** hecha el 19 nov · 3 rondas + 1 ronda extra autorizada por el usuario (la 3.ª y la extra con un Builder nuevo) · revisada por `code-reviewer` y `security-auditor` (D35, decisión del usuario) · APROBADA. Reportes en `tasks/contexto/F4.1c reportes ronda {0,1,2,3,extra}.md`. Observaciones abiertas en `docs/fase4/pendientes.md` §33-§56 (con gravedad); lo que hereda cada tarea está como criterio en F4.3 y F4.6.
 
 # Tarea F6.7: líneas base (pista B, Bayron; plan del Planner del 13 nov, aprobado el 13 nov con U1-U10)
 
@@ -438,6 +440,14 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 - [ ] `check` acepta todos los M de F4.1a-c y del corpus, y detecta sobre tablas hechas a mano un `TransId` fuera de rango, rangos que se solapan, un hueco en la partición y una transición que apila con una clase de retorno.
 - [ ] D7: un AFD en cadena de 10⁵ estados se minimiza en un hilo de 256 KiB.
 - [ ] La dorada de F4.1a se regenera si cambia y la cuenta a mano de `automata.md` se actualiza.
+
+**Heredado de la revisión de F4.1c (19 nov, D38; detalle en `docs/fase4/pendientes.md`):**
+- [ ] §39/§47/§53 (S1, S12): con la representación actual 2 000 literales en 200 elementos ya pasan de 2²⁰ (δ densa con |Σ| = 61, AFD del contenido simple copiado por marco, un trie de follow(x) por estado); `re2` (200 elementos de 40 tipos × 50 literales, 1 131 091 entradas) debe compilar: grupo global del texto de contenido simple con `Enter`/`Leave` como los atributos, trie compartido entre estados con la misma lista de aristas, partición de clases y Hopcroft.
+- [ ] §48 y §52 (S5, S8): partir `fill_frame` en `fill_empty`/`fill_simple`/`fill_model` y una sola contabilidad por pieza emitida (`elem` frente a `frame_cost`).
+- [ ] §56 (S13): `Builder::new` memoriza `classes_of` por conjunto de palabras (hoy por texto; `w4.xsd` 153 MB frente a 63 MB de `check`).
+- [ ] F4.1c-CRX-S4: una prueba que falle si el cobro de los nombres de follow(x) (`glushkov.rs:298`) se mueve detrás de la UPA.
+- [ ] F4.1c-CRX-S5 = F4E-I2: el tamaño del trie de atributos se memoriza por tipo en `ElemSpec` y Σ|nombre| de atributos se cobra una vez a los pasos.
+- [ ] F4D-M1 residual / F4D-I1: la cuenta conservadora de F4-U6 (≈ 60 por redondeo IEEE y los tres casos de §53) se ajusta si F4.3 cambia la representación.
 
 **Verificación:** `cargo test -p automaton`, `make lint`, `make test`, `make docs-check`.
 
@@ -583,6 +593,15 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 **Heredado de la revisión de F4.1b (17 nov, D38):**
 - [ ] F4.1b-CR-S3 (rendimiento): al cerrar cada número, `compare` e `is_multiple` cuestan O(|cota del esquema|) (hasta 16 MiB): en compilación, quitar los ceros a la izquierda del exponente, decidir al compilar la comprobación si |E| de la cota pasa del rango alcanzable por un lexema de 1 024 bytes, y guardar en `DivisorRef` el e_d ya saturado, para que cada número cueste O(`LEXEME_MAX`).
 - [ ] F4.1b-CR-S7: S-3 cuenta un nodo repetido una sola vez (`allOf:[{$ref:x},{$ref:x}]` con x violado da 1; `jsonschema` da 2): declararlo en `DIVERGENCIAS` junto a las de D47 cuando entre al corpus.
+
+**Heredado de la revisión de F4.1c (19 nov, D38; detalle en `docs/fase4/pendientes.md`):**
+- [ ] §33 = F4C-S3/I2 (Medium; antes de F6.7b para el oráculo): la capa de buena formación compara el nombre de cierre completo (prefijo incluido, hash del QName en el marco) en todo elemento, y rechaza `xmlns`/`xmlns:p` repetidos en la etiqueta y `:` inicial o final (`<p:a></q:a>`, `<a></p:a>`, `<:pedido>…</:pedido>` hoy dan peso 0).
+- [ ] §34 (Medium): espacios de nombres del payload por nombre local, `<x:pedido xmlns:x="urn:otro">` aceptado, `xsi:*`/`xml:lang` suman 1; según lo que decidan las dos personas (desviación en `00-alcance.md` §1.2 o tabla de prefijos acotada).
+- [ ] §35 = F4C-S5 (Low): normalizar `\r\n`/`\r` → `\n` (XML 1.0 §2.11) en texto y `\t\n\r` → espacio en atributos antes de `length`/`enum`/`fixed` de `xs:string`.
+- [ ] §13/§45 = F4C-S6/F4D-M3 (Medium; **High** en cuanto F6.5 o F7 llamen a `validate`): profundidad desde `Limits` (256) y `limit` antes del `vec!`; prueba con 1 MB de `<` sobre un XSD de marco grande (hoy pide 3,2 GB y aborta).
+- [ ] §44 = F4C-S4 (Low): `step` da `Internal` con clase ≥ `n_classes` y `Core::new` valida `n_classes ≥ class::CHAR + 1` (amplía F4.1a-CR-S2).
+- [ ] §46 = F4C-S7 (Low; también F5.2): `words.checked_add(1)` en `push` (32 bits).
+- [ ] §49 (Info, informe): el lexema de 1 024 bytes da `limit` en `xs:decimal`/`xs:integer` con más cifras y facetas numéricas.
 
 ## Punto de control PC-E (tras F4.6 + F5.1)
 

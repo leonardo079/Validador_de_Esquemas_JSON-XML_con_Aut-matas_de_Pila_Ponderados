@@ -193,9 +193,9 @@ async fn regla_pendiente_da_200_con_automata_pendiente() {
 }
 
 /// XSD válido → 200 con `format: "xml"`, su IR (la dorada de
-/// `tests/ir/xsd`) y el autómata pendiente hasta F4.1c: no es un error.
+/// `tests/ir/xsd`) y, desde F4.1c (D57), su autómata construido.
 #[tokio::test]
-async fn xsd_valido_da_200_con_automata_pendiente() {
+async fn xsd_valido_da_200_con_automata() {
     let esquema = std::fs::read(repo("schemas/xsd/parse-ok/pedido.xsd")).unwrap();
     let dorada = std::fs::read_to_string(repo("ir/xsd/pedido.json")).unwrap();
     let (estado, cuerpo) = pedir(&router(Config::default()), post(esquema)).await;
@@ -207,11 +207,9 @@ async fn xsd_valido_da_200_con_automata_pendiente() {
         .as_str()
         .unwrap()
         .starts_with("esquema válido (subconjunto de XSD 1.0); "));
-    assert_eq!(v["automaton"]["status"], "pending");
-    assert!(v["automaton"]["message"]
-        .as_str()
-        .unwrap()
-        .starts_with("estrategia pendiente: "));
+    assert_eq!(v["automaton"]["status"], "ok", "{cuerpo}");
+    assert_eq!(v["automaton"]["summary"]["format"], "xml");
+    assert_eq!(v["automaton"]["summary"]["deferred"], 0);
 }
 
 /// Esquema inválido → 422 con los errores de la primera etapa que falla:

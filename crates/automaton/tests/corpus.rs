@@ -174,3 +174,43 @@ fn casos_que_compilan_dan_lo_esperado() {
     }
     assert!(n >= 4, "{n}");
 }
+
+/// F4.1c: los casos XML del corpus con bytes (`valid-xml-pedido-01` da 0,
+/// `malformed-xml-billion-laughs-01` da `lexical` en su offset) dan lo de
+/// `expected`, en bloques de 1, 7 y 4096 bytes.
+#[test]
+fn casos_xml_dan_lo_esperado() {
+    let mut n = 0;
+    for c in corpus::casos().unwrap() {
+        if c.format != Format::Xml {
+            continue;
+        }
+        let Payload::Bytes(payload) = &c.payload else {
+            continue;
+        };
+        let texto = c.schema_text.clone();
+        let ir = std::thread::Builder::new()
+            .stack_size(8 << 20)
+            .spawn(move || {
+                let s = xsd::parse(&texto).unwrap_or_else(|e| panic!("{e}"));
+                xsd::lower(&xsd::analyze(&s).unwrap_or_else(|e| panic!("{e:?}"))).unwrap()
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+        let a = build(&ir).unwrap_or_else(|e| panic!("{}: {e}", c.id));
+        let r = correr(&a, payload);
+        assert_eq!(r.valid, c.expected.valid, "{}: {r:?}", c.id);
+        if let Some(v) = c.expected.violations {
+            assert_eq!(r.violations.get(), Some(v), "{}", c.id);
+        }
+        if let Some(off) = c.expected.offset {
+            assert_eq!(r.first.map(|f| f.offset), Some(off), "{}", c.id);
+        }
+        if let Some(Esperado::Lexical) = c.expected.error_kind {
+            assert_eq!(r.error_kind, Some(ErrorKind::Lexical), "{}", c.id);
+        }
+        n += 1;
+    }
+    assert!(n >= 2, "{n}");
+}

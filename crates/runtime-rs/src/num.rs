@@ -36,8 +36,12 @@ struct Parts<'a> {
 
 impl<'a> Parts<'a> {
     fn new(l: &'a [u8]) -> Parts<'a> {
+        // El `+` inicial solo aparece en los números de XSD (el lexema de un
+        // texto `xs:decimal`, `xs:integer` o `xs:float` tras el *collapse*,
+        // F4.1c); RFC 8259 no lo admite, así que JSON no cambia.
         let (neg, rest) = match l.split_first() {
             Some((b'-', r)) => (true, r),
+            Some((b'+', r)) => (false, r),
             _ => (false, l),
         };
         let (mant, exp) = match rest.iter().position(|&c| c == b'e' || c == b'E') {
