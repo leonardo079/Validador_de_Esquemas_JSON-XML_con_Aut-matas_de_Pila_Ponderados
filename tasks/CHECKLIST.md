@@ -43,7 +43,7 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 
 ## Cuentas y equipo
 
-- [ ] **S0** · Clúster MongoDB Atlas M0 y cuenta AWS con alerta de presupuesto (compartir accesos) — *Pista:* B · *Depende:* — · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
+- [x] **S0** · Clúster MongoDB Atlas M0 y cuenta AWS con alerta de presupuesto (compartir accesos) — *Pista:* B · *Depende:* — · *Resp.:* Bayron · *Estado:* hecha (20 nov) · Atlas M0 us-east-1 (proyecto validador-pda), AWS Free plan con budgets cero-gasto y 5 USD, accesos compartidos con Leonardo
 - [x] **S1** · Acordar fecha real de entrega y reparto de pistas; reprogramar el cronograma del plan si cambia — *Pista:* AB · *Depende:* — · *Resp.:* ambos · *Estado:* hecha (13 nov) · entrega dom 22 nov, cronograma sin cambios; pista A Leonardo, pista B Bayron
 
 ## Tarea 5 — frontal XSD (resto)
