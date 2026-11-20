@@ -677,3 +677,15 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [x] `lint OK` (fmt + clippy con `--all-targets`, que compila el benchmark).
 
 **Estado (19 nov):** hecha.
+
+# Tarea F6.5: arnés de métricas (pista B, Bayron; 20 nov, D65)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario).
+
+- [x] Binario `metricas` en `crates/bench`: DPDA (M sobre `runtime-rs`, bloques de 4 KiB, memoria fija de los límites) frente a la línea base DOM (D48) en todo el corpus y en el bombeo (`[`ᵏ`]`ᵏ, n enteros, n objetos).
+- [x] Mide mediana de tiempo, MB/s, ns/byte (ciclos/byte = ns/byte × GHz), asignaciones y pico de montón (`dhat` solo en el binario, sin `unsafe`), profundidad y |Q|/δ; tabla Markdown y CSV (`--csv`, para E1).
+- [x] 8 pruebas deterministas en `crates/bench/tests/arnes.rs` (profundidad, generadores, DPDA = línea base = `expected` en el corpus, formato del informe); ninguna mide tiempo (D1).
+- [x] Resultados y lectura en `docs/fase6/metricas.md`; `docs/fase6/pendientes.md` §2 y §11 anotados.
+- [x] `lint OK`; 720 pruebas del workspace en verde (8 binarios bloqueados por Smart App Control repetidos en `--release`).
+
+**Estado (20 nov):** hecha. Pendiente para F5.x: añadir el código generado como otra columna de validador; para E1: las gráficas contra k y n con el CSV.

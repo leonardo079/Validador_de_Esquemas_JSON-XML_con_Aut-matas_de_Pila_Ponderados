@@ -73,7 +73,7 @@ remite a ellas.
 - **Dónde:** — (el arnés de F6.5, `crates/bench`, aún no existe);
   `crates/baseline/src/xml.rs:199` (`compile`), `:251` (`parse`), `:268`
   (`validate_dom`).
-- **Tarea:** F6.5. La parte de F6.7b (dejar dicho cómo se mide) está **resuelta**.
+- **Tarea:** F6.5. La parte de F6.7b (dejar dicho cómo se mide) está **resuelta**. **F6.5 (20 nov, D65):** el arnés `metricas` mide asignaciones y pico con `dhat`, que solo ve el asignador de Rust; por eso la línea base XML (libxml2, malloc de C) no entra en la tabla (`docs/fase6/metricas.md` §2). Medirla exige el pico del proceso (`VmHWM`) en Docker: queda para E1 si hace falta.
 
 ### 3. Tope de tamaño del payload en la línea base (F6.7a-P3)
 
@@ -255,7 +255,7 @@ remite a ellas.
   hilo de `with_stack` del llamador (CR-S3).
 - **Dónde:** `crates/baseline/src/json.rs:90` (`compile`),
   `crates/baseline/src/json.rs:98` (`compile_text`).
-- **Tarea:** F6.5.
+- **Tarea:** F6.5. **Resuelto en F6.5 (20 nov, D65):** el arnés compila el esquema (y `JsonBaseline`) una vez, fuera de la medida, y cronometra solo la validación; la línea base corre entera dentro de un único `with_stack` por caso, así que no se cuenta la creación del hilo (`crates/bench/src/bin/metricas.rs`, `medir`).
 
 ### 12. Dependencia `baseline` del workspace aún sin usar (F6.7a-P12)
 

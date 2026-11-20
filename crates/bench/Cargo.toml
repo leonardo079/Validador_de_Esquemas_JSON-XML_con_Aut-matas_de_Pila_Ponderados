@@ -8,11 +8,18 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-lexer.workspace = true
+schema-parser.workspace = true
+semantic.workspace = true
+xsd.workspace = true
+ir.workspace = true
 automaton.workspace = true
+runtime-rs.workspace = true
+baseline.workspace = true
+# Solo el binario `metricas` lo usa como asignador global (F6.5): cuenta
+# asignaciones, bytes y el pico sin `unsafe` en este crate (D52).
+dhat = "=0.3.3"
 
 [dev-dependencies]
-schema-parser.workspace = true
 # Sin `plotters` ni `rayon`: solo el arnés de `cargo bench` (F6.6, D1).
 criterion = { version = "=0.5.1", default-features = false, features = ["cargo_bench_support"] }
 
@@ -22,6 +29,12 @@ criterion = { version = "=0.5.1", default-features = false, features = ["cargo_b
 [[bench]]
 name = "parser_claves"
 harness = false
+
+# F6.5: arnés de métricas DPDA frente a línea base sobre el corpus y el
+# bombeo. `cargo run -p bench --release --bin metricas`.
+[[bin]]
+name = "metricas"
+path = "src/bin/metricas.rs"
 
 [lints]
 workspace = true
