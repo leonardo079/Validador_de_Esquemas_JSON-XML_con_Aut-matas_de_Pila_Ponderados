@@ -4,6 +4,8 @@ Entregable 1 del enunciado (`docs/enunciado/Propuesta_Proyecto_Final_PDA_JSON.pd
 lenguaje, diagramas de autómatas (AFD, DPDA), gramáticas regulares y libres de contexto, arquitectura del compilador
 y árboles de derivación». Este archivo es la entrada: resume la definición formal (§2) y dice dónde está cada pieza.
 El detalle de cada fase está en `docs/faseN/`; lo que sigue abierto, en `docs/faseN/pendientes.md`.
+El informe final (entregable 4: complejidad, tamaño del autómata, decisiones, errores, vulnerabilidades y
+bombeo) está en [informe-final.md](informe-final.md).
 
 ## 1. Mapa del entregable
 
@@ -163,7 +165,7 @@ La aplicación web dibuja el de cualquier payload (`POST /api/derivation`, [fase
 | 4. Autómata | [automata.md](fase4/automata.md), [runtime.md](fase4/runtime.md), [pattern.md](fase4/pattern.md) |
 | 5. Código | [codegen.md](fase5/codegen.md) (Rust), [codegen-c.md](fase5/codegen-c.md) (C), [generador.md](fase5/generador.md), [arbol-derivacion.md](fase5/arbol-derivacion.md) |
 | 6. Tiempo real | [puntero.md](fase6/puntero.md), [limites.md](fase6/limites.md), [mitigaciones.md](fase6/mitigaciones.md), [fuzzing.md](fase6/fuzzing.md), [mutaciones.md](fase6/mutaciones.md), [linea-base.md](fase6/linea-base.md), [metricas.md](fase6/metricas.md), [bombeo.md](fase6/bombeo.md) (gráficas en [graficas/](fase6/graficas/datos.md)) |
-| 7. Aplicación | [servidor.md](fase7/servidor.md), [vistas.md](fase7/vistas.md), [sandbox.md](fase7/sandbox.md), [atlas.md](fase7/atlas.md), [despliegue.md](fase7/despliegue.md) |
+| 7. Aplicación | [servidor.md](fase7/servidor.md), [vistas.md](fase7/vistas.md), [sandbox.md](fase7/sandbox.md), [codigo.md](fase7/codigo.md), [atlas.md](fase7/atlas.md), [despliegue.md](fase7/despliegue.md) |
 
 Las decisiones (D1-D79) están en [`tasks/plan-general.md`](../tasks/plan-general.md), «Registro de decisiones». Lo
 cerrado de cada revisión está en `docs/faseN/historial.md`.

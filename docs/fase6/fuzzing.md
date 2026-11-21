@@ -57,8 +57,19 @@ modos. Sin las variables, la prueba es la de siempre.
 La reproducción en el C de los 340 + 195 payloads con cada esquema de su formato dio el mismo reporte en las tres
 implementaciones, sin avisos de los sanitizadores.
 
-Es una **prueba de humo**, no una campaña: unos minutos en total, y `validar_json` solo hizo 6 393 ejecuciones. Para
-la entrega conviene `SEG=600 make fuzz` o más (`docs/fase6/pendientes.md` §32). El script sigue con los demás
+Es una **prueba de humo**, no una campaña: unos minutos en total, y `validar_json` solo hizo 6 393 ejecuciones.
+
+**Segunda corrida (21 nov, `SEG=600 make fuzz`, durante E5 y E4):** 600 s por objetivo, sin fallos.
+
+| Objetivo | Ejecuciones | Corpus final |
+| --- | ---: | ---: |
+| `validar_json` | 55 669 | 1 060 |
+| `validar_xml` | 132 773 | 724 |
+| `esquema_json` | 226 223 | 2 412 |
+| `esquema_xsd` | 221 592 | 2 345 |
+
+La reproducción en el C (como mucho 1 000 payloads por formato) dio el mismo reporte en las tres implementaciones.
+Conviene repetirla en E3 (`docs/fase6/pendientes.md` §32). El script sigue con los demás
 objetivos si uno falla y sale con 1 al final, con el fallo en `fuzz/artifacts/`.
 
 Los dos fallos que salieron al montar los objetivos eran de las propias pruebas: un esquema fijo con

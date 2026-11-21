@@ -674,6 +674,16 @@ Criterios propuestos y aplicados por Claude con la delegación del usuario («to
 - [x] El C, por reproducción del corpus del fuzzer en la diferencial con ASan/UBSan (sin FFI). — `SV_EXTRA_JSON`/`SV_EXTRA_XML` en `diferencial.rs`, `scripts/fuzz.sh`
 - [x] `make fuzz` fuera de `make test`; F6.3-P1 resuelto con la opción a (`corpus.rs`, `docs/fase6/pendientes.md` §28).
 
+## Tarea E4: informe final — HECHA (21 nov; parte de la pista A)
+
+- [x] Complejidad: O(n) en bytes y O(d) en pila con el argumento formal, las gráficas y tablas de E1/F6.5 y una medición de los binarios generados Rust y C. — `docs/informe-final.md` §1
+- [x] Tamaño del autómata y explosión al determinizar: tamaños del corpus, fuentes de explosión y qué las acota, medido con `schemac automaton`. — §2
+- [x] Decisiones de diseño (D1-D80, las que dan forma al resultado) y recortes. — §3
+- [x] Manejo de errores y casos especiales: clases, pesos, códigos de salida, primer error y puntero, los dos modos, errores del esquema. — §4
+- [x] Resultados del bombeo (las 7 pruebas de E1) y casos extremos. — §5
+- [x] Vulnerabilidades: las cinco del enunciado, las de las auditorías y lo que queda abierto (para E3). — §6
+- [x] Verificación y conclusiones; revisión de exactitud (`tasks/contexto/E4 informe.md`) con sus hallazgos corregidos.
+
 ## Tarea E5: cerrar la documentación técnica — HECHA (21 nov; parte de la pista A)
 
 - [x] Índice del entregable 1 del enunciado (§5): cada pieza pedida con su documento y cómo se mantiene. — `docs/README.md` §1

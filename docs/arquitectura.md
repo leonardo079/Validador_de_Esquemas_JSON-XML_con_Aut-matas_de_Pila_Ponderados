@@ -141,15 +141,18 @@ flowchart LR
   SRV --> BL["baseline<br/>(comparación)"]
   SRV --> DV["derivation"]
   SRV --> AT[("MongoDB Atlas<br/>casos y métricas")]
-  SRV -. "código generado" .-> SB["sandbox Docker<br/>sin red, sin root,<br/>solo lectura"]
+  SRV -- "código generado<br/>(SANDBOX=docker)" --> SB["sandbox Docker<br/>sin red, sin root,<br/>solo lectura"]
   CADDY["Caddy (TLS)"] --> SRV
 ```
 
 Endpoints: `GET /api/health`, `POST /api/schemas`, `/api/automaton`, `/api/derivation`, `/api/compare`,
-`GET /api/tests` y `POST /api/tests/run`. Están documentados en [fase7/servidor.md](fase7/servidor.md),
-[vistas.md](fase7/vistas.md) y [atlas.md](fase7/atlas.md). El sandbox ([fase7/sandbox.md](fase7/sandbox.md)) está
-listo. La descarga del código y la validación por WebSocket son F7.5, que aún no está hecha, por eso esa flecha es
-punteada. El despliegue está en [fase7/despliegue.md](fase7/despliegue.md).
+`GET /api/tests`, `POST /api/tests/run`, `POST /api/code` (ZIP con el código generado), `POST /api/validate` (lo
+compila y ejecuta en el sandbox y lo compara con el intérprete) y `WS /ws/validate` (validación por bloques con el
+núcleo `runtime-rs`). Están documentados en [fase7/servidor.md](fase7/servidor.md), [vistas.md](fase7/vistas.md),
+[atlas.md](fase7/atlas.md) y [codigo.md](fase7/codigo.md). `POST /api/validate` usa el sandbox
+([fase7/sandbox.md](fase7/sandbox.md)) solo si el servidor arranca con `SANDBOX=docker`. En la EC2 queda apagado
+(503), así que la validación con el código generado se enseña en local ([fase7/codigo.md](fase7/codigo.md) §5). El
+despliegue está en [fase7/despliegue.md](fase7/despliegue.md).
 
 ## 5. Interfaces compartidas
 

@@ -71,7 +71,7 @@ La documentación técnica (definición formal, AFD, DPDA, gramáticas, árboles
 │   ├── atlas/          # Fase 7: carga de casos y métricas en MongoDB Atlas
 │   └── cli/            # Herramienta de línea de comandos `schemac`
 ├── fuzz/               # Fase 6: objetivos de cargo-fuzz (nightly, fuera del workspace)
-├── server/             # Backend REST (axum)
+├── server/             # Backend REST + WebSocket (axum)
 ├── web/                # Frontend (React + Vite)
 ├── sandbox/            # Imagen aislada para compilar/ejecutar código generado
 ├── tests/              # Casos de prueba (se cargan en MongoDB Atlas)
@@ -82,7 +82,7 @@ La documentación técnica (definición formal, AFD, DPDA, gramáticas, árboles
 ## Tecnologías
 
 - **Compilador y validadores:** Rust (compilador), C11 y Rust `no_std` (código generado).
-- **Backend:** Rust + axum (REST).
+- **Backend:** Rust + axum (REST + WebSocket).
 - **Frontend:** React + TypeScript + Vite, Monaco Editor, Cytoscape.js, D3.
 - **Base de datos:** MongoDB Atlas.
 - **Nube:** AWS EC2 con Docker Compose y Caddy (despliegue en curso, F7.7).
@@ -170,8 +170,7 @@ Cada caso guarda esquema, payload, resultado esperado y métricas, y se almacena
 
 ## Estado
 
-Fases 1-6 cerradas. De la Fase 7 faltan la descarga del código con validación por WebSocket (F7.5) y el
-despliegue en EC2 (F7.7). El avance por tarea está en
+Fases 1-6 cerradas. De la Fase 7 falta el despliegue en EC2 (F7.7). El avance por tarea está en
 [tasks/CHECKLIST.md](tasks/CHECKLIST.md).
 
 ## Autores

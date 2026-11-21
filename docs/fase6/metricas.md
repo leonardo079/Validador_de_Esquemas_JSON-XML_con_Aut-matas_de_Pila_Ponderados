@@ -145,8 +145,8 @@ a cero el estado del ejecutor) y por la resolución del reloj: no son significat
   validador generado. No depende de la longitud ni de la profundidad: es igual para
   2 bytes que para 2 MB de enteros o 800 KB de objetos. La línea base guarda el
   DOM: 32 MiB para 10⁶ enteros (≈ 16× la entrada) y **64,4 MiB con 200 017
-  asignaciones** para 10⁵ objetos (≈ 80× la entrada). Para payloads de menos de
-  ≈ 100 KB el DOM pesa menos que el estado fijo del DPDA; a partir de ahí la
+  asignaciones** para 10⁵ objetos (≈ 80× la entrada). Para payloads de menos de unos
+  2 000 enteros (≈ 4 KB) o 100 objetos (< 1 KB) el DOM pesa menos que el estado fijo del DPDA; a partir de ahí la
   diferencia crece linealmente. Es la consecuencia práctica del lema de bombeo: el
   lenguaje {[ᵏ]ᵏ} no es regular y necesita la pila, pero acotar la profundidad
   (D7, 256) deja la memoria del DPDA acotada por una constante.

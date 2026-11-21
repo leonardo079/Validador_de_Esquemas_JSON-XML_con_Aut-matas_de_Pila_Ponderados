@@ -724,7 +724,8 @@ remite a ellas.
 ### 32. El fuzzing no corre en `make test` (F6.4-P1)
 
 - **Estado:** `make fuzz` necesita nightly y cargo-fuzz y corre por tiempo; no es parte de `make test` (D1). El
-  corpus que encuentra no se versiona (`.gitignore`). La primera corrida fue de 100-120 s por objetivo.
-- **Arreglo propuesto:** correr `SEG=600 make fuzz` antes de la entrega y en E3, y versionar los fallos que
-  aparezcan como casos del corpus o pruebas.
+  corpus que encuentra no se versiona (`.gitignore`). La primera corrida fue de 100-120 s por objetivo; la segunda
+  (21 nov), de 600 s por objetivo, sin fallos ([fuzzing.md](fuzzing.md) §4).
+- **Arreglo propuesto:** volver a correr `SEG=600 make fuzz` en E3 y tras cada cambio del núcleo, y versionar los
+  fallos que aparezcan como casos del corpus o pruebas.
 - **Tarea:** E3.
