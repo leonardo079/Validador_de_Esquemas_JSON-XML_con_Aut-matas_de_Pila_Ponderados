@@ -10,8 +10,8 @@ cd web && npm install && npm run dev   # http://localhost:5173 (reenvía /api al
 
 ## 1. Endpoints nuevos
 
-Son aditivos: `POST /api/schemas` y `GET /api/health` no cambian. **Tocan la API del servidor, así que quedan
-pendientes del visto bueno de Leonardo (D42).** Los tres pasan por el mismo camino que `POST /api/schemas`
+Son aditivos: `POST /api/schemas` y `GET /api/health` no cambian. **Tocan la API del servidor; Leonardo les dio
+el visto bueno el 20 nov (D42, D70).** Los tres pasan por el mismo camino que `POST /api/schemas`
 (`api::procesar`):
 
 - tope de subida (413);
@@ -94,7 +94,12 @@ Pruebas (vitest, 18 nuevas, 32 en total):
 
 ## 3. Pendientes
 
-- **F7.6-P1:** visto bueno de Leonardo a los tres endpoints (D42).
+- **F7.6-P1:** visto bueno de Leonardo a los tres endpoints (D42). **Resuelto (20 nov).**
+- **F7.6-P3:** el grafo sale de reinterpretar el texto de `Automaton::write_dot`, así que un cambio en las etiquetas
+  del DOT rompe la vista (lo detecta `server/tests/vistas.rs`). Arreglo propuesto: una salida estructurada de nodos
+  y aristas en `automaton::export`, cuando haya tiempo (pista A).
+- **F7.6-P4:** `/api/compare` recibe el payload como cadena JSON, así que no admite payloads con UTF-8 inválido
+  (algunos casos `malformed` del corpus). Es una limitación de la vista, no del validador.
 - **F7.6-P2** (`pendientes.md` §15): `/api/compare` corre `jsonschema` sin tope de CPU propio. Un esquema hostil
   ocupa un permiso de concurrencia hasta terminar, aunque el cliente ya recibió el 504 (lo mismo que §12 para
   `POST /api/schemas`; `docs/fase6/pendientes.md` §14). Lo acotan el tope de subida (1 MiB) y la concurrencia
