@@ -799,11 +799,30 @@ fn hex(bytes: &[u8]) -> String {
     s
 }
 
+/// Tamaño de los trozos en que [`ConReserva`] entrega el cuerpo.
+const TROZO: usize = 64 << 10;
+
 /// Un cuerpo que retiene su reserva del presupuesto de respuestas hasta que
 /// hyper lo suelta: tras enviarlo entero o al cortarse la conexión.
+///
+/// Lo entrega en trozos de [`TROZO`] y guarda el resto en `pendiente`
+/// (verificación de E3, 21 nov). hyper pide el trozo siguiente solo cuando
+/// ha podido escribir el anterior, así que la reserva dura lo que tarda en
+/// enviarse. Antes, el cuerpo entero (un ZIP de 6,4 MB) salía en un solo
+/// *frame*, hyper lo copiaba a su cola y la reserva se soltaba aunque el
+/// cliente no hubiera leído nada: 122 ZIP retenidos llevaron el proceso a
+/// 889 MB.
 struct ConReserva {
     cuerpo: axum::body::Body,
+    pendiente: axum::body::Bytes,
     _reserva: tokio::sync::OwnedSemaphorePermit,
+}
+
+impl ConReserva {
+    fn trozo(&mut self) -> http_body::Frame<axum::body::Bytes> {
+        let n = self.pendiente.len().min(TROZO);
+        http_body::Frame::data(self.pendiente.split_to(n))
+    }
 }
 
 impl http_body::Body for ConReserva {
@@ -814,15 +833,34 @@ impl http_body::Body for ConReserva {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
-        std::pin::Pin::new(&mut self.cuerpo).poll_frame(cx)
+        use std::task::Poll;
+        if !self.pendiente.is_empty() {
+            return Poll::Ready(Some(Ok(self.trozo())));
+        }
+        match std::pin::Pin::new(&mut self.cuerpo).poll_frame(cx) {
+            Poll::Ready(Some(Ok(f))) => match f.into_data() {
+                Ok(datos) => {
+                    self.pendiente = datos;
+                    Poll::Ready(Some(Ok(self.trozo())))
+                }
+                Err(otro) => Poll::Ready(Some(Ok(otro))),
+            },
+            otro => otro,
+        }
     }
 
     fn is_end_stream(&self) -> bool {
-        self.cuerpo.is_end_stream()
+        self.pendiente.is_empty() && self.cuerpo.is_end_stream()
     }
 
     fn size_hint(&self) -> http_body::SizeHint {
-        self.cuerpo.size_hint()
+        let mut h = self.cuerpo.size_hint();
+        let p = self.pendiente.len() as u64;
+        if let Some(u) = h.upper() {
+            h.set_upper(u + p);
+        }
+        h.set_lower(h.lower() + p);
+        h
     }
 }
 
@@ -858,6 +896,7 @@ async fn presupuesto_respuestas(
         partes,
         axum::body::Body::new(ConReserva {
             cuerpo,
+            pendiente: axum::body::Bytes::new(),
             _reserva: reserva,
         }),
     )
@@ -866,6 +905,39 @@ async fn presupuesto_respuestas(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Verificación de E3 (§19): la reserva dura hasta el último trozo, y
+    /// ningún trozo pasa de [`TROZO`].
+    #[tokio::test]
+    async fn reserva_hasta_el_ultimo_trozo() {
+        use http_body_util::BodyExt;
+        let sem = Arc::new(Semaphore::new(10));
+        let reserva = sem.clone().try_acquire_many_owned(4).unwrap();
+        let n = 5 * TROZO + 123;
+        let mut cuerpo = ConReserva {
+            cuerpo: axum::body::Body::from(vec![7u8; n]),
+            pendiente: axum::body::Bytes::new(),
+            _reserva: reserva,
+        };
+        assert_eq!(http_body::Body::size_hint(&cuerpo).exact(), Some(n as u64));
+        let mut total = 0;
+        while let Some(f) = cuerpo.frame().await {
+            let d = f.unwrap().into_data().unwrap();
+            assert!(d.len() <= TROZO);
+            total += d.len();
+            if total < n {
+                assert_eq!(
+                    sem.available_permits(),
+                    6,
+                    "soltó la reserva antes de tiempo"
+                );
+            }
+        }
+        assert_eq!(total, n);
+        assert!(http_body::Body::is_end_stream(&cuerpo));
+        drop(cuerpo);
+        assert_eq!(sem.available_permits(), 10);
+    }
     use std::convert::Infallible;
     use std::pin::Pin;
     use std::task::{Context, Poll};

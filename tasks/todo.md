@@ -674,7 +674,7 @@ Criterios propuestos y aplicados por Claude con la delegación del usuario («to
 - [x] El C, por reproducción del corpus del fuzzer en la diferencial con ASan/UBSan (sin FFI). — `SV_EXTRA_JSON`/`SV_EXTRA_XML` en `diferencial.rs`, `scripts/fuzz.sh`
 - [x] `make fuzz` fuera de `make test`; F6.3-P1 resuelto con la opción a (`corpus.rs`, `docs/fase6/pendientes.md` §28).
 
-## Tarea E3: revisión de seguridad consolidada de las Fases 4-7 — REVISIÓN HECHA (21 nov); esperan los High del servidor (pista B)
+## Tarea E3: revisión de seguridad consolidada de las Fases 4-7 — HECHA (21 nov)
 
 - [x] Tres auditorías con `security-auditor` (D35): A validador y código generado (Rust, C, emisores), B compilador con esquemas hostiles, C servidor, sandbox, infra y web. — `tasks/contexto/E3 auditoria {A,B,C}.md`
 - [x] E3B-1 (High): cadena de `anyOf`/`oneOf` con puertas combinatorias (206 s con 2,4 KB) → mapas en `Closures::union` y cobro de cada puerta; `limit` en ≤ 2 s. — `conj.rs`, `mitigaciones.rs::cadena_de_anyof_acotada`
@@ -683,7 +683,8 @@ Criterios propuestos y aplicados por Claude con la delegación del usuario («to
 - [x] Documentación: `docs/fase4/pattern.md` §6, `runtime.md` §4 (E3A-5), `docs/fase6/mitigaciones.md`, `docs/informe-final.md` §6; pendientes en Fase 4 §61, Fase 5 §1/§11 (resueltos), Fase 6 §31-§35, Fase 7 §17-§25.
 - [x] §61 de la Fase 4 (E3A-2, High en el servidor): las cotas numéricas de más de 64 bytes se guardan en forma canónica corta (mantisa de ≤ 1 025 cifras con testigo, exponente saturado en ±10¹¹⁰⁰); cada número cuesta O(1 024); ataque de 8 000 números de 5 s a 0,005 s. — `emit.rs::canonical` (proptests `compara_igual`, `multiplo_igual`), `mitigaciones.rs::cotas_largas_en_forma_canonica`
 - [x] §31 de la Fase 6, clave aleatoria en los binarios: `Validador::con_clave` + `RandomState` en `main.rs`; `/dev/urandom` (o mezcla con el reloj) en `main.c`. Cierra en los binarios los choques fabricados del nombre de cierre XML y de `uniqueItems` bajo `not`. — `codegen/src/{rust,c}.rs`, `codegen/tests/c.rs::main_con_clave_aleatoria`
-- [ ] Pista B: los High del servidor (`docs/fase7/pendientes.md` §18-§19; §17 baja a Medium con §61 resuelto) y los Medium §20-§23.
+- [x] Pista B: los High del servidor y los Medium §21-§23, corregidos por Bayron (D83).
+- [x] Verificación con las sondas de la auditoría C: §18 (716 → 242 MB) y §21 (cierre a los 120 s) cumplen. §19 no cumplía: el presupuesto de respuestas se soltaba al entregar el cuerpo entero en un *frame*, y 122 ZIP sin leer llegaban a 889 MB. Corregido con `ConReserva` por trozos de 64 KiB: unos 150 MB con 10 o con 122 intentos. — `server/src/api.rs`, `api::tests::reserva_hasta_el_ultimo_trozo`; `docs/fase7/pendientes.md` §18, §19, §21
 - [x] Visto bueno de los endpoints de F7.1, F7.2 y F7.5 (D82; F7.6 ya tenía D70), con seis cambios pequeños para Bayron (`docs/fase7/pendientes.md` §25); fila de 1 MiB en `docs/00-alcance.md` §4.
 
 ## Tarea E4: informe final — HECHA (21 nov; parte de la pista A)

@@ -343,6 +343,8 @@ los dos **High** (§18 y §19) rechazan exponer la aplicación hasta corregirlos
 - **Arreglo propuesto:** que la compilación del esquema del WebSocket pida `app.permisos` (y el plazo de 10 s),
   como `POST /api/schemas`.
 - **Dónde:** `server/src/flujo.rs:141-167`, `server/src/api.rs:452-462`.
+- **Verificado en E3 (21 nov):** la sonda de la auditoría (4 WebSocket y 2 `POST /api/schemas` con un `allOf`
+  de 1 MiB) llega a 242 MB de pico (antes, 716 MB), y los WebSocket sin permiso reciben `busy`. Cerrado.
 
 ### 19. Respuestas grandes sin tope ni permiso hasta enviarlas (E3C-3, High, confirmado sin Caddy)
 
@@ -354,6 +356,14 @@ los dos **High** (§18 y §19) rechazan exponer la aplicación hasta corregirlos
 - **Arreglo propuesto:** un tope del ZIP y de la IR (413/422 si se pasa), mantener un presupuesto de bytes hasta
   enviar el cuerpo entero y un `ConcurrencyLimit` global.
 - **Dónde:** `server/src/api.rs:415-431` y `:576-577`, `server/src/generado.rs:441-454`, `infra/Caddyfile:14`.
+- **Verificado en E3 (21 nov): no bastaba, y se corrigió.** `ConReserva` entregaba el cuerpo entero en un solo
+  *frame*: hyper lo copiaba a su cola, el cuerpo terminaba y la reserva se soltaba aunque el cliente no hubiera
+  leído nada. Con 122 ZIP de 6,4 MB sin leer, el proceso llegó a 889 MB. Ahora `ConReserva` entrega trozos de
+  64 KiB (`TROZO`) y guarda el resto, así que hyper pide cada trozo cuando ha escrito el anterior y la reserva
+  dura lo que el envío. Con la misma sonda, el pico se queda en unos 150 MB con 10 o con 122 intentos (el resto
+  recibe 503), y lo comprueba `api::tests::reserva_hasta_el_ultimo_trozo`. La IR de `/api/schemas` no retiene
+  nada: con un esquema de 1 MiB se omite (556 bytes), y los ≈ 420 MB de pico con 61 peticiones son de las dos
+  compilaciones a la vez (§1). Cerrado.
 
 ### 20. Compilaciones lentas que retienen los dos permisos (E3B-4, Medium)
 
@@ -373,6 +383,8 @@ los dos **High** (§18 y §19) rechazan exponer la aplicación hasta corregirlos
   cuatro sesiones ocupan las 4 plazas para siempre (la quinta recibió 503 a los 80 s).
 - **Arreglo propuesto:** duración máxima por sesión (p. ej. 120 s) y contar cada mensaje; documentarlo en
   [codigo.md](codigo.md) §3.
+- **Verificado en E3 (21 nov):** cuatro sesiones que mandan *pings* y bloques vacíos se cierran a los 120 s con
+  `1013 session-limit`. Cerrado.
 
 ### 22. `/api/validate` retiene un permiso de compilación 85 s (E3C-4, Medium, teórico: apagado en la EC2)
 
