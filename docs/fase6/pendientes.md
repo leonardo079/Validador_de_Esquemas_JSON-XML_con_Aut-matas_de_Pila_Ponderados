@@ -744,9 +744,10 @@ remite a ellas.
   largas (§61 de la Fase 4), un bloque cuesta segundos: con `maxTimeMs=1000`, el binario C terminó a los 23,5 s.
 - **Arreglo propuesto:** entregar el bloque en trozos de 4 KiB y mirar el reloj entre ellos, y corregir
   [limites.md](limites.md) §1 («entre dos miradas pasa a lo sumo lo que cuesta un bloque» depende del esquema).
-  Con el arreglo de §61, cada trozo vuelve a costar O(4 KiB).
+  Con §61 de la Fase 4 resuelto (21 nov), cada trozo vuelve a costar O(4 KiB), y un bloque de 64 KiB, unos
+  milisegundos.
 - **Dónde:** `crates/codegen/src/c.rs:120-133`, `rust.rs:148-159`.
-- **Tarea:** junto con §61 de la Fase 4.
+- **Tarea:** sin bloqueo; baja a Info con §61 resuelto.
 
 ### 34. El reloj de `main.c` no es monótono (E3A-4, Low)
 

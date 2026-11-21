@@ -283,3 +283,30 @@ fn cadena_de_anyof_acotada() {
         assert!(matches!(e, BuildError::Limit { .. }), "{comb}: {e}");
     }
 }
+
+/// §61 de la Fase 4 (E3A-2): cada número del payload costaba O(|cota|), así
+/// que un `minimum` de 10⁶ cifras hacía que 8 000 números costaran segundos.
+/// Las cotas largas se guardan en forma canónica corta (`emit::canonical`):
+/// lo que lee el núcleo por número queda acotado por `LEXEME_MAX`, y el
+/// veredicto es el mismo (D1: se comprueba el tamaño, no el tiempo).
+#[test]
+fn cotas_largas_en_forma_canonica() {
+    let big = format!("1{}", "0".repeat(1_000_000));
+    let src = format!(
+        r#"{{"type":"array","items":{{"minimum":-{big},"exclusiveMaximum":{big},"multipleOf":0.{}1}}}}"#,
+        "0".repeat(1000)
+    );
+    let a = json(&src).unwrap();
+    assert!(
+        a.tables().lexemes.len() < 3 * 2200,
+        "{}",
+        a.tables().lexemes.len()
+    );
+    let ok = format!("[1, -2.5, 3e999, {}]", "9".repeat(900));
+    assert!(correr(&a, ok.as_bytes()).valid);
+    // Justo en las cotas: 10^(10⁶) no es menor que sí mismo.
+    let r = correr(&a, format!("[{big}]").as_bytes());
+    infinito(&r, ErrorKind::Limit); // el lexema pasa de 1 024 bytes
+    let r = correr(&a, b"[1e1000000, 1e999999, 1e-1001, 1e-1002]");
+    assert_eq!(r.violations.get(), Some(2), "{r:?}");
+}

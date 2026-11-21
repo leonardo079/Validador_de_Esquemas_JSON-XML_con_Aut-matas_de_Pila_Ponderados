@@ -26,7 +26,7 @@ línea, columna y JSON Pointer o ruta XML) y la regla incumplida.
 | Tamaño de M | de 13 estados y 43 transiciones a 216 y 10 054 (XSD del pedido) | §2.1 |
 | Explosión al determinizar | acotada: `limit` antes de crear el estado 4 097 o de pasar 2²⁰ entradas | §2.2 |
 | Corrección | 78 casos del corpus; intérprete = Rust generado = C generado (con ASan/UBSan); veredicto = línea base | §6 |
-| Pruebas | 838 en `make test`, 7 del lema de bombeo, fuzzing con cuatro objetivos | §5, §6 |
+| Pruebas | 843 en `make test`, 7 del lema de bombeo, fuzzing con cuatro objetivos | §5, §6 |
 
 ## 1. Análisis de complejidad
 
@@ -344,8 +344,9 @@ es E3 (§6.3). Lo que se encontró y cómo se cerró:
   - sesiones WebSocket sin duración máxima.
 
   Hasta corregirlos, la aplicación no debería quedar expuesta sin más límites que los actuales.
-  También sigue abierto el costo de comparar con cotas de 10⁶ cifras
-  ([fase4/pendientes.md](fase4/pendientes.md) §61).
+  El costo de comparar con cotas de 10⁶ cifras se cerró después de E3: las cotas largas se guardan en una
+  forma canónica corta, y cada número del payload cuesta O(1 024) ([fase4/pendientes.md](fase4/pendientes.md)
+  §61).
 - **Fuzzing.** Fueron 10 minutos por objetivo, sin fallos. Es una comprobación, no una garantía: conviene repetirlo
   en E3 y con cada cambio del núcleo.
 
@@ -369,7 +370,7 @@ es E3 (§6.3). Lo que se encontró y cómo se cerró:
 - **Generación:** 20 válidos generados desde la IR (F5.4) y 30 inválidos o malformados por mutación (F6.3), todos
   con doble oráculo: el DPDA y la línea base.
 - **Toda la verificación es local** (D32): `make lint` (rustfmt, clippy `-D warnings`, clang-format,
-  `unsafe-check`), `make test` (838 pruebas) y `make docs-check`.
+  `unsafe-check`), `make test` (843 pruebas) y `make docs-check`.
 
 ## 8. Conclusiones
 

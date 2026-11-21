@@ -321,9 +321,11 @@ los dos **High** (§18 y §19) rechazan exponer la aplicación hasta corregirlos
 ### 17. `WS /ws/validate` sin tope de CPU (E3A-2, High en el servidor)
 
 - **Estado:** el WebSocket acepta el esquema del cliente y valida en el proceso sin plazo. Con cotas numéricas
-  largas (§61 de la Fase 4) cada número cuesta O(|cota|): minutos de CPU por bloque de 1 MiB, 4 sesiones a la vez.
+  largas (§61 de la Fase 4) cada número costaba O(|cota|): minutos de CPU por bloque de 1 MiB, 4 sesiones a la
+  vez. **§61 está resuelto** (21 nov): cada número cuesta ahora O(1 024), así que un bloque de 1 MiB vuelve a
+  costar milisegundos. Baja a **Medium**: la validación es O(n), pero la sesión sigue sin plazo propio.
 - **Arreglo propuesto:** plazo de CPU por sesión (comprobar `Instant` entre trozos de, p. ej., 4 KiB dentro de cada
-  bloque y cerrar con `limit`), y con §61 de la Fase 4 el costo por número vuelve a ser O(1 024).
+  bloque y cerrar con `limit`).
 - **Dónde:** `server/src/flujo.rs:100-110` y `:138-208`.
 
 ### 18. El WebSocket compila sin el permiso ni el presupuesto de cuerpos (E3C-1, High, confirmado)

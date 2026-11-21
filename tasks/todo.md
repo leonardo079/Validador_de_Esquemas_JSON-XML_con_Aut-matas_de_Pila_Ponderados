@@ -591,7 +591,7 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 - [x] F4.1a-CR-S7: los dos modos se comparan sabiendo que, en fallo temprano, un payload truncado tras una violación da `schema` y en total `syntax`. — `runtime.md` §3
 
 **Heredado de la revisión de F4.1b (17 nov, D38):**
-- [ ] F4.1b-CR-S3 (rendimiento): al cerrar cada número, `compare` e `is_multiple` cuestan O(|cota del esquema|) (hasta 16 MiB): en compilación, quitar los ceros a la izquierda del exponente, decidir al compilar la comprobación si |E| de la cota pasa del rango alcanzable por un lexema de 1 024 bytes, y guardar en `DivisorRef` el e_d ya saturado, para que cada número cueste O(`LEXEME_MAX`). **Recortado** (orden de recorte): pasa a F6.5/E3, `docs/fase4/pendientes.md` §61.
+- [x] F4.1b-CR-S3 (rendimiento), resuelto el 21 nov tras E3 con las cotas en forma canónica (`emit::canonical`; `docs/fase4/pendientes.md` §61): al cerrar cada número, `compare` e `is_multiple` cuestan O(|cota del esquema|) (hasta 16 MiB): en compilación, quitar los ceros a la izquierda del exponente, decidir al compilar la comprobación si |E| de la cota pasa del rango alcanzable por un lexema de 1 024 bytes, y guardar en `DivisorRef` el e_d ya saturado, para que cada número cueste O(`LEXEME_MAX`). **Recortado** (orden de recorte): pasa a F6.5/E3, `docs/fase4/pendientes.md` §61.
 - [x] F4.1b-CR-S7: S-3 cuenta un nodo repetido una sola vez (`allOf:[{$ref:x},{$ref:x}]` con x violado da 1; `jsonschema` da 2): declararlo en `DIVERGENCIAS` junto a las de D47 cuando entre al corpus. — ningún caso del corpus lo usa todavía; queda en la lista de `DIVERGENCIAS` si entra
 
 **Heredado de la revisión de F4.1c (19 nov, D38; detalle en `docs/fase4/pendientes.md`):**
@@ -681,7 +681,8 @@ Criterios propuestos y aplicados por Claude con la delegación del usuario («to
 - [x] E3B-2/E3B-3 (High): cientos de `pattern` distintos (39-48 s, horas con 1 MiB) → tope de trabajo por esquema (`BuildOptions::max_pattern_work`, 2²³); `limit` en 1,2-1,5 s. — `pattern.rs`, `json.rs`, `xml.rs`, `mitigaciones.rs::trabajo_de_pattern_por_esquema`
 - [x] E3A-1 (Medium): desborde con signo del exponente en `number_hash` del C (aceptaba lo que Rust rechaza bajo `not` sobre `uniqueItems`) → `uint64_t`; caso en la diferencial (con el código anterior falla por UBSan). — `sv_nucleo.c`, `diferencial.rs`
 - [x] Documentación: `docs/fase4/pattern.md` §6, `runtime.md` §4 (E3A-5), `docs/fase6/mitigaciones.md`, `docs/informe-final.md` §6; pendientes en Fase 4 §61, Fase 5 §1/§11 (resueltos), Fase 6 §31-§35, Fase 7 §17-§25.
-- [ ] Pista B: los High del servidor (`docs/fase7/pendientes.md` §17-§19) y los Medium §20-§23.
+- [x] §61 de la Fase 4 (E3A-2, High en el servidor): las cotas numéricas de más de 64 bytes se guardan en forma canónica corta (mantisa de ≤ 1 025 cifras con testigo, exponente saturado en ±10¹¹⁰⁰); cada número cuesta O(1 024); ataque de 8 000 números de 5 s a 0,005 s. — `emit.rs::canonical` (proptests `compara_igual`, `multiplo_igual`), `mitigaciones.rs::cotas_largas_en_forma_canonica`
+- [ ] Pista B: los High del servidor (`docs/fase7/pendientes.md` §18-§19; §17 baja a Medium con §61 resuelto) y los Medium §20-§23.
 - [ ] Visto bueno de los endpoints de F7.2, F7.5 y F7.6 (Leonardo, `docs/fase7/pendientes.md` §25).
 
 ## Tarea E4: informe final — HECHA (21 nov; parte de la pista A)

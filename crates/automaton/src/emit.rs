@@ -640,8 +640,17 @@ impl<'a> Emitter<'a> {
         k
     }
 
-    /// Guarda un lexema del esquema y devuelve su índice en `nums`.
+    /// Guarda un lexema numérico del esquema (cota, divisor, `enum`, `fixed`
+    /// o umbral IEEE) en su forma canónica ([`canonical`]) y devuelve su
+    /// índice en `nums`.
     pub(crate) fn lexeme(&mut self, l: &str) -> u32 {
+        // Los cortos se guardan tal cual (ya cuestan O(64) y el DOT los
+        // enseña como se escribieron); los largos, en forma canónica.
+        let l = if l.len() <= CANON_SHORT {
+            l.to_owned()
+        } else {
+            canonical(l)
+        };
         let off = self.idx(self.a.lexemes.len());
         let len = self.idx(l.len());
         self.a.nums.push(Lexeme { off, len });
@@ -671,5 +680,292 @@ pub(crate) const fn plain(op: Op, next: u32) -> Trans {
         checks: 0,
         n_checks: 0,
         outs: OUT_IDENTITY,
+    }
+}
+
+/// Lexemas de hasta estos bytes se guardan como se escribieron.
+const CANON_SHORT: usize = 64;
+
+/// Cifras significativas que conserva [`canonical`]: más que las que puede
+/// tener el lexema de un número del payload (como mucho `LEXEME_MAX` bytes).
+const CANON_DIGITS: usize = 1025;
+const _: () = assert!(CANON_DIGITS > runtime_rs::LEXEME_MAX);
+
+/// Cifras del exponente por encima de las cuales [`canonical`] lo satura:
+/// el de un número del payload, con su desplazamiento, es menor que
+/// 10^(`LEXEME_MAX` + 1).
+const CANON_EXP_DIGITS: usize = 1100;
+const _: () = assert!(CANON_EXP_DIGITS > runtime_rs::LEXEME_MAX + 2);
+
+/// La forma canónica corta de un lexema numérico (§61 de
+/// `docs/fase4/pendientes.md`, E3A-2): `[-]0.De±E`, con D las cifras
+/// significativas, sin ceros a los lados, y E el exponente exacto, o `0`.
+///
+/// Las rutinas del núcleo (`num::compare`, `num::is_multiple`) cuestan
+/// O(|x| + |cota|) por número del payload. Con una cota escrita con 10⁶
+/// cifras, ceros o exponente, cada número costaba O(10⁶). Con la forma
+/// canónica cuestan O(`LEXEME_MAX`). Las comparaciones con cualquier número
+/// del payload, que tiene como mucho `LEXEME_MAX` cifras significativas y un
+/// exponente de menos de `LEXEME_MAX` cifras, no cambian:
+///
+/// - **D de más de [`CANON_DIGITS`] cifras** se recorta a esas cifras
+///   seguidas de un `1`. Ningún x llega a la cifra [`CANON_DIGITS`], así que
+///   x y la cota se ordenan por sus primeras cifras, y si x coincide en
+///   todas las suyas, la cota es mayor en magnitud con D (no termina en
+///   cero) y con el recorte (el `1` final). La igualdad es imposible con las
+///   dos.
+/// - **Un exponente de más de [`CANON_EXP_DIGITS`] cifras** se satura en
+///   ±10^[`CANON_EXP_DIGITS`]: el signo de E_x − E_cota no cambia.
+///
+/// Las listas de `enum` y los intervalos se ordenan por el valor original
+/// antes de reescribirlos. `canonical` es monótona en sentido débil (dos
+/// entradas largas pueden quedar iguales), y eso basta a la búsqueda binaria
+/// del núcleo, que no exige orden estricto: esas entradas nunca son iguales a
+/// un número del payload.
+///
+/// El lexema ya lo validaron `ir` o `xsd`; aun así, un byte que no es cifra
+/// se lee como 9, sin pánico (como `num::dig`).
+///
+/// Un divisor de `multipleOf` tiene como mucho 38 cifras significativas
+/// (`Divisor::of`), así que nunca se recorta. Su exponente saturado tampoco
+/// cambia el resultado: k = E_x − E_d sigue siendo negativo, o mayor que 64.
+pub(crate) fn canonical(l: &str) -> String {
+    let b = l.as_bytes();
+    let (neg, rest) = match b.split_first() {
+        Some((b'-', r)) => (true, r),
+        Some((b'+', r)) => (false, r),
+        _ => (false, b),
+    };
+    let (mant, exp) = match rest.iter().position(|&c| c == b'e' || c == b'E') {
+        Some(i) => (&rest[..i], &rest[i + 1..]),
+        None => (rest, &rest[rest.len()..]),
+    };
+    let (int, frac) = match mant.iter().position(|&c| c == b'.') {
+        Some(i) => (&mant[..i], &mant[i + 1..]),
+        None => (mant, &mant[mant.len()..]),
+    };
+    let (exp_neg, exp) = match exp.split_first() {
+        Some((b'-', r)) => (true, r),
+        Some((b'+', r)) => (false, r),
+        _ => (false, exp),
+    };
+    let digits: Vec<u8> = int.iter().chain(frac).copied().collect();
+    let lead = digits.iter().take_while(|&&c| c == b'0').count();
+    if lead == digits.len() {
+        return "0".to_owned();
+    }
+    let trail = digits.iter().rev().take_while(|&&c| c == b'0').count();
+    let d = &digits[lead..digits.len() - trail];
+    // Valor = 0.D · 10^(exp + |int| − lead).
+    let off = int.len() as i128 - lead as i128;
+    let exp = &exp[exp.iter().position(|&c| c != b'0').unwrap_or(exp.len())..];
+    let (e_neg, e_mag) = if exp.len() <= 30 {
+        let v = exp.iter().fold(0i128, |v, &c| {
+            v * 10 + i128::from(c.wrapping_sub(b'0').min(9))
+        });
+        let e = if exp_neg { -v } else { v } + off;
+        (e < 0, e.unsigned_abs().to_string())
+    } else if exp.len() > CANON_EXP_DIGITS {
+        let mut m = String::from("1");
+        m.extend(core::iter::repeat_n('0', CANON_EXP_DIGITS));
+        (exp_neg, m)
+    } else {
+        // |exp| ≥ 10³⁰ > |off|: el signo es el de exp, y la magnitud es
+        // |exp| ± |off| (suma si tienen el mismo signo).
+        (
+            exp_neg,
+            add_small(exp, exp_neg == (off < 0), off.unsigned_abs()),
+        )
+    };
+    let mut s = String::with_capacity(d.len().min(CANON_DIGITS + 1) + e_mag.len() + 5);
+    if neg {
+        s.push('-');
+    }
+    s.push_str("0.");
+    if d.len() > CANON_DIGITS {
+        s.push_str(core::str::from_utf8(&d[..CANON_DIGITS]).unwrap_or("0"));
+        s.push('1');
+    } else {
+        s.push_str(core::str::from_utf8(d).unwrap_or("0"));
+    }
+    s.push('e');
+    if e_neg && e_mag != "0" {
+        s.push('-');
+    }
+    s.push_str(&e_mag);
+    s
+}
+
+/// |m| + δ (`suma`) o |m| − δ, con m cifras decimales sin ceros a la
+/// izquierda y m > δ. Devuelve las cifras sin ceros a la izquierda.
+fn add_small(m: &[u8], suma: bool, delta: u128) -> String {
+    let mut v: Vec<u8> = m
+        .iter()
+        .rev()
+        .map(|&c| c.wrapping_sub(b'0').min(9))
+        .collect();
+    let mut carry = delta;
+    let mut i = 0;
+    while carry > 0 {
+        if i == v.len() {
+            v.push(0);
+        }
+        let d = u128::from(v[i]);
+        let c = carry % 10;
+        carry /= 10;
+        if suma {
+            let t = d + c;
+            v[i] = (t % 10) as u8;
+            carry += t / 10;
+        } else if d >= c {
+            v[i] = (d - c) as u8;
+        } else {
+            v[i] = (d + 10 - c) as u8;
+            carry += 1;
+        }
+        i += 1;
+    }
+    while v.len() > 1 && v.last() == Some(&0) {
+        v.pop();
+    }
+    v.iter().rev().map(|&d| char::from(b'0' + d)).collect()
+}
+
+#[cfg(test)]
+mod canonica {
+    use super::{canonical, CANON_DIGITS, CANON_EXP_DIGITS};
+    use core::cmp::Ordering;
+    use proptest::prelude::*;
+    use runtime_rs::num::{compare, is_multiple, Divisor};
+
+    #[test]
+    fn forma_canonica() {
+        for (l, c) in [
+            ("0", "0"),
+            ("-0.000", "0"),
+            ("1", "0.1e1"),
+            ("-12.5", "-0.125e2"),
+            ("0.00120", "0.12e-2"),
+            ("100e-5", "0.1e-2"),
+            ("1E+3", "0.1e4"),
+            ("+7", "0.7e1"),
+        ] {
+            assert_eq!(canonical(l), c, "{l}");
+        }
+        // Exponente largo: exacto hasta CANON_EXP_DIGITS cifras, saturado
+        // por encima; y la suma con el desplazamiento por encima de 10³⁰.
+        let e40 = format!("1{}", "0".repeat(40));
+        assert_eq!(
+            canonical(&format!("12e{e40}")),
+            format!("0.12e{}", "1".to_owned() + &"0".repeat(38) + "02")
+        );
+        let largo = format!("1e-{}", "9".repeat(CANON_EXP_DIGITS + 5));
+        assert_eq!(
+            canonical(&largo),
+            format!("0.1e-1{}", "0".repeat(CANON_EXP_DIGITS))
+        );
+        // Mantisa larga: recorte con el 1 testigo.
+        let m = format!("0.{}1{}", "0".repeat(1_000_000), "5".repeat(2000));
+        let c = canonical(&m);
+        assert!(c.len() < CANON_DIGITS + 20, "{}", c.len());
+        assert!(
+            c.ends_with(&format!("{}1e-1000000", "5".repeat(CANON_DIGITS - 1))),
+            "{}",
+            &c[c.len() - 30..]
+        );
+    }
+
+    /// Un número como los del payload: como mucho 1 024 bytes.
+    fn corto() -> impl Strategy<Value = String> {
+        (
+            any::<bool>(),
+            "[0-9]{1,20}",
+            proptest::option::of("[0-9]{1,20}"),
+            proptest::option::of((any::<bool>(), "[0-9]{1,25}")),
+        )
+            .prop_map(|(n, i, f, e)| {
+                let mut s = String::new();
+                if n {
+                    s.push('-');
+                }
+                s += &i;
+                if let Some(f) = f {
+                    s.push('.');
+                    s += &f;
+                }
+                if let Some((en, e)) = e {
+                    s.push('e');
+                    if en {
+                        s.push('-');
+                    }
+                    s += &e;
+                }
+                s
+            })
+    }
+
+    /// Una cota del esquema: a veces con miles de cifras, ceros o un
+    /// exponente larguísimo.
+    fn cota() -> impl Strategy<Value = String> {
+        (
+            corto(),
+            0usize..4,
+            0usize..3000,
+            "[0-9]{1,3}",
+            proptest::option::of(1usize..1200),
+        )
+            .prop_map(|(base, forma, n, rel, exp)| {
+                let mut s = match forma {
+                    0 => base,
+                    1 => format!("{base}{}", rel.repeat(n / rel.len().max(1) + 1)),
+                    2 => format!("0.{}{rel}", "0".repeat(n)),
+                    _ => format!("{}{rel}", "9".repeat(n)),
+                };
+                if let Some(k) = exp {
+                    if !s.contains(['e', 'E']) {
+                        s += &format!("e-{}", "7".repeat(k));
+                    }
+                }
+                s
+            })
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(400))]
+        #[test]
+        fn compara_igual(x in corto(), b in cota()) {
+            let c = canonical(&b);
+            prop_assert_eq!(compare(x.as_bytes(), c.as_bytes()), compare(x.as_bytes(), b.as_bytes()), "x={} b={}", x, &b[..b.len().min(60)]);
+            // Y la cota canónica es tan corta como promete.
+            prop_assert!(c.len() <= CANON_DIGITS + CANON_EXP_DIGITS + 8);
+        }
+
+        #[test]
+        fn multiplo_igual(x in corto(), d in "[1-9][0-9]{0,6}", ceros in 0usize..2000, e in proptest::option::of((any::<bool>(), "[0-9]{1,40}"))) {
+            let mut l = format!("{d}{}", "0".repeat(ceros % 5));
+            if ceros > 1000 {
+                l = format!("0.{}{d}", "0".repeat(ceros));
+            }
+            if let Some((en, e)) = e {
+                l += &format!("e{}{e}", if en { "-" } else { "" });
+            }
+            if let Ok(div) = Divisor::of(l.as_bytes()) {
+                let c = canonical(&l);
+                prop_assert_eq!(Divisor::of(c.as_bytes()), Ok(div));
+                prop_assert_eq!(is_multiple(x.as_bytes(), c.as_bytes(), &div), is_multiple(x.as_bytes(), l.as_bytes(), &div), "x={} d={}", x, l);
+            }
+        }
+    }
+
+    #[test]
+    fn orden_de_la_cota_recortada() {
+        // x coincide en todas sus cifras con la cota y la cota sigue.
+        let b = format!("1.{}", "2".repeat(5000));
+        let x = format!("1.{}", "2".repeat(1000));
+        assert_eq!(
+            compare(x.as_bytes(), canonical(&b).as_bytes()),
+            Ordering::Less
+        );
+        assert_eq!(compare(x.as_bytes(), b.as_bytes()), Ordering::Less);
     }
 }

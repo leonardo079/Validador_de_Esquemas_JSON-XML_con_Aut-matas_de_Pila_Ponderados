@@ -1054,7 +1054,7 @@ remite a ellas.
 - **Arreglo propuesto:** avisar a Bayron (es su crate).
 - **Tarea:** —.
 
-### 61. Costo de comparar con una cota larga (F4.1b-CR-S3; recorte de F4.6)
+### 61. Costo de comparar con una cota larga (F4.1b-CR-S3; recorte de F4.6) — RESUELTO (21 nov, tras E3)
 
 - **Gravedad:** Medium (rendimiento con esquemas hostiles: el esquema lo controla quien
   valida, no el payload). **High en el servidor desde F7.5 (E3A-2):** `WS /ws/validate` acepta el esquema
@@ -1072,6 +1072,20 @@ remite a ellas.
   O(`LEXEME_MAX`).
 - **Tarea:** F6.5 (medición) o E3 (revisión de seguridad); antes de F7.5 si el servidor valida
   con esquemas del usuario.
+- **Resuelto (21 nov):** de otra forma que la propuesta, sin tocar el núcleo ni las tablas.
+  `Tables::lexeme` guarda cada lexema numérico de más de 64 bytes (cotas, divisores, `enum`, `fixed`
+  y umbrales IEEE) en forma canónica corta, `[-]0.De±E` (`emit::canonical`, `crates/automaton/src/emit.rs`):
+  - la mantisa se recorta a 1 025 cifras, seguidas de un `1` testigo si había más;
+  - el exponente se satura en ±10¹¹⁰⁰.
+
+  Ningún número del payload tiene más de `LEXEME_MAX` = 1 024 cifras, así que ninguna comparación ni
+  ningún `multipleOf` cambian: el argumento está en la documentación de `canonical`. Lo comprueban dos
+  proptests (`compara_igual`, `multiplo_igual`), con cotas de miles de cifras, ceros y exponentes de
+  hasta 1 200 cifras, y casos escritos a mano. Así cada número cuesta O(`LEXEME_MAX`) en Rust y en C.
+  El ataque de E3A-2 (8 000 números contra un `minimum` y un `exclusiveMaximum` de 10⁶ cifras y un
+  `multipleOf` de 10⁻¹⁰⁰¹) pasa de unos 5 s a 0,005 s en el C generado, y `tablas.c` queda en 5 KB.
+  La prueba de regresión es `mitigaciones.rs::cotas_largas_en_forma_canonica`. Los lexemas cortos se
+  guardan como se escribieron: el DOT no cambia.
 
 ### 62. Espacios de nombres y `xsi:*` (sigue §34)
 
