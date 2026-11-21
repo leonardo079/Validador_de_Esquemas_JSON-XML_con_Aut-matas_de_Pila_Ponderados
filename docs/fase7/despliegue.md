@@ -40,7 +40,7 @@ Let's Encrypt valide el dominio.
    - 20 GB gp3.
 2. **Elastic IP:** EC2 → Elastic IPs → Allocate → Associate a la instancia. Esa es la IP fija; anótala, por
    ejemplo `3.4.5.6`.
-3. **Atlas:** en Network Access, añadir esa IP. Hace falta desde F7.2; hoy el servidor aún no usa Mongo.
+3. **Atlas:** en Network Access, añadir esa IP. Sin ella, `/api/tests` da 502. `desplegar.ps1` copia el `.env` (`MONGODB_URI`) a la EC2 (`atlas.md` §5).
 4. **Preparar la máquina**, una vez:
    ```powershell
    ssh -i $HOME\.ssh\validador-ec2.pem ubuntu@3.4.5.6

@@ -28,6 +28,12 @@ services:
     security_opt: ["no-new-privileges:true"]
     environment:
       SERVER_ADDR: 0.0.0.0:8080
+    # F7.2 (D72): `MONGODB_URI` de `.env` en la raíz del repo (no se versiona
+    # ni entra en la imagen). Sin él, el servidor arranca sin base de datos y
+    # `/api/tests` responde 503.
+    env_file:
+      - path: ../.env
+        required: false
     expose: ["8080"]
     logging:
       driver: json-file

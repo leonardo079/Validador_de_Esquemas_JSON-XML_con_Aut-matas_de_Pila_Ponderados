@@ -46,15 +46,27 @@ struct App {
     /// (`max_inflight_body_bytes`).
     cuerpos: Arc<Semaphore>,
     compilar: Compilador,
+    /// La colección `cases` de Atlas (F7.2), si hay `MONGODB_URI`.
+    casos: Option<crate::casos::Coleccion>,
 }
 
-/// La API con la compilación real.
+/// La API con la compilación real y sin base de datos.
 pub fn router(cfg: Config) -> Router {
     router_con(cfg, Arc::new(compilar::compilar))
 }
 
+/// [`router`] con la colección de casos de Atlas (F7.2, D72): habilita
+/// `GET /api/tests` y `POST /api/tests/run`.
+pub fn router_con_casos(cfg: Config, casos: Option<crate::casos::Coleccion>) -> Router {
+    construir(cfg, Arc::new(compilar::compilar), casos)
+}
+
 /// [`router`] con otra compilación (para las pruebas).
 pub fn router_con(cfg: Config, compilar: Compilador) -> Router {
+    construir(cfg, compilar, None)
+}
+
+fn construir(cfg: Config, compilar: Compilador, casos: Option<crate::casos::Coleccion>) -> Router {
     let limite = cfg.max_upload_bytes;
     // Nunca menos que una subida entera: si no, un cuerpo del tope no
     // cabría jamás.
@@ -64,6 +76,7 @@ pub fn router_con(cfg: Config, compilar: Compilador) -> Router {
         cuerpos: Arc::new(Semaphore::new(bloques(presupuesto) as usize)),
         cfg,
         compilar,
+        casos,
     });
     Router::new()
         .route("/api/health", get(health))
@@ -71,6 +84,8 @@ pub fn router_con(cfg: Config, compilar: Compilador) -> Router {
         .route("/api/automaton", post(automata))
         .route("/api/derivation", post(derivacion))
         .route("/api/compare", post(comparar))
+        .route("/api/tests", get(listar_casos))
+        .route("/api/tests/run", post(ejecutar_casos))
         .fallback(no_encontrado)
         .method_not_allowed_fallback(metodo_no_permitido)
         .layer(DefaultBodyLimit::max(limite))
@@ -273,6 +288,84 @@ async fn derivacion(State(app): State<Arc<App>>, req: Request) -> Response {
 /// veredictos con sus tiempos.
 async fn comparar(State(app): State<Arc<App>>, req: Request) -> Response {
     procesar(&app, req, |bytes| vista(crate::vistas::comparar(&bytes))).await
+}
+
+/// La categoría pedida en `?category=…` (solo minúsculas y guiones).
+/// `Err(())` si `category` no es `[a-z-]{1,32}` (400, [`categoria_no_valida`]).
+fn categoria(req: &Request) -> Result<Option<String>, ()> {
+    let Some(q) = req.uri().query() else {
+        return Ok(None);
+    };
+    for par in q.split('&') {
+        if let Some(v) = par.strip_prefix("category=") {
+            if v.is_empty()
+                || v.len() > 32
+                || !v.bytes().all(|b| b.is_ascii_lowercase() || b == b'-')
+            {
+                return Err(());
+            }
+            return Ok(Some(v.to_owned()));
+        }
+    }
+    Ok(None)
+}
+
+/// El 400 de una `category` no válida.
+fn categoria_no_valida() -> Response {
+    responder(
+        StatusCode::BAD_REQUEST,
+        json!({"error": "request", "message": "`category` no válida"}).to_string(),
+    )
+}
+
+/// La respuesta de un error de la base de datos (el detalle, al registro).
+fn fallo_casos(e: crate::casos::Error) -> Response {
+    use crate::casos::Error;
+    match e {
+        Error::SinBase => no_disponible(
+            "no-database",
+            "el servidor no tiene base de datos (MONGODB_URI sin configurar)",
+        ),
+        Error::Base(detalle) => {
+            registrar(&format!("atlas: {detalle}"));
+            responder(
+                StatusCode::BAD_GATEWAY,
+                json!({"error": "database", "message": "no se pudo consultar la base de datos de casos"})
+                    .to_string(),
+            )
+        }
+    }
+}
+
+/// `GET /api/tests[?category=…]` (F7.2, D72): los casos de Atlas, sin esquema
+/// ni payload.
+async fn listar_casos(State(app): State<Arc<App>>, req: Request) -> Response {
+    let cat = match categoria(&req) {
+        Ok(c) => c,
+        Err(()) => return categoria_no_valida(),
+    };
+    match crate::casos::listar(app.casos.as_ref(), cat.as_deref()).await {
+        Ok(v) => responder(StatusCode::OK, v.to_string()),
+        Err(e) => fallo_casos(e),
+    }
+}
+
+/// `POST /api/tests/run[?category=…]` (F7.2, D72): trae los casos de Atlas y
+/// los ejecuta con el DPDA en el hilo de [`procesar`] (permiso, pila y tope
+/// de tiempo), comparando con su `expected`. El cuerpo se ignora.
+async fn ejecutar_casos(State(app): State<Arc<App>>, req: Request) -> Response {
+    let cat = match categoria(&req) {
+        Ok(c) => c,
+        Err(()) => return categoria_no_valida(),
+    };
+    let lista = match crate::casos::traer(app.casos.as_ref(), cat.as_deref()).await {
+        Ok(l) => l,
+        Err(e) => return fallo_casos(e),
+    };
+    procesar(&app, req, move |_| {
+        responder(StatusCode::OK, crate::casos::ejecutar(&lista).to_string())
+    })
+    .await
 }
 
 /// La respuesta de una vista: 200 con su JSON, o el error que toque.

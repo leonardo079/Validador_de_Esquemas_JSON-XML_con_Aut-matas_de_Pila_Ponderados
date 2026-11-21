@@ -41,7 +41,31 @@ fn main() -> ExitCode {
         // conexión callada sin cabeceras ocupa ≈ 15 KB y ningún permiso; las
         // que mandan un cuerpo pasan por el presupuesto y el plazo de
         // lectura de `api.rs` (SEC-H1).
-        match axum::serve(listener, server::router(cfg))
+        // F7.2 (D72): los casos de Atlas, solo si hay `MONGODB_URI`. El
+        // cliente no conecta hasta la primera consulta; una URI mal formada
+        // deja el servidor sin base (503 en `/api/tests`), nunca lo tumba.
+        let casos = match std::env::var("MONGODB_URI")
+            .ok()
+            .filter(|u| !u.trim().is_empty())
+        {
+            None => {
+                avisar("sin MONGODB_URI: /api/tests responde 503");
+                None
+            }
+            Some(uri) => match atlas::coleccion(uri.trim()).await {
+                Ok(c) => {
+                    avisar("casos de prueba: MongoDB Atlas configurado");
+                    Some(c)
+                }
+                Err(e) => {
+                    avisar(&format!(
+                        "MONGODB_URI no válida ({e}); /api/tests responde 503"
+                    ));
+                    None
+                }
+            },
+        };
+        match axum::serve(listener, server::router_con_casos(cfg, casos))
             .with_graceful_shutdown(apagado())
             .await
         {

@@ -763,3 +763,17 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [ ] **21 nov:** crear la EC2 y la Elastic IP, ejecutar `ec2-preparar.sh` y `desplegar.ps1`, y comprobar la URL pública.
 
 **Estado (20 nov):** preparado. Falta el despliegue real del sábado.
+
+# Tarea F7.2: casos de prueba en MongoDB Atlas (pista B, Bayron; 20 nov, D72)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario).
+
+- [x] Crate `crates/atlas`: documento por caso (esquema exacto, payload como texto, base64 o generador, `expected`, `source` relativa) y conexión con plazos cortos.
+- [x] Carga local `cargo run -p atlas` (*upsert* idempotente, `--podar`, `--en-seco`): 78 casos en Atlas.
+- [x] Servidor: `GET /api/tests` y `POST /api/tests/run` (en `api::procesar`), con 503 sin base, 502 si Atlas falla y 400 si la categoría no es válida. Arranca igual sin `MONGODB_URI`.
+- [x] Web: pestaña «Casos de prueba (Atlas)» con filtro por categoría, lista y ejecución.
+- [x] Compose pasa el `.env` al servidor (opcional) y `desplegar.ps1` lo copia a la EC2 con permisos 600.
+- [x] Driver con `bson-3`, porque bson 2 activaba `serde_json/preserve_order` en todo el workspace y rompía D49 y tres pruebas.
+- [x] 9 pruebas nuevas sin red (`crates/atlas/tests/documento.rs`, `server/tests/casos.rs`) y 2 de vitest (34 en total). Verificado contra Atlas: 78/78 pasan, en Windows y en Docker tras Caddy. `lint OK`; 766 pruebas del workspace en verde.
+
+**Estado (20 nov):** hecha. Pendiente: visto bueno de Leonardo a `/api/tests` (D42); E2 (métricas en Atlas); en la EC2, añadir su IP en Network Access de Atlas.

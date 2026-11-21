@@ -182,3 +182,34 @@ describe("unidades", () => {
     expect(bytes(3 << 20)).toBe("3.0 MiB");
   });
 });
+
+import { interpretarCasos, interpretarEjecucion } from "./vistas";
+
+describe("casos de Atlas (F7.2)", () => {
+  it("interpreta la lista y la ejecución", () => {
+    const l = interpretarCasos(
+      200,
+      JSON.stringify({ total: 1, cases: [{ id: "valid-x-01", category: "valid", format: "json", description: "d", expected: { valid: true } }] }),
+    );
+    expect(l.ok && l.datos[0].id).toBe("valid-x-01");
+    const e = interpretarEjecucion(
+      200,
+      JSON.stringify({
+        total: 2, passed: 1, failed: 1, skipped: 0, errors: 0,
+        results: [
+          { id: "a", category: "valid", status: "passed", mismatch: [], got: { valid: true }, expected: { valid: true } },
+          { id: "b", category: "invalid", status: "raro", mismatch: ["valid"] },
+        ],
+      }),
+    );
+    expect(e.ok).toBe(true);
+    if (!e.ok) return;
+    expect(e.datos.passed).toBe(1);
+    expect(e.datos.results[1].status).toBe("error");
+    expect(e.datos.results[1].got).toBeNull();
+  });
+  it("sin base de datos da el mensaje del 503", () => {
+    const r = interpretarCasos(503, JSON.stringify({ error: "no-database", message: "el servidor no tiene base de datos" }));
+    expect(r).toEqual({ ok: false, fallo: { estado: 503, mensaje: "el servidor no tiene base de datos", offset: null } });
+  });
+});

@@ -31,7 +31,7 @@ Requiere Node ≥ 20. Desde `web/`:
 ```sh
 npm install          # una vez (package-lock.json fija las versiones)
 npm run dev          # http://localhost:5173 ; /api se reenvía a 127.0.0.1:8080
-npm test             # vitest: respuestas, panel y vistas de F7.6 (32 pruebas)
+npm test             # vitest: respuestas, panel y vistas de F7.6 y F7.2 (34 pruebas)
 npm run build        # tsc + vite build → dist/ (lo sirve Caddy en F7.7)
 ```
 
@@ -51,3 +51,4 @@ Para apuntar el proxy a otro servidor: `VITE_API_TARGET=http://host:puerto npm r
 | `src/Automata.tsx` | F7.6: grafo de M con Cytoscape. |
 | `src/Arbol.tsx` | F7.6: árbol de derivación con d3-hierarchy en SVG. |
 | `src/Comparacion.tsx` | F7.6: tabla y barras DPDA frente a línea base. |
+| `src/Casos.tsx` | F7.2: casos de Atlas (`GET /api/tests`, `POST /api/tests/run`). |

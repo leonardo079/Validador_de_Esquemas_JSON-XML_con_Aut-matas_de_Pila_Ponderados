@@ -31,6 +31,16 @@ scp @ssh $tar "${destino}:/tmp/validador-imagenes.tar"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Remove-Item $tar
 
+# F7.2: el `.env` (MONGODB_URI) va aparte, solo a la EC2, con permisos 600.
+$env_local = Join-Path $repo '.env'
+if (Test-Path $env_local) {
+    scp @ssh $env_local "${destino}:validador/.env"
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    ssh @ssh $destino "chmod 600 ~/validador/.env"
+} else {
+    Write-Host "Sin .env: el servidor arranca sin MongoDB (/api/tests responde 503)."
+}
+
 $remoto = "set -e; docker load -i /tmp/validador-imagenes.tar && rm /tmp/validador-imagenes.tar; " +
     "cd ~/validador && git pull --ff-only; " +
     "DOMINIO=$dominio docker compose -f infra/docker-compose.yml up -d --no-build; " +

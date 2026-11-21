@@ -258,3 +258,93 @@ export function bytes(n: number): string {
   if (n < 1 << 20) return `${(n / 1024).toFixed(1)} KiB`;
   return `${(n / (1 << 20)).toFixed(1)} MiB`;
 }
+
+// ---------------------------------------------------------------------------
+// F7.2 (D72): casos de prueba de MongoDB Atlas (`GET /api/tests`,
+// `POST /api/tests/run`).
+
+export interface CasoListado {
+  id: string;
+  category: string;
+  format: string;
+  description: string;
+  expected: Record<string, unknown>;
+}
+
+export interface ResultadoCaso {
+  id: string;
+  category: string;
+  status: "passed" | "failed" | "skipped" | "error";
+  reason?: string;
+  mismatch: string[];
+  got: Record<string, unknown> | null;
+  expected: Record<string, unknown> | null;
+}
+
+export interface Ejecucion {
+  total: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  errors: number;
+  results: ResultadoCaso[];
+}
+
+export function interpretarCasos(estado: number, cuerpo: string): Respuesta<CasoListado[]> {
+  const v = leer(cuerpo);
+  if (estado !== 200 || !esObjeto(v) || !Array.isArray(v.cases)) return { ok: false, fallo: fallo(estado, v) };
+  return {
+    ok: true,
+    datos: v.cases.filter(esObjeto).map((c) => ({
+      id: texto(c.id),
+      category: texto(c.category),
+      format: texto(c.format),
+      description: texto(c.description),
+      expected: esObjeto(c.expected) ? c.expected : {},
+    })),
+  };
+}
+
+const ESTADOS = ["passed", "failed", "skipped", "error"] as const;
+
+export function interpretarEjecucion(estado: number, cuerpo: string): Respuesta<Ejecucion> {
+  const v = leer(cuerpo);
+  if (estado !== 200 || !esObjeto(v) || !Array.isArray(v.results)) return { ok: false, fallo: fallo(estado, v) };
+  return {
+    ok: true,
+    datos: {
+      total: numero(v.total),
+      passed: numero(v.passed),
+      failed: numero(v.failed),
+      skipped: numero(v.skipped),
+      errors: numero(v.errors),
+      results: v.results.filter(esObjeto).map((r) => ({
+        id: texto(r.id),
+        category: texto(r.category),
+        status: (ESTADOS as readonly string[]).includes(texto(r.status)) ? (r.status as ResultadoCaso["status"]) : "error",
+        reason: typeof r.reason === "string" ? r.reason : undefined,
+        mismatch: Array.isArray(r.mismatch) ? r.mismatch.map((m) => texto(m)) : [],
+        got: esObjeto(r.got) ? r.got : null,
+        expected: esObjeto(r.expected) ? r.expected : null,
+      })),
+    },
+  };
+}
+
+async function obtener<T>(
+  ruta: string,
+  metodo: "GET" | "POST",
+  interpretar: (estado: number, cuerpo: string) => Respuesta<T>,
+): Promise<Respuesta<T>> {
+  try {
+    const r = await fetch(ruta, { method: metodo });
+    return interpretar(r.status, await r.text());
+  } catch {
+    return { ok: false, fallo: { estado: null, mensaje: "no se pudo contactar con el servidor" } };
+  }
+}
+
+const consulta = (categoria: string) => (categoria ? `?category=${encodeURIComponent(categoria)}` : "");
+export const pedirCasos = (categoria = "") => obtener(`/api/tests${consulta(categoria)}`, "GET", interpretarCasos);
+export const ejecutarCasos = (categoria = "") =>
+  obtener(`/api/tests/run${consulta(categoria)}`, "POST", interpretarEjecucion);

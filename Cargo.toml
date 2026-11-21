@@ -13,6 +13,7 @@ members = [
     "crates/baseline",
     "crates/cli",
     "crates/derivation",
+    "crates/atlas",
     "server",
 ]
 
@@ -34,6 +35,7 @@ codegen = { path = "crates/codegen" }
 runtime-rs = { path = "crates/runtime-rs" }
 baseline = { path = "crates/baseline" }
 derivation = { path = "crates/derivation" }
+atlas = { path = "crates/atlas" }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

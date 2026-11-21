@@ -83,3 +83,4 @@ table.comparacion td { font-variant-numeric: tabular-nums; }
 .fila-barra { display: grid; grid-template-columns: 90px 1fr 90px; gap: 8px; align-items: center; }
 .barra-fondo { background: var(--fondo); border: 1px solid var(--borde); border-radius: 4px; height: 14px; }
 .barra-valor { background: var(--acento); height: 100%; border-radius: 3px; min-width: 2px; }
+.fila-error td { background: color-mix(in srgb, var(--error) 12%, transparent); }
