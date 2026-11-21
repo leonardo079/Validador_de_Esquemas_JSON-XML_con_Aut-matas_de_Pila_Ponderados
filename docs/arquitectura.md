@@ -31,7 +31,7 @@ flowchart LR
 | Fase | Crate | Entrada → salida | Documento |
 | --- | --- | --- | --- |
 | 1. Léxico | `lexer` | bytes → tokens (AFD de Mealy `no_std`, sin `alloc`; UTF-8, JSON, XML) | [fase1/lexico.md](fase1/lexico.md) |
-| 2. Sintáctico | `schema-parser`, `xsd` (lector y parser) | tokens → AST del esquema (LL(1), iterativo, profundidad 256) | [fase2/](fase2/) |
+| 2. Sintáctico | `schema-parser`, `xsd` (lector y parser) | tokens → AST del esquema (LL(1) descendente recursivo, profundidad ≤ 256, en un hilo con pila propia, D7) | [fase2/](fase2/) |
 | 3. Semántico | `semantic`, `xsd` (análisis), `ir` | AST → `VerifiedIr`: `$ref` resuelto, ciclos rechazados, cada regla con su clase y estrategia | [fase3/ir.md](fase3/ir.md), [clasificacion.md](fase3/clasificacion.md) |
 | 4. Autómata | `automaton` | `VerifiedIr` → `Automaton` (las tablas de M y su resumen) | [fase4/automata.md](fase4/automata.md) |
 | 5. Código | `codegen` | `Automaton` → archivos Rust o C autocontenidos | [fase5/codegen.md](fase5/codegen.md), [codegen-c.md](fase5/codegen-c.md) |

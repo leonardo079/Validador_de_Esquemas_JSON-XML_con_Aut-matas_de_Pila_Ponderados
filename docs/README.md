@@ -5,7 +5,8 @@ lenguaje, diagramas de autómatas (AFD, DPDA), gramáticas regulares y libres de
 y árboles de derivación». Este archivo es la entrada: resume la definición formal (§2) y dice dónde está cada pieza.
 El detalle de cada fase está en `docs/faseN/`; lo que sigue abierto, en `docs/faseN/pendientes.md`.
 El informe final (entregable 4: complejidad, tamaño del autómata, decisiones, errores, vulnerabilidades y
-bombeo) está en [informe-final.md](informe-final.md).
+bombeo) está en [informe-final.md](informe-final.md), y el guion de la presentación y de la demo, en
+[presentacion/guion.md](presentacion/guion.md).
 
 ## 1. Mapa del entregable
 

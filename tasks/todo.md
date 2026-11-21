@@ -687,6 +687,14 @@ Criterios propuestos y aplicados por Claude con la delegación del usuario («to
 - [x] Verificación con las sondas de la auditoría C: §18 (716 → 242 MB) y §21 (cierre a los 120 s) cumplen. §19 no cumplía: el presupuesto de respuestas se soltaba al entregar el cuerpo entero en un *frame*, y 122 ZIP sin leer llegaban a 889 MB. Corregido con `ConReserva` por trozos de 64 KiB: unos 150 MB con 10 o con 122 intentos. — `server/src/api.rs`, `api::tests::reserva_hasta_el_ultimo_trozo`; `docs/fase7/pendientes.md` §18, §19, §21
 - [x] Visto bueno de los endpoints de F7.1, F7.2 y F7.5 (D82; F7.6 ya tenía D70), con seis cambios pequeños para Bayron (`docs/fase7/pendientes.md` §25); fila de 1 MiB en `docs/00-alcance.md` §4.
 
+## Tarea E7: diapositivas, guion, video y ensayos — EN CURSO (21 nov; los dos)
+
+- [x] Diapositivas: 18, con notas del orador por diapositiva (quién habla y qué dice), en una presentación de claude.ai que se descarga en PowerPoint o PDF. Cifras del informe final.
+- [x] Guion: reparto y tiempos (≈ 25 min), lista de antes de presentar, la demo en seis pasos con sus entradas y lo que debe verse, video de respaldo, tabla de ensayos y preguntas probables. — `docs/presentacion/guion.md`, `docs/presentacion/ejemplos/usuarios-invalido.json` (comprobado con un binario generado: `/users/1`, `required`)
+- [ ] URL pública en la diapositiva 17 (tras F7.7).
+- [ ] Video de respaldo (§4 del guion).
+- [ ] Dos ensayos con cronómetro (§5 del guion).
+
 ## Tarea E4: informe final — HECHA (21 nov; parte de la pista A)
 
 - [x] Complejidad: O(n) en bytes y O(d) en pila con el argumento formal, las gráficas y tablas de E1/F6.5 y una medición de los binarios generados Rust y C. — `docs/informe-final.md` §1
