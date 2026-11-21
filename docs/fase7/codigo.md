@@ -31,6 +31,10 @@ El ZIP es reproducible: fecha fija y mismo orden, así que el mismo esquema da l
 si `lang` no es `rust` ni `c`, y 422 si el esquema no compila (como `/api/schemas`) o si M no se puede construir.
 Ejemplos: el de `objeto-cerrado` en C ocupa 135 KB (9 archivos) y en Rust 213 KB. Los lee `unzip`.
 
+**Topes (E3, D83):** el ZIP no puede pasar de 8 MiB (422 `too-large`). Además, toda respuesta de más de 64 KiB
+reserva su tamaño de un presupuesto global de 48 MiB hasta que se termina de enviar (503 `busy` si no hay sitio;
+`pendientes.md` §19).
+
 ## 2. `POST /api/validate`
 
 El cuerpo es `{"schema": "…", "payload": "…", "lang": "c"|"rust"}`. El servidor:
@@ -51,8 +55,10 @@ El cuerpo es `{"schema": "…", "payload": "…", "lang": "c"|"rust"}`. El servi
   respuesta es 502 `sandbox`.
 - **Sin sandbox** (el servidor arrancó sin `SANDBOX=docker`), la respuesta es 503 `no-sandbox`; el resto de la API
   sigue igual.
-- El plazo es el del sandbox (compilar, ejecutar y holgura: 85 s), no los 10 s de una compilación de esquema
-  (`api::procesar_con_plazo`).
+- El plazo es el del sandbox: con `SANDBOX=docker`, 40 + 10 + 5 = **55 s**, por debajo del `write 60s` de Caddy
+  (E3C-4). Usa un semáforo propio de 1, así que no ocupa los permisos de compilación (`api::procesar_con_plazo`).
+- El 502 `sandbox` da un mensaje fijo; el diagnóstico del compilador va solo al registro (E3C-6, D15).
+- `generated` y `agree` son `null` si el sandbox no terminó (`status` distinto de `ok`).
 
 **Verificado con Docker** (`validate_compila_y_ejecuta_en_el_sandbox`): en C y en Rust, con un payload válido, uno
 inválido y uno malformado, el binario generado y el intérprete coinciden, y los códigos de salida son 0, 1 y 2. Las
@@ -76,8 +82,22 @@ fija, sin árbol y sin guardar el payload.
   así que nunca hay más de un bloque en cola.
 - `stopped: true` indica que el validador ya encontró un error de peso ∞ (malformado o límite): lo que llegue
   después no cambia el veredicto.
-- El validador corre en un hilo propio con pila de 8 MiB (D7). Hay como mucho 4 sesiones a la vez (503 `busy` sin
-  cola), 64 MiB por sesión y 30 s de inactividad.
+- El validador corre en un hilo propio con pila de 8 MiB (D7).
+- **Topes (E3, D83):**
+
+  | Tope | Valor | Si se pasa |
+  | --- | --- | --- |
+  | Sesiones a la vez | 4 | 503 `busy` en el *upgrade*, sin cola |
+  | Compilación del esquema | un permiso de compilación del servidor y 10 s | `busy` o `timeout` |
+  | CPU de validación por sesión | 20 s, medidos cada 4 KiB | `cpu-limit` |
+  | Duración de la sesión | 120 s | `session-limit` |
+  | Mensajes por sesión (también *ping* y bloques vacíos) | 20 000 | `session-limit` |
+  | Bytes de payload | 64 MiB | `too-large` |
+  | Inactividad | 30 s | `idle` |
+  | `Origin` | el mismo host que `Host` (o ninguno) | 403 |
+
+- Cada error es `{"type":"error","code","message"}`, y el cierre lleva su código WebSocket: 1008 (protocolo),
+  1009 (demasiado grande), 1011 (interno) o 1013 (reintentar más tarde).
 
 **Comprobado:**
 

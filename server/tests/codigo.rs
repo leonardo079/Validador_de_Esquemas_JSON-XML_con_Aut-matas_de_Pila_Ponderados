@@ -262,3 +262,62 @@ async fn validate_compila_y_ejecuta_en_el_sandbox() {
         }
     }
 }
+
+// --- E3 (`docs/fase7/pendientes.md` §17-§25).
+
+/// E3C-3: el presupuesto de respuestas grandes se suelta al terminar de
+/// enviar el cuerpo. 300 ZIP leídos enteros (≈ 135 KB cada uno, más de lo que
+/// cabe en 48 MiB a la vez) dan siempre 200.
+#[tokio::test]
+async fn presupuesto_de_respuestas_se_suelta_al_leer() {
+    let app = router(Config::default());
+    for i in 0..300 {
+        let (e, _, z) = pedir(&app, post("/api/code?lang=c", ESQUEMA)).await;
+        assert_eq!(e, StatusCode::OK, "petición {i}");
+        assert!(z.len() > 64 << 10);
+    }
+}
+
+/// E3C-3: si el cliente no lee, las respuestas retienen su reserva hasta
+/// agotar el presupuesto (503 `busy`); al soltarlas, vuelve a haber sitio.
+#[tokio::test]
+async fn presupuesto_de_respuestas_se_agota_sin_leer() {
+    let app = router(Config::default());
+    let mut retenidas = Vec::new();
+    let mut ocupado = false;
+    for _ in 0..600 {
+        let r = app
+            .clone()
+            .oneshot(post("/api/code?lang=c", ESQUEMA))
+            .await
+            .unwrap();
+        if r.status() == StatusCode::SERVICE_UNAVAILABLE {
+            let b = axum::body::to_bytes(r.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            assert_eq!(
+                serde_json::from_slice::<Value>(&b).unwrap()["error"],
+                "busy"
+            );
+            ocupado = true;
+            break;
+        }
+        assert_eq!(r.status(), StatusCode::OK);
+        retenidas.push(r); // cuerpo sin leer: la reserva sigue tomada
+    }
+    assert!(ocupado, "nunca se agotó el presupuesto");
+    assert!(retenidas.len() < 600);
+    drop(retenidas);
+    let (e, _, _) = pedir(&app, post("/api/code?lang=c", ESQUEMA)).await;
+    assert_eq!(
+        e,
+        StatusCode::OK,
+        "al soltar las respuestas vuelve a haber presupuesto"
+    );
+}
+
+#[test]
+fn errores_del_flujo_con_codigo() {
+    let m = server::flujo::conversar(r#"{"type": 3}"#, &[b"1"]);
+    assert_eq!(m[0]["code"], "schema");
+}

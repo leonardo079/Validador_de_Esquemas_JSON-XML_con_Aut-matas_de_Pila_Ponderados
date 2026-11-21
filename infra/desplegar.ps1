@@ -34,9 +34,12 @@ Remove-Item $tar
 # F7.2: el `.env` (MONGODB_URI) va aparte, solo a la EC2, con permisos 600.
 $env_local = Join-Path $repo '.env'
 if (Test-Path $env_local) {
+    # E3C-11: el archivo se crea vacío con permisos 600 ANTES de copiar la
+    # contraseña (scp conserva los permisos de un archivo que ya existe).
+    ssh @ssh $destino "umask 077; : > ~/validador/.env; chmod 600 ~/validador/.env"
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     scp @ssh $env_local "${destino}:validador/.env"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    ssh @ssh $destino "chmod 600 ~/validador/.env"
 } else {
     Write-Host "Sin .env: el servidor arranca sin MongoDB (/api/tests responde 503)."
 }

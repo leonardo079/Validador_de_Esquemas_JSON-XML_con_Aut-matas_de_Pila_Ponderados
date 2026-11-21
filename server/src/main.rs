@@ -71,6 +71,10 @@ fn main() -> ExitCode {
         let sandbox = match std::env::var("SANDBOX").ok().as_deref() {
             Some("docker") => {
                 let mut s = server::sandbox::Sandbox::default();
+                // E3C-4: compilar + ejecutar + holgura = 55 s, por debajo del
+                // `write 60s` de Caddy (si no, el 504 no llega nunca).
+                s.limites.compilar = std::time::Duration::from_secs(40);
+                s.limites.holgura = std::time::Duration::from_secs(5);
                 if let Ok(img) = std::env::var("SANDBOX_IMAGE") {
                     s.imagen = img;
                 }

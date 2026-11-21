@@ -914,3 +914,17 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [x] Doc en `docs/fase7/codigo.md`; `pendientes.md` §14 cerrado y §16 nuevo; `lint OK`; 820 pruebas del workspace en verde (7 de `codegen` necesitan un compilador de C, que no hay en este Windows).
 
 **Estado (21 nov):** hecha. Pendiente: visto bueno de Leonardo a las tres rutas (D42); F7.5-P1 (sandbox en la EC2); F7.3-P1 (caché del binario).
+
+# Correcciones del servidor tras E3 (pista B, Bayron; 21 nov, D83)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario). Detalle en `docs/fase7/pendientes.md` §17-§25.
+
+- [x] §17 (High): 20 s de CPU por sesión de WebSocket, medidos cada 4 KiB.
+- [x] §18 (High): el WebSocket compila con un permiso de `app.permisos` y con plazo.
+- [x] §19 (High): presupuesto de respuestas de 48 MiB retenido hasta enviar el cuerpo, y ZIP de 8 MiB como mucho.
+- [x] §21-§23 (Medium): duración máxima y mensajes por sesión; semáforo y plazo propios del sandbox (55 s); caché del corpus de Atlas.
+- [x] E3C-6/7/8/11 y §25.3/.4/.6/.8.
+- [x] Pruebas nuevas en `server/tests/codigo.rs`, `server/tests/api.rs` y `api::tests`; `lint OK`; servidor en verde; prueba con Docker en verde.
+- [ ] Visto bueno de Leonardo a los cambios de contrato (`/api/health`, `code` del WebSocket).
+
+**Estado (21 nov):** hecha. Sin cambios: §20, E3C-9 y E3C-10.

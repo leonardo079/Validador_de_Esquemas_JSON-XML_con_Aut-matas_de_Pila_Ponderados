@@ -6,7 +6,8 @@
 //! Las consultas tienen plazo ([`PLAZO`]) y tope ([`MAX_CASOS`]); [`ejecutar`]
 //! es pura (sin red) y corre en el hilo de `api::procesar`.
 
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use atlas::Guardado;
 use automaton::{BuildError, ErrorKind, Mode};
@@ -62,13 +63,38 @@ async fn buscar(
 }
 
 /// `GET /api/tests`: los casos sin esquema ni payload.
+/// Caducidad de la caché del corpus (E3C-5): el corpus es estático (se
+/// recarga con `cargo run -p atlas`), así que no hace falta consultar Atlas
+/// en cada petición ni gastar la cuota del M0.
+pub const CADUCIDAD: Duration = Duration::from_secs(300);
+
+/// (categoría, cuándo, documentos).
+type Entrada = (String, Instant, Arc<Vec<Value>>);
+static CACHE: Mutex<Vec<Entrada>> = Mutex::new(Vec::new());
+
+/// Los documentos completos de una categoría (o de todas), de la caché si
+/// tienen menos de [`CADUCIDAD`].
+async fn todos(col: Option<&Coleccion>, categoria: Option<&str>) -> Result<Arc<Vec<Value>>, Error> {
+    let col = col.ok_or(Error::SinBase)?;
+    let clave = categoria.unwrap_or("").to_owned();
+    if let Ok(c) = CACHE.lock() {
+        if let Some((_, _, v)) = c
+            .iter()
+            .find(|(k, t, _)| *k == clave && t.elapsed() < CADUCIDAD)
+        {
+            return Ok(v.clone());
+        }
+    }
+    let v = Arc::new(buscar(Some(col), filtro(categoria), None).await?);
+    if let Ok(mut c) = CACHE.lock() {
+        c.retain(|(k, t, _)| *k != clave && t.elapsed() < CADUCIDAD);
+        c.push((clave, Instant::now(), v.clone()));
+    }
+    Ok(v)
+}
+
 pub async fn listar(col: Option<&Coleccion>, categoria: Option<&str>) -> Result<Value, Error> {
-    let v = buscar(
-        col,
-        filtro(categoria),
-        Some(doc! {"schema": 0, "payload": 0}),
-    )
-    .await?;
+    let v = todos(col, categoria).await?;
     let casos: Vec<Value> = v
         .iter()
         .map(|d| {
@@ -82,7 +108,9 @@ pub async fn listar(col: Option<&Coleccion>, categoria: Option<&str>) -> Result<
             })
         })
         .collect();
-    Ok(json!({"total": casos.len(), "cases": casos}))
+    // `truncated` (§25.8): la consulta devuelve como mucho MAX_CASOS.
+    let truncated = casos.len() as i64 >= MAX_CASOS;
+    Ok(json!({"total": casos.len(), "truncated": truncated, "cases": casos}))
 }
 
 /// Los casos completos para ejecutar; los que no se pueden leer cuentan como
@@ -91,7 +119,7 @@ pub async fn traer(
     col: Option<&Coleccion>,
     categoria: Option<&str>,
 ) -> Result<Vec<Result<Guardado, (String, String)>>, Error> {
-    let v = buscar(col, filtro(categoria), None).await?;
+    let v = todos(col, categoria).await?;
     Ok(v.iter()
         .map(|d| atlas::leer(d).map_err(|e| (d["_id"].as_str().unwrap_or("?").to_owned(), e)))
         .collect())

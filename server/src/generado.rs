@@ -82,6 +82,10 @@ fn leeme(l: Lenguaje, formato: &str) -> String {
     )
 }
 
+/// Tope del ZIP (E3C-3, `docs/fase7/pendientes.md` §19): un esquema de 107 KB
+/// daba 6,4 MB. Más que esto es 422 `too-large`.
+pub const MAX_ZIP: usize = 8 << 20;
+
 /// `POST /api/code?lang=…`: el ZIP con el código y un `LEEME.txt`.
 pub fn zip(esquema: &[u8], l: Lenguaje) -> Result<(String, Vec<u8>), Fallo> {
     let (f, a) = construir(esquema)?;
@@ -92,6 +96,14 @@ pub fn zip(esquema: &[u8], l: Lenguaje) -> Result<(String, Vec<u8>), Fallo> {
         .map(|x| (x.nombre.as_str(), x.contenido.as_bytes()))
         .collect();
     lista.push(("LEEME.txt", texto.as_bytes()));
+    let total: usize = lista.iter().map(|(_, d)| d.len()).sum();
+    if total > MAX_ZIP {
+        return Err(Fallo::Payload(json!({
+            "error": "too-large",
+            "limit": MAX_ZIP,
+            "message": format!("el código generado ocupa {total} bytes; el máximo es {MAX_ZIP}"),
+        })));
+    }
     Ok((
         format!("validador-{}-{}.zip", f.nombre(), nombre(l)),
         crate::zip::zip(&lista),

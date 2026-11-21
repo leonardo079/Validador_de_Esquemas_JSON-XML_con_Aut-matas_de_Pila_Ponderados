@@ -38,6 +38,15 @@ pub type Compilador = Arc<dyn Fn(&[u8], usize) -> Compilado + Send + Sync>;
 /// Unidad del presupuesto de cuerpos en vuelo (SEC-H1).
 const BLOQUE: usize = 1024;
 
+/// Respuestas de más de este tamaño reservan su tamaño del presupuesto
+/// hasta que se envían enteras (E3C-3, `docs/fase7/pendientes.md` §19).
+const RESPUESTA_GRANDE: usize = 64 << 10;
+
+/// Presupuesto global de bytes de respuestas grandes pendientes de enviar:
+/// con él, cien clientes que no leen no retienen más de esto (antes, 121 ZIP
+/// sin leer llevaron el proceso a 1 GB).
+const PRESUPUESTO_RESPUESTAS: usize = 48 << 20;
+
 struct App {
     cfg: Config,
     /// Permisos de compilación (`max_concurrent_compiles`).
@@ -53,6 +62,12 @@ struct App {
     sandbox: Option<Arc<crate::sandbox::Sandbox>>,
     /// Sesiones de `WS /ws/validate` a la vez (F7.5).
     flujos: Arc<Semaphore>,
+    /// Presupuesto de bytes de respuestas grandes que aún no se han enviado
+    /// (E3C-3), en bloques de [`BLOQUE`].
+    respuestas: Arc<Semaphore>,
+    /// Un solo trabajo del sandbox a la vez, aparte de las compilaciones
+    /// (E3C-4): `/api/validate` ya no retiene uno de los dos permisos.
+    sandbox_permisos: Arc<Semaphore>,
 }
 
 /// La API con la compilación real y sin base de datos.
@@ -99,6 +114,8 @@ fn construir(
         casos,
         sandbox: sandbox.map(Arc::new),
         flujos: Arc::new(Semaphore::new(crate::flujo::MAX_FLUJOS)),
+        respuestas: Arc::new(Semaphore::new(PRESUPUESTO_RESPUESTAS / BLOQUE)),
+        sandbox_permisos: Arc::new(Semaphore::new(1)),
     });
     Router::new()
         .route("/api/health", get(health))
@@ -115,6 +132,10 @@ fn construir(
         .method_not_allowed_fallback(metodo_no_permitido)
         .layer(DefaultBodyLimit::max(limite))
         .layer(middleware::map_response(cabeceras_comunes))
+        .layer(middleware::from_fn_with_state(
+            app.clone(),
+            presupuesto_respuestas,
+        ))
         .with_state(app)
 }
 
@@ -162,10 +183,19 @@ fn registrar(linea: &str) {
     let _ = writeln!(std::io::stderr(), "server: {linea}");
 }
 
-async fn health() -> Response {
+/// `GET /api/health`. Desde E3 (§25.4) anuncia también qué partes opcionales
+/// tiene el servidor: `database` (Atlas, F7.2) y `sandbox` (F7.5), para que
+/// la web no tenga que descubrirlo con un 503.
+async fn health(State(app): State<Arc<App>>) -> Response {
     responder(
         StatusCode::OK,
-        json!({"status": "ok", "version": env!("CARGO_PKG_VERSION")}).to_string(),
+        json!({
+            "status": "ok",
+            "version": env!("CARGO_PKG_VERSION"),
+            "database": app.casos.is_some(),
+            "sandbox": app.sandbox.is_some(),
+        })
+        .to_string(),
     )
 }
 
@@ -191,7 +221,7 @@ fn demasiado_grande(limit: usize) -> Response {
         json!({
             "error": "too-large",
             "limit": limit,
-            "message": format!("el esquema supera el tamaño máximo de {limit} bytes"),
+            "message": format!("el cuerpo de la petición supera el tamaño máximo de {limit} bytes"),
         })
         .to_string(),
     )
@@ -441,7 +471,7 @@ async fn validar(State(app): State<Arc<App>>, req: Request) -> Response {
         .as_ref()
         .map(|s| s.limites.compilar + s.limites.ejecutar + s.limites.holgura)
         .unwrap_or(app.cfg.compile_timeout);
-    procesar_con_plazo(&app, req, plazo, move |bytes| {
+    procesar_con_plazo(&app, req, &app.sandbox_permisos, plazo, move |bytes| {
         vista(crate::generado::validar(&bytes, sb.as_deref()))
     })
     .await
@@ -449,16 +479,48 @@ async fn validar(State(app): State<Arc<App>>, req: Request) -> Response {
 
 /// `WS /ws/validate` (F7.5, D81): validación por bloques en vivo
 /// (`flujo.rs`). Sin cola: con todas las sesiones ocupadas, 503.
-async fn flujo(State(app): State<Arc<App>>, ws: axum::extract::ws::WebSocketUpgrade) -> Response {
+async fn flujo(
+    State(app): State<Arc<App>>,
+    cabeceras: HeaderMap,
+    ws: axum::extract::ws::WebSocketUpgrade,
+) -> Response {
+    if !mismo_origen(&cabeceras) {
+        return responder(
+            StatusCode::FORBIDDEN,
+            json!({"error": "origin", "message": "WebSocket desde otro origen"}).to_string(),
+        );
+    }
     let Ok(permiso) = app.flujos.clone().try_acquire_owned() else {
         return no_disponible(
             "busy",
             "hay demasiadas validaciones en vivo; reintente en unos segundos",
         );
     };
+    let cx = crate::flujo::Contexto {
+        permisos: app.permisos.clone(),
+        plazo_compilar: app.cfg.compile_timeout,
+    };
     ws.max_message_size(crate::flujo::MAX_BLOQUE)
         .max_frame_size(crate::flujo::MAX_BLOQUE)
-        .on_upgrade(move |s| crate::flujo::sesion(s, permiso))
+        .on_upgrade(move |s| crate::flujo::sesion(s, permiso, cx))
+}
+
+/// E3C-7: un navegador manda `Origin`; si lo manda, su host tiene que ser el
+/// de `Host` (la web y la API comparten origen, D56). Sin `Origin` (clientes
+/// que no son navegadores) se acepta: no hay cookies ni credenciales que
+/// robar, el riesgo es solo de cuota (topes de sesión).
+fn mismo_origen(c: &HeaderMap) -> bool {
+    let Some(origen) = c.get(header::ORIGIN).and_then(|v| v.to_str().ok()) else {
+        return true;
+    };
+    let Some(host) = c.get(header::HOST).and_then(|v| v.to_str().ok()) else {
+        return false;
+    };
+    let sin_esquema = origen
+        .strip_prefix("https://")
+        .or_else(|| origen.strip_prefix("http://"))
+        .unwrap_or("");
+    sin_esquema.eq_ignore_ascii_case(host)
 }
 
 /// La respuesta de una vista: 200 con su JSON, o el error que toque.
@@ -482,9 +544,12 @@ fn vista(r: Result<String, crate::vistas::Fallo>) -> Response {
         ),
         Err(Fallo::Sandbox(detalle)) => {
             registrar(&format!("sandbox: {detalle}"));
+            // E3C-6 (D15): el diagnóstico del compilador o de `docker run` va solo al
+            // registro; el cliente recibe un mensaje fijo.
             responder(
                 StatusCode::BAD_GATEWAY,
-                json!({"error": "sandbox", "message": detalle.chars().take(600).collect::<String>()}).to_string(),
+                json!({"error": "sandbox", "message": "el sandbox no pudo compilar o ejecutar el código generado"})
+                    .to_string(),
             )
         }
     }
@@ -498,13 +563,15 @@ async fn procesar<F>(app: &App, req: Request, trabajo: F) -> Response
 where
     F: FnOnce(Vec<u8>) -> Response + Send + 'static,
 {
-    procesar_con_plazo(app, req, app.cfg.compile_timeout, trabajo).await
+    procesar_con_plazo(app, req, &app.permisos, app.cfg.compile_timeout, trabajo).await
 }
 
-/// [`procesar`] con otro tope de tiempo (el del sandbox, F7.5).
+/// [`procesar`] con otro semáforo y otro tope de tiempo (los del sandbox,
+/// F7.5; E3C-4).
 async fn procesar_con_plazo<F>(
     app: &App,
     req: Request,
+    permisos: &Arc<Semaphore>,
     plazo: std::time::Duration,
     trabajo: F,
 ) -> Response
@@ -551,7 +618,7 @@ where
         }
     };
     // Sin cola: con todas las compilaciones ocupadas, 503 enseguida.
-    let Ok(permiso) = app.permisos.clone().try_acquire_owned() else {
+    let Ok(permiso) = permisos.clone().try_acquire_owned() else {
         return no_disponible(
             "busy",
             "hay demasiadas compilaciones en curso; reintente en unos segundos",
@@ -693,6 +760,70 @@ fn hex(bytes: &[u8]) -> String {
     s
 }
 
+/// Un cuerpo que retiene su reserva del presupuesto de respuestas hasta que
+/// hyper lo suelta: tras enviarlo entero o al cortarse la conexión.
+struct ConReserva {
+    cuerpo: axum::body::Body,
+    _reserva: tokio::sync::OwnedSemaphorePermit,
+}
+
+impl http_body::Body for ConReserva {
+    type Data = axum::body::Bytes;
+    type Error = axum::Error;
+
+    fn poll_frame(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        std::pin::Pin::new(&mut self.cuerpo).poll_frame(cx)
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.cuerpo.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.cuerpo.size_hint()
+    }
+}
+
+/// E3C-3 (`docs/fase7/pendientes.md` §19): una respuesta de más de
+/// [`RESPUESTA_GRANDE`] reserva su tamaño de [`PRESUPUESTO_RESPUESTAS`]
+/// hasta que se termina de enviar; sin presupuesto, 503 `busy` (y la
+/// respuesta construida se suelta en el acto).
+async fn presupuesto_respuestas(
+    State(app): State<Arc<App>>,
+    req: Request,
+    siguiente: middleware::Next,
+) -> Response {
+    let r = siguiente.run(req).await;
+    let tam = http_body::Body::size_hint(r.body())
+        .exact()
+        .and_then(|n| usize::try_from(n).ok())
+        .unwrap_or(usize::MAX);
+    if tam <= RESPUESTA_GRANDE {
+        return r;
+    }
+    let Ok(reserva) = app
+        .respuestas
+        .clone()
+        .try_acquire_many_owned(bloques(tam.min(PRESUPUESTO_RESPUESTAS)))
+    else {
+        return no_disponible(
+            "busy",
+            "hay demasiadas respuestas grandes pendientes de enviar; reintente en unos segundos",
+        );
+    };
+    let (partes, cuerpo) = r.into_parts();
+    Response::from_parts(
+        partes,
+        axum::body::Body::new(ConReserva {
+            cuerpo,
+            _reserva: reserva,
+        }),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -741,6 +872,41 @@ mod tests {
         // Con un `Content-Length` (reserva menor), la capacidad es esa.
         let b = leer(peticion(100_000, tope), tope, 100_000).await.unwrap();
         assert_eq!((b.len(), b.capacity()), (100_000, 100_000));
+    }
+
+    /// E3C-7: el WebSocket solo acepta un `Origin` del mismo host (o ninguno).
+    #[test]
+    fn origen_del_websocket() {
+        let c = |o: Option<&str>, h: Option<&str>| {
+            let mut m = HeaderMap::new();
+            if let Some(o) = o {
+                m.insert(header::ORIGIN, HeaderValue::from_str(o).unwrap());
+            }
+            if let Some(h) = h {
+                m.insert(header::HOST, HeaderValue::from_str(h).unwrap());
+            }
+            mismo_origen(&m)
+        };
+        assert!(
+            c(None, Some("x.sslip.io")),
+            "sin Origin: no es un navegador"
+        );
+        assert!(c(
+            Some("https://3-4-5-6.sslip.io"),
+            Some("3-4-5-6.sslip.io")
+        ));
+        assert!(c(Some("http://localhost:5173"), Some("localhost:5173")));
+        assert!(c(
+            Some("https://EJEMPLO.sslip.io"),
+            Some("ejemplo.sslip.io")
+        ));
+        assert!(!c(Some("https://malo.example"), Some("3-4-5-6.sslip.io")));
+        assert!(!c(
+            Some("https://3-4-5-6.sslip.io.malo.example"),
+            Some("3-4-5-6.sslip.io")
+        ));
+        assert!(!c(Some("null"), Some("x")));
+        assert!(!c(Some("https://x"), None));
     }
 
     /// Pasar del tope con frames pequeños es un 413, no un 400.

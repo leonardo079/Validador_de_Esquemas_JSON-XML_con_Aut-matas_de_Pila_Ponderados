@@ -284,9 +284,15 @@ pub fn ejecutar(s: &Sandbox, t: &Trabajo<'_>) -> Resultado {
     let mut entrada: Vec<(&str, &[u8])> = t.archivos.to_vec();
     entrada.push(("payload", t.payload));
     let tar = tar(&entrada);
+    // E3C-8: con el pid solo, tras un reinicio (pid 1 en el contenedor) el
+    // nombre se repetía; los nanosegundos del arranque lo hacen único.
     let nombre = format!(
-        "sv-{}-{}",
+        "sv-{}-{}-{}",
         std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0),
         CONTADOR.fetch_add(1, Ordering::Relaxed)
     );
     let mut hijo = match Command::new(&s.docker)
@@ -319,7 +325,16 @@ pub fn ejecutar(s: &Sandbox, t: &Trabajo<'_>) -> Resultado {
             Ok(Some(e)) => break Some(e),
             Ok(None) if inicio.elapsed() >= plazo => break None,
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
-            Err(e) => return Resultado::Rechazado(format!("esperando a Docker: {e}")),
+            Err(e) => {
+                // E3C-8: no dejar el contenedor vivo si no se puede esperar.
+                let _ = Command::new(&s.docker)
+                    .args(["kill", &nombre])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                let _ = hijo.kill();
+                return Resultado::Rechazado(format!("esperando a Docker: {e}"));
+            }
         }
     };
     let Some(estado) = estado else {

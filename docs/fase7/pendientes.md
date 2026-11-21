@@ -324,6 +324,8 @@ los dos **High** (§18 y §19) rechazan exponer la aplicación hasta corregirlos
 
 ### 17. `WS /ws/validate` sin tope de CPU (E3A-2, High en el servidor)
 
+- **Resuelto (21 nov, D83):** [`flujo.rs`](../../server/src/flujo.rs) da `CPU_POR_SESION` = 20 s de validación por sesión, medidos con `Instant` cada `PASO` = 4 KiB dentro de cada bloque. Al pasarlo, error `cpu-limit` y cierre 1013. Con §61 de la Fase 4 resuelto (`abd2e3a`, O(1 024) por número), los dos topes se suman.
+
 - **Estado:** el WebSocket acepta el esquema del cliente y valida en el proceso sin plazo. Con cotas numéricas
   largas (§61 de la Fase 4) cada número costaba O(|cota|): minutos de CPU por bloque de 1 MiB, 4 sesiones a la
   vez. **§61 está resuelto** (21 nov): cada número cuesta ahora O(1 024), así que un bloque de 1 MiB vuelve a
@@ -334,6 +336,8 @@ los dos **High** (§18 y §19) rechazan exponer la aplicación hasta corregirlos
 
 ### 18. El WebSocket compila sin el permiso ni el presupuesto de cuerpos (E3C-1, High, confirmado)
 
+- **Resuelto (21 nov, D83):** la sesión pide un permiso de `app.permisos` antes de compilar (sin él, error `busy` y cierre 1013) y lo suelta en cuanto M está construido. La compilación tiene el plazo de `compile_timeout`: al pasarlo, error `timeout`, y el hilo conserva el permiso hasta terminar, como en `POST /api/schemas`. El esquema es un mensaje de ≤ 1 MiB que ya cuenta en `MAX_FLUJOS`.
+
 - **Estado:** 4 WebSocket y 2 `POST /api/schemas` con `{"allOf":[{},…]}` de 1 MiB llevaron el proceso a 716 MB,
   por encima del `mem_limit` de 600 MiB: el contenedor muere y se puede repetir.
 - **Arreglo propuesto:** que la compilación del esquema del WebSocket pida `app.permisos` (y el plazo de 10 s),
@@ -341,6 +345,8 @@ los dos **High** (§18 y §19) rechazan exponer la aplicación hasta corregirlos
 - **Dónde:** `server/src/flujo.rs:141-167`, `server/src/api.rs:452-462`.
 
 ### 19. Respuestas grandes sin tope ni permiso hasta enviarlas (E3C-3, High, confirmado sin Caddy)
+
+- **Resuelto (21 nov, D83):** un middleware ([`api.rs`](../../server/src/api.rs), `presupuesto_respuestas`) hace que toda respuesta de más de 64 KiB reserve su tamaño de un **presupuesto global de 48 MiB**, que se retiene hasta que hyper suelta el cuerpo (enviado entero o conexión cortada). Sin presupuesto, 503 `busy`. El ZIP tiene un tope de 8 MiB (`generado::MAX_ZIP`, 422 `too-large`), y la IR ya tenía el suyo de 4 MiB (U8). Pruebas: 300 ZIP leídos dan siempre 200; sin leerlos, el presupuesto se agota (503) y vuelve al soltarlos. No se añadió un `ConcurrencyLimit` global: el presupuesto ya acota lo retenido.
 
 - **Estado:** es el CR-I3 de §8, pero peor con F7.5: un esquema de 107 KB da un ZIP de 6,4 MB en 0,18 s, sin tope
   de tamaño. Con 121 respuestas de `/api/code` que el cliente no lee, el proceso llegó a 1,04 GB en 12 s (la IR
@@ -351,6 +357,8 @@ los dos **High** (§18 y §19) rechazan exponer la aplicación hasta corregirlos
 
 ### 20. Compilaciones lentas que retienen los dos permisos (E3B-4, Medium)
 
+- **Sin cambios (21 nov):** necesita un proceso hijo o un plazo dentro de `automaton::build` (interfaz compartida, D42). Para la entrega se acepta: lo peor medido tras E3 es ≈ 2 s.
+
 - **Estado:** el plazo de 10 s solo suelta la respuesta (§12). Antes de E3, dos esquemas de 2-6 KB (E3B-1 a E3B-3)
   dejaban los dos permisos ocupados durante minutos u horas. Corregidos esos tres, lo peor medido es ≈ 2 s, pero la
   causa (no se puede cancelar el hilo) sigue.
@@ -359,6 +367,8 @@ los dos **High** (§18 y §19) rechazan exponer la aplicación hasta corregirlos
 
 ### 21. Sesiones WebSocket sin duración máxima (E3C-2, Medium, confirmado)
 
+- **Resuelto (21 nov, D83):** `DURACION_MAXIMA` = 120 s por sesión, haga lo que haga el cliente (error `session-limit`), y `MAX_MENSAJES` = 20 000, contando también *ping*, *pong* y bloques vacíos. Documentado en [codigo.md](codigo.md) §3.
+
 - **Estado:** un *ping* o un bloque vacío renuevan los 30 s, y los bloques vacíos no cuentan para los 64 MiB:
   cuatro sesiones ocupan las 4 plazas para siempre (la quinta recibió 503 a los 80 s).
 - **Arreglo propuesto:** duración máxima por sesión (p. ej. 120 s) y contar cada mensaje; documentarlo en
@@ -366,15 +376,21 @@ los dos **High** (§18 y §19) rechazan exponer la aplicación hasta corregirlos
 
 ### 22. `/api/validate` retiene un permiso de compilación 85 s (E3C-4, Medium, teórico: apagado en la EC2)
 
+- **Resuelto (21 nov, D83):** semáforo propio de 1 (`sandbox_permisos`), así que ya no ocupa uno de los dos permisos de compilación. Con `SANDBOX=docker` el plazo es 40 + 10 + 5 = 55 s, por debajo del `write 60s` de Caddy. Los 512 MiB del contenedor del sandbox no cuentan en el `mem_limit` del servidor (son otro contenedor); en la EC2 sigue apagado (§16).
+
 - **Arreglo propuesto:** un semáforo propio para el sandbox, el plazo por debajo del `write 60s` de Caddy, y
   contar los 512 MiB de cada contenedor fuera del `mem_limit` del servidor.
 
 ### 23. `/api/tests` y `/api/tests/run` consultan Atlas en cada petición (E3C-5, Medium, teórico)
 
+- **Resuelto en parte (21 nov, D83):** caché del corpus en memoria por categoría con `CADUCIDAD` = 5 min ([`casos.rs`](../../server/src/casos.rs)): una consulta a Atlas cada 5 min como mucho. No se pide el permiso antes de consultar (la consulta tiene su plazo de 10 s y ya no se repite); `/api/tests/run` sí ejecuta con permiso.
+
 - **Arreglo propuesto:** el corpus es estático: guardarlo en memoria con caducidad, y pedir el permiso antes de
   consultar. Evita agotar la cuota de Atlas M0.
 
 ### 24. Menores (E3C-6 a E3C-11, Low/Info)
+
+- **Resueltos (21 nov, D83):** E3C-6 (el 502 `sandbox` da un mensaje fijo y el diagnóstico va solo al registro), E3C-7 (`Origin` distinto de `Host` → 403; sin `Origin`, se acepta), E3C-8 (`docker kill` si `try_wait` falla; nombre con los nanosegundos, único tras un reinicio) y E3C-11 (el `.env` se crea vacío con permisos 600 antes de copiarlo; queda el `curl | sh` desde `main`, documentado en `despliegue.md`). **Sin cambios:** E3C-9 (Caddy como root y sin *digest*) y E3C-10 (avisos de `vite` y `vitest`, solo de desarrollo).
 
 - E3C-6: el 502 `sandbox` devuelve el *stderr* del compilador y de `docker run` (D15 pide no exponer detalles
   internos).
@@ -397,6 +413,8 @@ son los de D82 (1)-(6): `lang` igual en las dos rutas (punto 2 de abajo), `code`
 (punto 3), `sandbox`/`database` en `/api/health` (punto 4), 500 `codegen` y los `null` documentados (punto 7),
 `truncated` en `/api/tests` (punto 8) y la frase de `servidor.md` (punto 1). Los puntos 5, 6, el payload solo como
 texto del 7 y el cuerpo ignorado del 8 se aceptan como están, documentados. El 9 va con §19.
+
+- **Hecho (21 nov, D83):** .3 (errores del WebSocket con `code` estable y cierres 1008, 1009, 1011 y 1013), .4 (`/api/health` anuncia `database` y `sandbox`), .6 (el 413 habla del «cuerpo de la petición») y .8 (`/api/tests` con `truncated`). **Quedan para la revisión de Leonardo:** .1 (los 400 `request` ya existen: actualizar `servidor.md` §2), .2 (`lang` por defecto distinto: `rust` en `/api/code` porque es lo que se descarga, `c` en `/api/validate` porque compila en 1-2 s), .5 (resuelto por §22), .7 (`generated`/`agree` `null` si el sandbox no termina; documentado en `codigo.md` §2) y .9 (resuelto por §19).
 
 Observaciones de la auditoría C:
 

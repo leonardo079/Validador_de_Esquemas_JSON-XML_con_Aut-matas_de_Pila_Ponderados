@@ -82,6 +82,9 @@ async fn health_da_ok_y_la_version() {
     let v = json(&cuerpo);
     assert_eq!(v["status"], "ok");
     assert_eq!(v["version"], env!("CARGO_PKG_VERSION"));
+    // E3 §25.4: sin Atlas ni sandbox lo anuncia.
+    assert_eq!(v["database"], false);
+    assert_eq!(v["sandbox"], false);
 }
 
 #[tokio::test]

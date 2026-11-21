@@ -5,7 +5,7 @@
 //!
 //! 1. El cliente manda el **esquema** como primer mensaje de texto. El
 //!    servidor responde `{"type":"ready","format","states","transitions",
-//!    "memoryBytes"}` o `{"type":"error","message"}` y cierra.
+//!    "memoryBytes"}` o `{"type":"error","code","message"}` y cierra.
 //! 2. El cliente manda el payload en **bloques binarios** (como mucho
 //!    [`MAX_BLOQUE`] cada uno). Tras cada uno, el servidor responde
 //!    `{"type":"progress","chunk","bytes","stopped"}`: `stopped` es que el
@@ -17,18 +17,28 @@
 //!
 //! El validador es el incremental de `runtime-rs` (el mismo núcleo que el
 //! código generado), con memoria fija y sin árbol: el servidor no guarda el
-//! payload. Corre en un hilo propio con pila explícita (D7); cada sesión
-//! tiene un permiso propio (como mucho [`MAX_FLUJOS`] a la vez), un tope de
-//! bytes y un plazo de inactividad.
+//! payload. Corre en un hilo propio con pila explícita (D7).
+//!
+//! **Topes (E3, `docs/fase7/pendientes.md` §17, §18, §21):**
+//! - la compilación del esquema pide un permiso de compilación del servidor
+//!   (el mismo semáforo que `POST /api/schemas`) y tiene su plazo;
+//! - [`CPU_POR_SESION`] de validación por sesión, medidos cada [`PASO`]
+//!   bytes dentro de cada bloque (una cota numérica larga hace caro cada
+//!   número);
+//! - [`DURACION_MAXIMA`] por sesión y [`MAX_MENSAJES`] mensajes (también los
+//!   *ping* y los bloques vacíos), además de [`INACTIVIDAD`] y [`MAX_TOTAL`].
+//!
+//! Los errores llevan un `code` estable y el cierre su código WebSocket
+//! (1008 protocolo, 1009 demasiado grande, 1011 interno, 1013 reintentar).
 
-use std::sync::mpsc;
-use std::time::Duration;
+use std::sync::{mpsc, Arc};
+use std::time::{Duration, Instant};
 
 use automaton::{Mode, Options, PayloadFormat};
-use axum::extract::ws::{Message, WebSocket};
+use axum::extract::ws::{CloseFrame, Message, WebSocket};
 use runtime_rs::{Flow, JsonValidator, XmlValidator};
 use serde_json::{json, Value};
-use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::compilar::Compilado;
 use crate::vistas::{construir, Fallo};
@@ -41,6 +51,20 @@ pub const MAX_BLOQUE: usize = 1 << 20;
 pub const MAX_TOTAL: u64 = 64 << 20;
 /// Sin mensajes del cliente durante este tiempo, se cierra.
 pub const INACTIVIDAD: Duration = Duration::from_secs(30);
+/// Duración máxima de una sesión, haga lo que haga el cliente (E3C-2).
+pub const DURACION_MAXIMA: Duration = Duration::from_secs(120);
+/// Mensajes del cliente por sesión, de cualquier tipo (E3C-2).
+pub const MAX_MENSAJES: u64 = 20_000;
+/// Tiempo de validación (en el hilo) por sesión (E3A-2).
+pub const CPU_POR_SESION: Duration = Duration::from_secs(20);
+/// Cada cuántos bytes se mira el reloj dentro de un bloque.
+pub const PASO: usize = 4096;
+
+/// Códigos de cierre WebSocket (RFC 6455 §7.4.1).
+const PROTOCOLO: u16 = 1008;
+const GRANDE: u16 = 1009;
+const INTERNO: u16 = 1011;
+const REINTENTAR: u16 = 1013;
 
 enum Peticion {
     Bloque(Vec<u8>),
@@ -63,9 +87,23 @@ fn describir(f: &Fallo) -> String {
     }
 }
 
-/// El hilo del validador: construye M y luego atiende bloques hasta `Fin`.
-fn hilo(esquema: String, rx: mpsc::Receiver<Peticion>, tx: tokio::sync::mpsc::Sender<Value>) {
-    let a = match construir(esquema.as_bytes()) {
+fn error_json(code: &str, message: &str) -> Value {
+    json!({"type": "error", "code": code, "message": message})
+}
+
+/// El hilo del validador: construye M (con el permiso de compilación, que se
+/// suelta al acabar) y atiende bloques hasta `Fin` o hasta agotar
+/// [`CPU_POR_SESION`].
+fn hilo(
+    esquema: String,
+    permiso: Option<OwnedSemaphorePermit>,
+    rx: mpsc::Receiver<Peticion>,
+    tx: tokio::sync::mpsc::Sender<Value>,
+) {
+    let construido = construir(esquema.as_bytes());
+    drop(esquema);
+    drop(permiso);
+    let a = match construido {
         Ok((f, a)) => {
             let s = a.summary();
             let palabras = a.state_words(&Options::new(Mode::Total).limits);
@@ -79,7 +117,7 @@ fn hilo(esquema: String, rx: mpsc::Receiver<Peticion>, tx: tokio::sync::mpsc::Se
             a
         }
         Err(f) => {
-            let _ = tx.blocking_send(json!({"type": "error", "message": describir(&f)}));
+            let _ = tx.blocking_send(error_json("schema", &describir(&f)));
             return;
         }
     };
@@ -94,17 +132,34 @@ fn hilo(esquema: String, rx: mpsc::Receiver<Peticion>, tx: tokio::sync::mpsc::Se
         PayloadFormat::Xml => V::X(XmlValidator::new(a.tables(), &opts, &mut mem)),
     };
     let (mut bytes, mut bloques, mut parado) = (0u64, 0u64, false);
+    let mut gastado = Duration::ZERO;
     while let Ok(p) = rx.recv() {
         match p {
             Peticion::Bloque(b) => {
                 bytes += b.len() as u64;
                 bloques += 1;
-                if !parado {
+                // Por trozos de PASO bytes, mirando el reloj entre trozos.
+                for trozo in b.chunks(PASO) {
+                    if parado {
+                        break;
+                    }
+                    let t = Instant::now();
                     let flujo = match &mut v {
-                        V::J(j) => j.feed(&b),
-                        V::X(x) => x.feed(&b),
+                        V::J(j) => j.feed(trozo),
+                        V::X(x) => x.feed(trozo),
                     };
+                    gastado += t.elapsed();
                     parado = flujo == Flow::Stop;
+                    if gastado > CPU_POR_SESION {
+                        let _ = tx.blocking_send(error_json(
+                            "cpu-limit",
+                            &format!(
+                                "la validación pasó de {} s de CPU",
+                                CPU_POR_SESION.as_secs()
+                            ),
+                        ));
+                        return;
+                    }
                 }
                 let m = json!({"type": "progress", "chunk": bloques, "bytes": bytes, "stopped": parado});
                 if tx.blocking_send(m).is_err() {
@@ -130,82 +185,186 @@ async fn enviar(s: &mut WebSocket, v: Value) -> bool {
     s.send(Message::Text(v.to_string().into())).await.is_ok()
 }
 
-async fn error(s: &mut WebSocket, m: &str) {
-    let _ = enviar(s, json!({"type": "error", "message": m})).await;
-    let _ = s.send(Message::Close(None)).await;
+async fn cerrar(s: &mut WebSocket, codigo: u16, motivo: &str) {
+    let _ = s
+        .send(Message::Close(Some(CloseFrame {
+            code: codigo,
+            reason: motivo.to_owned().into(),
+        })))
+        .await;
 }
 
-/// Una sesión. `permiso` se suelta al terminar.
-pub async fn sesion(mut s: WebSocket, permiso: OwnedSemaphorePermit) {
+/// Manda el error con su `code` y cierra con `cierre`.
+async fn error(s: &mut WebSocket, code: &str, message: &str, cierre: u16) {
+    let _ = enviar(s, error_json(code, message)).await;
+    cerrar(s, cierre, code).await;
+}
+
+/// Lo que necesita una sesión del servidor.
+#[derive(Clone, Debug)]
+pub struct Contexto {
+    /// El semáforo de compilaciones del servidor (`app.permisos`, E3C-1).
+    pub permisos: Arc<Semaphore>,
+    /// Plazo de la compilación del esquema (`compile_timeout`).
+    pub plazo_compilar: Duration,
+}
+
+/// Una sesión. `permiso` (el de las sesiones) se suelta al terminar.
+pub async fn sesion(mut s: WebSocket, permiso: OwnedSemaphorePermit, cx: Contexto) {
     let _permiso = permiso;
+    let inicio = Instant::now();
     let esquema = match tokio::time::timeout(INACTIVIDAD, s.recv()).await {
         Ok(Some(Ok(Message::Text(t)))) => t.to_string(),
-        _ => return error(&mut s, "el primer mensaje debe ser el esquema (texto)").await,
+        _ => {
+            return error(
+                &mut s,
+                "protocol",
+                "el primer mensaje debe ser el esquema (texto)",
+                PROTOCOLO,
+            )
+            .await
+        }
+    };
+    // E3C-1: la compilación pide un permiso, como `POST /api/schemas`.
+    let Ok(compilar) = cx.permisos.clone().try_acquire_owned() else {
+        return error(
+            &mut s,
+            "busy",
+            "hay demasiadas compilaciones en curso; reintente en unos segundos",
+            REINTENTAR,
+        )
+        .await;
     };
     let (tx_pet, rx_pet) = mpsc::channel::<Peticion>();
     let (tx_res, mut rx_res) = tokio::sync::mpsc::channel::<Value>(2);
     let hilo = std::thread::Builder::new()
         .name("server-flujo".into())
         .stack_size(crate::STACK_SIZE)
-        .spawn(move || hilo(esquema, rx_pet, tx_res));
+        .spawn(move || hilo(esquema, Some(compilar), rx_pet, tx_res));
     if hilo.is_err() {
-        return error(&mut s, "no se pudo crear el hilo de validación").await;
+        return error(
+            &mut s,
+            "internal",
+            "no se pudo crear el hilo de validación",
+            INTERNO,
+        )
+        .await;
     }
-    // ready o error.
-    match rx_res.recv().await {
-        Some(v) if v["type"] == "ready" => {
+    // ready o error, con el plazo de compilación.
+    match tokio::time::timeout(cx.plazo_compilar, rx_res.recv()).await {
+        Err(_) => {
+            return error(
+                &mut s,
+                "timeout",
+                "la compilación superó el tiempo máximo",
+                REINTENTAR,
+            )
+            .await
+        }
+        Ok(Some(v)) if v["type"] == "ready" => {
             if !enviar(&mut s, v).await {
                 return;
             }
         }
-        Some(v) => {
+        Ok(Some(v)) => {
             let _ = enviar(&mut s, v).await;
-            let _ = s.send(Message::Close(None)).await;
-            return;
+            return cerrar(&mut s, PROTOCOLO, "schema").await;
         }
-        None => return error(&mut s, "error interno del compilador").await,
+        Ok(None) => {
+            return error(&mut s, "internal", "error interno del compilador", INTERNO).await
+        }
     }
-    let mut total = 0u64;
+    let (mut total, mut mensajes) = (0u64, 0u64);
     loop {
-        let m = match tokio::time::timeout(INACTIVIDAD, s.recv()).await {
-            Err(_) => return error(&mut s, "sin datos durante 30 s").await,
+        // El plazo de cada espera: la inactividad, sin pasar de la duración
+        // máxima de la sesión (E3C-2).
+        let Some(queda) = DURACION_MAXIMA.checked_sub(inicio.elapsed()) else {
+            return error(
+                &mut s,
+                "session-limit",
+                "la sesión pasó de su duración máxima (120 s)",
+                REINTENTAR,
+            )
+            .await;
+        };
+        let m = match tokio::time::timeout(INACTIVIDAD.min(queda), s.recv()).await {
+            Err(_) if queda <= INACTIVIDAD => {
+                return error(
+                    &mut s,
+                    "session-limit",
+                    "la sesión pasó de su duración máxima (120 s)",
+                    REINTENTAR,
+                )
+                .await
+            }
+            Err(_) => return error(&mut s, "idle", "sin datos durante 30 s", REINTENTAR).await,
             Ok(None) | Ok(Some(Err(_))) => return,
             Ok(Some(Ok(m))) => m,
         };
+        mensajes += 1;
+        if mensajes > MAX_MENSAJES {
+            return error(
+                &mut s,
+                "session-limit",
+                "demasiados mensajes en la sesión",
+                PROTOCOLO,
+            )
+            .await;
+        }
         let fin = match m {
             Message::Binary(b) => {
                 total += b.len() as u64;
                 if total > MAX_TOTAL {
-                    return error(&mut s, "el payload supera 64 MiB").await;
+                    return error(&mut s, "too-large", "el payload supera 64 MiB", GRANDE).await;
                 }
                 if tx_pet.send(Peticion::Bloque(b.to_vec())).is_err() {
-                    return error(&mut s, "el validador terminó").await;
+                    return error(&mut s, "internal", "el validador terminó", INTERNO).await;
                 }
                 false
             }
             Message::Text(t) if t.as_str() == "fin" => {
                 if tx_pet.send(Peticion::Fin).is_err() {
-                    return error(&mut s, "el validador terminó").await;
+                    return error(&mut s, "internal", "el validador terminó", INTERNO).await;
                 }
                 true
             }
             Message::Text(_) => {
-                return error(&mut s, "mensaje de texto desconocido (se espera `fin`)").await
+                return error(
+                    &mut s,
+                    "protocol",
+                    "mensaje de texto desconocido (se espera `fin`)",
+                    PROTOCOLO,
+                )
+                .await
             }
             Message::Ping(_) | Message::Pong(_) => continue,
             Message::Close(_) => return,
         };
         match rx_res.recv().await {
+            Some(v) if v["type"] == "error" => {
+                // `cpu-limit` u otro error del hilo: se manda y se cierra.
+                let code = v["code"].as_str().unwrap_or("internal").to_owned();
+                let _ = enviar(&mut s, v).await;
+                return cerrar(
+                    &mut s,
+                    if code == "cpu-limit" {
+                        REINTENTAR
+                    } else {
+                        INTERNO
+                    },
+                    &code,
+                )
+                .await;
+            }
             Some(v) => {
                 if !enviar(&mut s, v).await {
                     return;
                 }
             }
-            None => return error(&mut s, "el validador terminó").await,
+            None => return error(&mut s, "internal", "el validador terminó", INTERNO).await,
         }
         if fin {
-            let _ = s.send(Message::Close(None)).await;
-            return;
+            return cerrar(&mut s, 1000, "fin").await;
         }
     }
 }
@@ -213,14 +372,14 @@ pub async fn sesion(mut s: WebSocket, permiso: OwnedSemaphorePermit) {
 /// La misma conversación que [`sesion`] sin red, para las pruebas: el
 /// esquema, los bloques y `fin` pasan por el hilo real del validador; devuelve
 /// los mensajes del servidor en orden (`ready` o `error`, un `progress` por
-/// bloque y el `report`).
+/// bloque y el `report`, o el `error` que corte la sesión).
 pub fn conversar(esquema: &str, bloques: &[&[u8]]) -> Vec<Value> {
     let (tx_pet, rx_pet) = mpsc::channel::<Peticion>();
     let (tx_res, mut rx_res) = tokio::sync::mpsc::channel::<Value>(2);
     let e = esquema.to_owned();
     let h = std::thread::Builder::new()
         .stack_size(crate::STACK_SIZE)
-        .spawn(move || hilo(e, rx_pet, tx_res))
+        .spawn(move || hilo(e, None, rx_pet, tx_res))
         .expect("hilo");
     let mut v = Vec::new();
     match rx_res.blocking_recv() {
@@ -236,8 +395,14 @@ pub fn conversar(esquema: &str, bloques: &[&[u8]]) -> Vec<Value> {
         if tx_pet.send(Peticion::Bloque(b.to_vec())).is_err() {
             break;
         }
-        if let Some(m) = rx_res.blocking_recv() {
-            v.push(m);
+        match rx_res.blocking_recv() {
+            Some(m) if m["type"] == "error" => {
+                v.push(m);
+                let _ = h.join();
+                return v;
+            }
+            Some(m) => v.push(m),
+            None => break,
         }
     }
     if tx_pet.send(Peticion::Fin).is_ok() {

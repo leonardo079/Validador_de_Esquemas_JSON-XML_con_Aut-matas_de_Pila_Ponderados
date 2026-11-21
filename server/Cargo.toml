@@ -40,6 +40,9 @@ sha2 = "0.11.1"
 # `BodyExt::frame` y `LengthLimitError`, para leer el cuerpo frame a frame a
 # un búfer contiguo (SEC2-H1). Ya está en el árbol de axum: no añade crates.
 http-body-util = "0.1.5"
+# E3C-3: el cuerpo que retiene su reserva del presupuesto de respuestas (ya
+# está en el árbol de axum).
+http-body = "1.1.0"
 
 # Las pruebas llaman al `Router` con `oneshot`, sin red ni puertos.
 [dev-dependencies]
