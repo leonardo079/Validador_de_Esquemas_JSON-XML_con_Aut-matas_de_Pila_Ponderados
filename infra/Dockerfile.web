@@ -1,0 +1,13 @@
+# Imagen del frontal (F7.7, D71): construye `web/` (Vite) y la sirve con Caddy,
+# que además hace de proxy de `/api` hacia el servidor y pone HTTPS
+# (Let's Encrypt) y las cabeceras de seguridad (`infra/Caddyfile`).
+FROM node:20.18.0-slim AS compilar
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/ ./
+RUN npm run build
+
+FROM caddy:2.8.4-alpine
+COPY infra/Caddyfile /etc/caddy/Caddyfile
+COPY --from=compilar /web/dist /srv

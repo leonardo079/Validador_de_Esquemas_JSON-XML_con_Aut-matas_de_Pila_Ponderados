@@ -1,0 +1,26 @@
+# Imagen del servidor (F7.7, D71; `docs/fase7/despliegue.md`). Se construye
+# desde la raíz del repo: `docker compose -f infra/docker-compose.yml build`.
+#
+# Etapa 1: compila `server` en release con la misma Rust 1.100.0 fijada por
+# digest que la línea base XML y el sandbox (comparten capas). Las cachés de
+# BuildKit guardan el registro de crates y `target/` entre construcciones.
+# `RUSTUP_TOOLCHAIN` evita que `rust-toolchain.toml` pida otra cadena.
+FROM rust:1.100.0-slim-trixie@sha256:e9d95b74296f7126a83ae3d041aeaba1ff4c478f13abc5cc034fcf7c131c3d4a AS compilar
+ENV RUSTUP_TOOLCHAIN=1.100.0 CARGO_BUILD_JOBS=4
+WORKDIR /src
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/target \
+    cargo build --release --locked -p server \
+    && cp target/release/server /usr/local/bin/server
+
+# Etapa 2: solo el binario sobre Debian 13 slim (la misma base que la etapa 1,
+# así la glibc coincide). Usuario sin privilegios; el sistema de archivos lo
+# pone de solo lectura Compose (`read_only`).
+FROM debian:trixie-slim
+RUN useradd --uid 10002 --no-create-home --shell /usr/sbin/nologin servidor
+COPY --from=compilar /usr/local/bin/server /usr/local/bin/server
+USER 10002:10002
+ENV SERVER_ADDR=0.0.0.0:8080
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/server"]

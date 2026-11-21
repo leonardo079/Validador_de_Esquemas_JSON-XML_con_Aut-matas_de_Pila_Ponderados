@@ -1,0 +1,13 @@
+# F7.7 (D71): lo que no entra en el contexto de `docker build` (se construye
+# desde la raíz del repo). Nunca secretos.
+.git
+target
+web/node_modules
+web/dist
+tests/large
+tasks/contexto
+.env
+.env.*
+*.pem
+*.key
+**/*.log

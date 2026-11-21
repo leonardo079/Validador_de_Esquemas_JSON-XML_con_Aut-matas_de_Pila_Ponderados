@@ -33,7 +33,7 @@ aquí solo se remite a ellas.
     Linux) y pasarle el esquema por la entrada estándar o por un archivo temporal. Con
     eso, un aborto solo tumba esa compilación (el servidor la vería como un 500).
 - **Dónde:** `server/src/api.rs:300` (`spawn` del hilo de compilación).
-- **Tarea:** F7.7 (`mem_limit`). **F7.3 (D68):** el proceso hijo se resolvió con el sandbox Docker para el código generado. Para la compilación de esquemas se descarta, porque arrancar un contenedor por petición no compensa; queda el `mem_limit` de F7.7 ([sandbox.md](sandbox.md) §5).
+- **Tarea:** F7.7 (`mem_limit`; **hecho en D71**: 600 MiB y `restart: unless-stopped`, `despliegue.md` §3). **F7.3 (D68):** el proceso hijo se resolvió con el sandbox Docker para el código generado. Para la compilación de esquemas se descarta, porque arrancar un contenedor por petición no compensa; queda el `mem_limit` de F7.7 ([sandbox.md](sandbox.md) §5).
 
 ### 2. `id` persistente (F7.1-P2)
 

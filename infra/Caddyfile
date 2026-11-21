@@ -1,0 +1,77 @@
+# Caddy delante del servidor (F7.7, D71; `docs/fase7/despliegue.md`).
+#
+# DOMINIO: en la EC2, `<ip-con-guiones>.sslip.io` (p. ej. `3-4-5-6.sslip.io`),
+# y Caddy pide el certificado a Let's Encrypt solo. En local,
+# `DOMINIO=http://localhost` (sin TLS).
+#
+# Lo que heredó F7.7 de `docs/fase7/pendientes.md` §1, §8 y §11: tope de
+# cuerpo, plazos de lectura y escritura, `idle`, HSTS y CSP.
+{
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 20s
+			write 60s
+			idle 2m
+		}
+		max_header_size 32KB
+	}
+}
+
+{$DOMINIO:localhost} {
+	encode gzip
+
+	# El mismo tope que el servidor (1 MiB, `MAX_UPLOAD_BYTES`). Con
+	# `request_buffers` Caddy lee el cuerpo entero antes de reenviarlo, así
+	# que un cuerpo de más da su 413 aquí. Sin eso, el servidor contestaba 413
+	# por el `Content-Length` sin leer, cortaba la conexión y Caddy, que aún
+	# estaba enviando, daba 502 (o se quedaba esperando con `Expect: 100`).
+	request_body {
+		max_size 1MiB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		# Monaco usa estilos en línea y sus workers salen del mismo origen
+		# (blob: para los que crea en tiempo de ejecución).
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		-Server
+	}
+
+	# Un `Content-Length` de más se rechaza sin leer el cuerpo (ni mandar el
+	# `100 Continue`): si no, con varios MB el cliente sigue enviando, Caddy
+	# ya no lee y la conexión se queda parada hasta el plazo de lectura.
+	@de_mas expression `{http.request.header.Content-Length} != "" && int({http.request.header.Content-Length}) > 1048576`
+	handle @de_mas {
+		header Content-Type application/json
+		header Connection close
+		respond `{"error":"too-large","limit":1048576,"message":"el cuerpo supera el tamaño máximo de 1048576 bytes"}` 413
+	}
+
+	handle /api/* {
+		reverse_proxy server:8080 {
+			request_buffers 1MiB
+		}
+	}
+
+	# Errores propios de Caddy en /api (413 del tope) como JSON, igual que
+	# los del servidor (`servidor.md` §2).
+	handle_errors 413 {
+		header Content-Type application/json
+		respond `{"error":"too-large","limit":1048576,"message":"el cuerpo supera el tamaño máximo de 1048576 bytes"}` 413
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

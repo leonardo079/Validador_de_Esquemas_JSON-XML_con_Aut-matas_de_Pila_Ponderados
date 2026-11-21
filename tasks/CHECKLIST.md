@@ -94,7 +94,7 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 - [x] **F7.4** · Frontend: editor Monaco, compilar, ver la IR (JSON v2, D17; tratar como no confiable) — *Pista:* B · *Depende:* F7.1 · *Resp.:* Bayron · *Estado:* hecha (19 nov) · D56 · `web/README.md`; `docs/fase7/pendientes.md` §5 resuelto salvo §9 de la Fase 3
 - [ ] **F7.5** · Descarga del código, `POST /api/validate` y WebSocket de validación por bloques — *Pista:* B · *Depende:* F5.3, F7.3 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
 - [x] **F7.6** · Vistas del autómata (Cytoscape), árbol de derivación y panel de métricas DPDA vs línea base — *Pista:* B · *Depende:* F7.4, F5.5, F6.5 · *Resp.:* Bayron · *Estado:* hecha (20 nov) · D70 · sin rondas (sin agentes) · doc en `docs/fase7/vistas.md`; endpoints `/api/automaton`, `/api/derivation` y `/api/compare` pendientes del visto bueno de Leonardo (D42); F7.6-P2 en `docs/fase7/pendientes.md` §15
-- [ ] **F7.7** · Despliegue en EC2 con Docker Compose y Caddy (primera versión lo antes posible) — *Pista:* B · *Depende:* S0, F7.1 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
+- [ ] **F7.7** · Despliegue en EC2 con Docker Compose y Caddy (primera versión lo antes posible) — *Pista:* B · *Depende:* S0, F7.1 · *Resp.:* Bayron · *Estado:* en curso (20 nov) · D71 · preparado y probado en local (`infra/`, `docs/fase7/despliegue.md`); falta desplegar en la EC2 el 21 nov
 
 ## Entrega (semana 5)
 

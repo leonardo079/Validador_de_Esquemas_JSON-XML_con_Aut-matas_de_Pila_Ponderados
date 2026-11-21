@@ -1,0 +1,64 @@
+# Despliegue (F7.7, D71; `docs/fase7/despliegue.md`).
+#
+#   docker compose -f infra/docker-compose.yml build
+#   DOMINIO=3-4-5-6.sslip.io docker compose -f infra/docker-compose.yml up -d
+#
+# En local: DOMINIO=http://localhost HTTP_PORT=8088 … up -d → http://localhost:8088
+#
+# Límites heredados de `docs/fase7/pendientes.md`: `mem_limit` obligatorio
+# (§1, SEC-M2: un fallo de asignación aborta el proceso y Compose lo
+# reinicia), `restart`, logs con tope (§11), solo lectura y sin capacidades.
+
+name: validador
+
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.server
+    image: validador-server:1
+    restart: unless-stopped
+    # El pico medido es ≈ 380 MiB (`servidor.md` §3); la t3.micro tiene 1 GiB.
+    mem_limit: 600m
+    memswap_limit: 600m
+    pids_limit: 128
+    cpus: 1.5
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      SERVER_ADDR: 0.0.0.0:8080
+    expose: ["8080"]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+    image: validador-web:1
+    restart: unless-stopped
+    depends_on: [server]
+    mem_limit: 256m
+    pids_limit: 128
+    cap_drop: [ALL]
+    # Caddy escucha en 80/443 dentro del contenedor.
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      DOMINIO: ${DOMINIO:-http://localhost}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      # Certificados de Let's Encrypt: que sobrevivan a un reinicio.
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  caddy_data:
+  caddy_config:

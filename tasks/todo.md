@@ -747,3 +747,19 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [x] Doc en `docs/fase7/vistas.md`, más `servidor.md`, `web/README.md` y `pendientes.md` §15; `lint OK`; 757 pruebas del workspace en verde.
 
 **Estado (20 nov):** hecha. Pendiente: visto bueno de Leonardo a los tres endpoints (D42); F7.6-P2, la CPU de `jsonschema` en `/api/compare` (`pendientes.md` §15).
+
+# Tarea F7.7: despliegue en EC2 con Docker Compose y Caddy (pista B, Bayron; preparado el 20 nov, D71)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario).
+
+- [x] `infra/Dockerfile.server` (release, Debian slim, sin root) y `infra/Dockerfile.web` (Vite + Caddy 2.8.4); `.dockerignore` sin secretos.
+- [x] `infra/docker-compose.yml`:
+  - `server`: `mem_limit` 600 MiB sin swap, `restart`, `read_only`, `cap_drop`, `no-new-privileges`, `pids_limit` y logs acotados;
+  - `web`: puertos 80 y 443, volúmenes de certificados.
+- [x] `infra/Caddyfile`: HTTPS por `DOMINIO` (`sslip.io`), HSTS, CSP, `nosniff`, `X-Frame-Options`, plazos y tope de 1 MiB.
+  - El tope usa `request_buffers` y rechaza por `Content-Length` antes de leer, porque la prueba local encontró 502 con 1,5 MB y una conexión colgada con 3 MB.
+- [x] Probado en local tras Caddy: health, web y SPA, compilar, comparar, cabeceras, y 413 en milisegundos con y sin `chunked`.
+- [x] `infra/ec2-preparar.sh` (Docker, swap y clon) e `infra/desplegar.ps1` (construir aquí, `docker save`/`scp`/`docker load`, `up`, comprobar HTTPS); guía en `docs/fase7/despliegue.md`.
+- [ ] **21 nov:** crear la EC2 y la Elastic IP, ejecutar `ec2-preparar.sh` y `desplegar.ps1`, y comprobar la URL pública.
+
+**Estado (20 nov):** preparado. Falta el despliegue real del sábado.
