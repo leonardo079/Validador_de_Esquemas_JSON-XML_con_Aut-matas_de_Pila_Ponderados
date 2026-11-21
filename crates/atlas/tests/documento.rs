@@ -107,3 +107,69 @@ fn uri_del_entorno_o_del_env() {
         std::env::var("MONGODB_URI").is_ok()
     );
 }
+
+// --- E2 (D73): métricas del CSV de `metricas --csv`.
+
+const CSV: &str = "caso,validador,bytes,profundidad,valido,violaciones,segundos,mb_s,ns_por_byte,asignaciones,pico_bytes,estados,transiciones
+\"invalid-range-01\",DPDA,12,1,false,2,4.8e-7,25.000,40.0000,1,73728,17,62
+\"invalid-range-01\",línea base DOM,12,1,false,2,1.6e-6,7.500,133.3300,16,918,,
+\"bombeo [^k ]^k, k=10\",DPDA,20,10,true,,1.8e-6,11.111,90.0000,1,73728,16,60
+\"con \"\"comillas\"\"\",DPDA,0,0,true,,0e0,inf,0.0000,1,0,1,1
+";
+
+#[test]
+fn metricas_del_csv() {
+    let ids = vec!["invalid-range-01".to_owned()];
+    let v = atlas::metricas(CSV, "2026-11-21", &ids).unwrap();
+    assert_eq!(v.len(), 4);
+    assert_eq!(v[0]["_id"], "invalid-range-01|DPDA");
+    assert_eq!(v[0]["case"], "invalid-range-01");
+    assert_eq!(v[0]["family"], "corpus");
+    assert_eq!(v[0]["violations"], 2);
+    assert_eq!(v[0]["peakHeapBytes"], 73728);
+    assert_eq!(v[0]["states"], 17);
+    assert_eq!(v[0]["seconds"], 4.8e-7);
+    assert_eq!(v[0]["measuredAt"], "2026-11-21");
+    // Línea base: sin estados ni transiciones.
+    assert_eq!(v[1]["validator"], "línea base DOM");
+    assert!(v[1]["states"].is_null());
+    // Bombeo: la coma dentro de las comillas no parte el campo.
+    assert_eq!(v[2]["label"], "bombeo [^k ]^k, k=10");
+    assert_eq!(v[2]["family"], "bombeo");
+    assert!(v[2]["case"].is_null());
+    assert!(v[2]["violations"].is_null());
+    assert_eq!(v[2]["valid"], true);
+    // Comillas dobladas y `inf` (no cabe en JSON) → null.
+    assert_eq!(v[3]["label"], "con \"comillas\"");
+    assert!(v[3]["mbPerSecond"].is_null());
+    // Todo documento pasa a BSON.
+    for d in &v {
+        atlas::a_bson(d).unwrap();
+    }
+}
+
+#[test]
+fn metricas_rechaza_un_csv_ajeno() {
+    assert!(atlas::metricas("a,b,c\n1,2,3\n", "x", &[]).is_err());
+    let corto = format!("{}\n\"x\",DPDA,1\n", atlas::CABECERA_METRICAS);
+    assert!(atlas::metricas(&corto, "x", &[]).is_err());
+    let sin_comillas = format!(
+        "{}\nx,DPDA,1,1,true,,1,1,1,1,1,1,1\n",
+        atlas::CABECERA_METRICAS
+    );
+    assert!(atlas::metricas(&sin_comillas, "x", &[]).is_err());
+}
+
+/// El CSV real que escribe `bench::csv` tiene la cabecera que espera `atlas`.
+#[test]
+fn la_cabecera_es_la_de_bench() {
+    assert!(bench_cabecera().starts_with(atlas::CABECERA_METRICAS));
+}
+
+fn bench_cabecera() -> String {
+    let fuente = std::fs::read_to_string(raiz().join("crates/bench/src/lib.rs")).unwrap();
+    let i = fuente
+        .find("\"caso,validador,")
+        .expect("cabecera en bench::csv");
+    fuente[i + 1..].split("\n").next().unwrap().to_owned()
+}

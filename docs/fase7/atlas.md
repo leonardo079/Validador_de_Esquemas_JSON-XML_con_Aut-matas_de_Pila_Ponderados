@@ -100,9 +100,40 @@ inválida, arranca igual, sin base de datos.
 el `.env` a la EC2 por `scp`, con permisos 600. **En Atlas, Network Access tiene que incluir la Elastic IP de la
 EC2** (`despliegue.md` §2, paso 3).
 
-## 6. Pendientes
+## 6. Métricas (E2, D73)
+
+Las medidas de F6.5 (`docs/fase6/metricas.md`) van a una segunda colección, `metrics`. Así volver a cargar los casos
+no las borra.
+
+```text
+cargo run -p bench --release --bin metricas -- --csv target/metricas/metricas.csv
+cargo run -p atlas --release -- --metricas target/metricas/metricas.csv        # casos y métricas
+cargo run -p atlas --release -- --solo-metricas target/metricas/metricas.csv   # solo métricas
+```
+
+Hay un documento por medida, con `_id` = `"<caso>|<validador>"`:
+
+- `case`: el `_id` del caso en `cases`, o `null` en el bombeo;
+- `family`: `corpus` o `bombeo`;
+- `label` y `validator` (`DPDA` o `línea base DOM`);
+- `bytes`, `depth`, `valid` y `violations`;
+- `seconds` (mediana), `mbPerSecond`, `nsPerByte`, `allocations` y `peakHeapBytes`;
+- `states` y `transitions` (solo el DPDA);
+- `measuredAt`, la fecha de la carga, y `source`.
+
+Los valores que no caben en JSON (`inf`) se guardan como `null`. Hay un índice por `case`.
+
+**Cargado el 21 nov:** 173 métricas, 151 del corpus (78 casos, los JSON con las dos columnas) y 22 de bombeo. La
+segunda carga dejó las 173 sin cambios. Para cruzarlas con los casos en Atlas:
+`db.metrics.find({case: "invalid-range-01"})` o un `$lookup` desde `cases` por `_id` = `case`.
+
+Pruebas: `crates/atlas/tests/documento.rs` (3 más, 8 en total): lectura del CSV (comillas dobladas, comas dentro
+del nombre del bombeo, campos vacíos, `inf`), rechazo de un CSV ajeno o incompleto, y que la cabecera coincida con la
+que escribe `bench::csv`.
+
+## 7. Pendientes
 
 - **F7.2-P1:** guardar en Atlas los esquemas compilados por su `id` (SHA-256, `pendientes.md` §2) no está hecho.
   Ninguna vista lo necesita, porque el servidor no tiene estado (D70).
-- **E2:** cargar también las métricas de F6.5 (`metricas --csv`) en otra colección.
+- **E2:** hecho (§6, D73).
 - Los endpoints son API nueva: **necesitan el visto bueno de Leonardo (D42)**.

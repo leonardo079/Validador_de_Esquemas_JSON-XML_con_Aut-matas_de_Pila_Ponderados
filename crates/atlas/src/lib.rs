@@ -218,10 +218,15 @@ pub fn leer(v: &Value) -> Result<Guardado, String> {
     })
 }
 
-/// Conecta con la colección de casos. No envía nada hasta la primera
+/// Conecta con la colección de casos (ver [`base`]).
+pub async fn coleccion(uri: &str) -> Result<Collection<Document>, String> {
+    Ok(base(uri).await?.collection(COLECCION))
+}
+
+/// La base de la URI (o [`BASE`]). No envía nada hasta la primera
 /// operación; los plazos son cortos para que un Atlas caído no cuelgue al
 /// servidor.
-pub async fn coleccion(uri: &str) -> Result<Collection<Document>, String> {
+pub async fn base(uri: &str) -> Result<mongodb::Database, String> {
     // El error del driver puede citar la URI (con la contraseña): no se
     // incluye. `mongodb+srv` resuelve el registro SRV aquí: sin red, falla.
     let mut o = ClientOptions::parse(uri)
@@ -235,7 +240,7 @@ pub async fn coleccion(uri: &str) -> Result<Collection<Document>, String> {
         .clone()
         .unwrap_or_else(|| BASE.to_owned());
     let c = Client::with_options(o).map_err(|e| e.to_string())?;
-    Ok(c.database(&base).collection(COLECCION))
+    Ok(c.database(&base))
 }
 
 /// `MONGODB_URI` del entorno o, si no está, de un `.env` en `dir` (una línea
@@ -252,4 +257,96 @@ pub fn uri_de_entorno(dir: &std::path::Path) -> Option<String> {
         .find_map(|l| l.trim().strip_prefix("MONGODB_URI="))
         .map(|u| u.trim().trim_matches('"').to_owned())
         .filter(|u| !u.is_empty())
+}
+
+// ---------------------------------------------------------------------------
+// E2 (D73): las métricas de F6.5 (`metricas --csv`) en la colección `metrics`.
+
+/// Nombre de la colección de métricas.
+pub const COLECCION_METRICAS: &str = "metrics";
+
+/// Cabecera que se espera del CSV de `bench::csv`.
+pub const CABECERA_METRICAS: &str =
+    "caso,validador,bytes,profundidad,valido,violaciones,segundos,mb_s,ns_por_byte,asignaciones,pico_bytes,estados,transiciones";
+
+/// Divide una línea del CSV: el primer campo va entre comillas (con `""`
+/// para una comilla) y el resto no tiene comas.
+fn campos(linea: &str) -> Option<Vec<String>> {
+    let resto = linea.strip_prefix('"')?;
+    let mut caso = String::new();
+    let mut it = resto.char_indices().peekable();
+    let fin = loop {
+        let (i, c) = it.next()?;
+        if c == '"' {
+            if it.peek().map(|&(_, d)| d) == Some('"') {
+                caso.push('"');
+                it.next();
+            } else {
+                break i + 1;
+            }
+        } else {
+            caso.push(c);
+        }
+    };
+    let cola = resto[fin..].strip_prefix(',')?;
+    let mut v = vec![caso];
+    v.extend(cola.split(',').map(str::to_owned));
+    Some(v)
+}
+
+fn numero(s: &str) -> Value {
+    if s.is_empty() {
+        return Value::Null;
+    }
+    if let Ok(n) = s.parse::<u64>() {
+        return json!(n);
+    }
+    match s.parse::<f64>() {
+        Ok(x) if x.is_finite() => json!(x),
+        _ => Value::Null,
+    }
+}
+
+/// Los documentos de `metrics` a partir del CSV de `metricas --csv`.
+/// `_id` = `"<caso>|<validador>"`; `case` es el `_id` del caso en `cases` si
+/// la medida es del corpus (familia `corpus`) o `null` en el bombeo.
+/// `medido` es la fecha de la medición (texto ISO, la pone quien carga).
+pub fn metricas(csv: &str, medido: &str, ids_corpus: &[String]) -> Result<Vec<Value>, String> {
+    let mut lineas = csv.lines();
+    if lineas.next().map(str::trim) != Some(CABECERA_METRICAS) {
+        return Err("cabecera inesperada: ¿es la salida de `metricas --csv`?".into());
+    }
+    let mut v = Vec::new();
+    for (n, l) in lineas.enumerate().filter(|(_, l)| !l.trim().is_empty()) {
+        let c = campos(l).ok_or_else(|| format!("línea {}: no se pudo leer", n + 2))?;
+        if c.len() != 13 {
+            return Err(format!(
+                "línea {}: {} campos, se esperaban 13",
+                n + 2,
+                c.len()
+            ));
+        }
+        let del_corpus = ids_corpus.iter().any(|id| *id == c[0]);
+        v.push(json!({
+            "_id": format!("{}|{}", c[0], c[1]),
+            "case": if del_corpus { json!(c[0]) } else { Value::Null },
+            "family": if del_corpus { "corpus" } else { "bombeo" },
+            "label": c[0],
+            "validator": c[1],
+            "bytes": numero(&c[2]),
+            "depth": numero(&c[3]),
+            "valid": c[4] == "true",
+            "violations": numero(&c[5]),
+            "seconds": numero(&c[6]),
+            "mbPerSecond": numero(&c[7]),
+            "nsPerByte": numero(&c[8]),
+            "allocations": numero(&c[9]),
+            "peakHeapBytes": numero(&c[10]),
+            "states": numero(&c[11]),
+            "transitions": numero(&c[12]),
+            "measuredAt": medido,
+            "source": "cargo run -p bench --release --bin metricas (F6.5)",
+        }));
+    }
+    Ok(v)
 }

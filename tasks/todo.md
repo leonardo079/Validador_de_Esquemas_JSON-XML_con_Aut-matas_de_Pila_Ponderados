@@ -777,3 +777,14 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [x] 9 pruebas nuevas sin red (`crates/atlas/tests/documento.rs`, `server/tests/casos.rs`) y 2 de vitest (34 en total). Verificado contra Atlas: 78/78 pasan, en Windows y en Docker tras Caddy. `lint OK`; 766 pruebas del workspace en verde.
 
 **Estado (20 nov):** hecha. Pendiente: visto bueno de Leonardo a `/api/tests` (D42); E2 (métricas en Atlas); en la EC2, añadir su IP en Network Access de Atlas.
+
+# Tarea E2: casos y métricas en Atlas (pista B, Bayron; 21 nov, D73)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario).
+
+- [x] `atlas::metricas` lee el CSV de `metricas --csv`: comillas dobladas, comas en el nombre del bombeo, campos vacíos, e `inf` como `null`.
+- [x] `cargar-casos --metricas <csv>` / `--solo-metricas <csv>`: *upsert* en la colección `metrics` (`_id` = `caso|validador`, `case` enlaza con `cases`), con índice por `case`.
+- [x] Cargado: 78 casos y 173 métricas (151 del corpus, 22 de bombeo); la segunda carga no cambia nada.
+- [x] 3 pruebas nuevas sin red (8 en `crates/atlas/tests/documento.rs`), una de ellas fija la cabecera de `bench::csv`. `lint OK`.
+
+**Estado (21 nov):** hecha.
