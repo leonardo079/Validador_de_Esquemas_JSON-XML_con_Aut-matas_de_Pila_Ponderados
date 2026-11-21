@@ -110,3 +110,10 @@ En desarrollo, Vite reenvía también `/ws` (`vite.config.ts`). En el despliegue
   código generado se enseña en local (`SANDBOX=docker cargo run -p server`) o con `make test-sandbox`.
 - **F7.3-P1** (`pendientes.md` §13): sigue abierto. Cada `/api/validate` vuelve a compilar; guardar el binario por
   esquema queda para después de la entrega.
+- **Visto bueno (D82, 21 nov):** Leonardo aprueba las tres rutas con estos cambios ([pendientes.md](pendientes.md)
+  §25):
+  - el mismo `lang` por defecto en `/api/code` y `/api/validate`, y 400 si se repite;
+  - un campo `code` en los errores del WebSocket y cierres 1008, 1009 y 1013;
+  - `sandbox` en `GET /api/health`, y `/api/validate` mira el sandbox antes de validar el cuerpo;
+  - 500 `codegen` si el código generado no compila;
+  - documentar cuándo `generated` y `agree` son `null`.

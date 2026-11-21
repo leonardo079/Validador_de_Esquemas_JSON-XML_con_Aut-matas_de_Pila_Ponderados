@@ -136,4 +136,5 @@ que escribe `bench::csv`.
 - **F7.2-P1:** guardar en Atlas los esquemas compilados por su `id` (SHA-256, `pendientes.md` §2) no está hecho.
   Ninguna vista lo necesita, porque el servidor no tiene estado (D70).
 - **E2:** hecho (§6, D73).
-- Los endpoints son API nueva: **necesitan el visto bueno de Leonardo (D42)**.
+- Los endpoints son API nueva: **aprobados por Leonardo (D82, 21 nov)**, con un cambio aditivo: un campo
+  `truncated` cuando hay más de 1 000 casos ([pendientes.md](pendientes.md) §25).

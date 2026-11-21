@@ -196,7 +196,7 @@ aquí solo se remite a ellas.
   del presupuesto), `:258` (plazo de lectura), `:285` (permiso de compilación).
 - **Tarea:** F7.7.
 
-### 9. Visto bueno de la interfaz compartida (F7.1-P7, D42)
+### 9. Visto bueno de la interfaz compartida (F7.1-P7, D42) — RESUELTO (D82, 21 nov)
 
 - **Estado:** el contrato de `POST /api/schemas` (U1), el `id` SHA-256 (U5) y el estado
   del autómata (U6) son interfaz compartida: los consumen F7.4 y F7.5 y los aprueban las
@@ -227,6 +227,10 @@ aquí solo se remite a ellas.
 - **Dónde:** [servidor.md](servidor.md) §2-§3; `server/src/api.rs:388` (`valido`);
   `server/Cargo.toml` (`axum`).
 - **Tarea:** cierre de F7.1 (antes de F7.4).
+- **Resuelto (21 nov, D82):** Leonardo aprueba el contrato con las precisiones B10-B27. La fila de 1 MiB
+  entra en `docs/00-alcance.md` §4 y la feature `json` de axum se queda. Queda corregir en
+  [servidor.md](servidor.md) §2 la frase «los únicos 400 son de lectura», que ya no es cierta desde F7.2, F7.5
+  y F7.6 (cambio (6) de D82, Bayron).
 
 ### 10. Los 400 y 431 de hyper no son JSON (F7.1-P8; TR1-O1)
 
@@ -386,9 +390,15 @@ los dos **High** (§18 y §19) rechazan exponer la aplicación hasta corregirlos
 **Bien según la auditoría:** sin XSS (todo como texto, CSP estricta), las órdenes de Docker sin *shell* y con
 nombres validados, consultas a MongoDB en BSON tipado, sin credenciales en el repo ni en el historial.
 
-### 25. Contrato de los endpoints de F7.2, F7.5 y F7.6 (visto bueno de Leonardo, D42)
+### 25. Contrato de los endpoints de F7.2, F7.5 y F7.6 (visto bueno de Leonardo, D42) — APROBADO CON CAMBIOS (D82, 21 nov)
 
-Observaciones de la auditoría C para decidir el visto bueno:
+**Decisión (D82):** se aprueban F7.2 y F7.5; F7.6 ya estaba aprobado (D70). Los cambios que se piden a Bayron
+son los de D82 (1)-(6): `lang` igual en las dos rutas (punto 2 de abajo), `code` y cierres en el WebSocket
+(punto 3), `sandbox`/`database` en `/api/health` (punto 4), 500 `codegen` y los `null` documentados (punto 7),
+`truncated` en `/api/tests` (punto 8) y la frase de `servidor.md` (punto 1). Los puntos 5, 6, el payload solo como
+texto del 7 y el cuerpo ignorado del 8 se aceptan como están, documentados. El 9 va con §19.
+
+Observaciones de la auditoría C:
 
 1. `servidor.md` §2 dice que los únicos 400 son de lectura; ya hay 400 `request` por `category`, `lang` y el
    cuerpo de `/api/compare` y `/api/validate`.

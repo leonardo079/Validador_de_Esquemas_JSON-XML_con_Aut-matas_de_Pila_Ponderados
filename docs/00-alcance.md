@@ -181,6 +181,7 @@ Todos son configurables en tiempo de compilación o en `sv_limits_t` (T5.2, T6.4
 | Partículas por modelo de contenido XSD (partícula = elemento o grupo, la raíz incluida; D26) | 4 096. Pasarlo es un error `limit` en la partícula 4 097 |
 | Referencias de entidad/carácter XML por documento | 100 000 |
 | Tiempo máximo de validación | sin límite en la librería; 10 s en la aplicación web |
+| Subida máxima del servidor (cuerpo de cada petición de la aplicación web) | 1 MiB (1 048 576 bytes, `MAX_SCHEMA_BYTES`). Pasarla es 413 `too-large` ([fase7/servidor.md](fase7/servidor.md) §3; D82) |
 | Tamaño máximo del esquema que lee `schemac` (`check`, `ir`) | 16 MiB (16 777 216 bytes); solo archivos regulares. Pasarlo es un error de entrada, código 2 ([fase3/bajada.md](fase3/bajada.md) §5) |
 
 ---

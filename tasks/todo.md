@@ -683,7 +683,7 @@ Criterios propuestos y aplicados por Claude con la delegación del usuario («to
 - [x] Documentación: `docs/fase4/pattern.md` §6, `runtime.md` §4 (E3A-5), `docs/fase6/mitigaciones.md`, `docs/informe-final.md` §6; pendientes en Fase 4 §61, Fase 5 §1/§11 (resueltos), Fase 6 §31-§35, Fase 7 §17-§25.
 - [x] §61 de la Fase 4 (E3A-2, High en el servidor): las cotas numéricas de más de 64 bytes se guardan en forma canónica corta (mantisa de ≤ 1 025 cifras con testigo, exponente saturado en ±10¹¹⁰⁰); cada número cuesta O(1 024); ataque de 8 000 números de 5 s a 0,005 s. — `emit.rs::canonical` (proptests `compara_igual`, `multiplo_igual`), `mitigaciones.rs::cotas_largas_en_forma_canonica`
 - [ ] Pista B: los High del servidor (`docs/fase7/pendientes.md` §18-§19; §17 baja a Medium con §61 resuelto) y los Medium §20-§23.
-- [ ] Visto bueno de los endpoints de F7.2, F7.5 y F7.6 (Leonardo, `docs/fase7/pendientes.md` §25).
+- [x] Visto bueno de los endpoints de F7.1, F7.2 y F7.5 (D82; F7.6 ya tenía D70), con seis cambios pequeños para Bayron (`docs/fase7/pendientes.md` §25); fila de 1 MiB en `docs/00-alcance.md` §4.
 
 ## Tarea E4: informe final — HECHA (21 nov; parte de la pista A)
 
