@@ -80,9 +80,9 @@ compilador garantiza, y lo que comprueban el corpus, la línea base y el fuzzing
    hash da un falso «repetido» (un rechazo), con probabilidad ≤ n²/2⁶⁵ con una clave secreta. Bajo `not`, ese
    rechazo se invierte y el choque haría aceptar.
 3. **Claves no declaradas repetidas.** Se detectan con la misma familia de hash, y un choque da un falso rechazo.
-   Los binarios de `schemac compile` usan la clave por defecto, que es pública: quien escribe el payload puede
-   fabricar un choque (unas 2³² operaciones), pero solo para que se rechace su propio payload
-   ([fase4/runtime.md](fase4/runtime.md) §4, [fase6/pendientes.md](fase6/pendientes.md) §31).
+   La clave por defecto de la biblioteca es pública. Los binarios de `schemac compile` toman una aleatoria al
+   arrancar, así que quien escribe el payload no puede fabricar choques ([fase4/runtime.md](fase4/runtime.md) §4,
+   [fase6/pendientes.md](fase6/pendientes.md) §31).
 
 **Clasificación.** (a) directas en δ, (b) registros acotados en el marco y (c) producto, determinización acotada,
 AFD o verificación diferida. Están en [00-alcance.md](00-alcance.md) (columna «Cat.») y en

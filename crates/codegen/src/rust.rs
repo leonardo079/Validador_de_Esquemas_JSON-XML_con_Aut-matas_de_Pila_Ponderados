@@ -139,11 +139,28 @@ fn main() -> ExitCode {
     ExitCode::from(ejecutar())
 }
 
+/// Clave de SipHash aleatoria para esta ejecución (§31 de
+/// `docs/fase6/pendientes.md`): las claves de `RandomState` de `std`, que
+/// salen del sistema operativo. Sin ella, la clave por defecto es pública y
+/// un payload puede fabricar choques (un falso «repetido», o aceptar un
+/// cierre XML que no empareja o un arreglo bajo `not: uniqueItems`).
+fn clave_aleatoria() -> [u64; 2] {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+    let s = RandomState::new();
+    let palabra = |i: u64| {
+        let mut h = s.build_hasher();
+        h.write_u64(i);
+        h.finish()
+    };
+    [palabra(0), palabra(1)]
+}
+
 fn ejecutar() -> u8 {
     let mut mem = MEMORIA.lock().unwrap_or_else(|e| e.into_inner());
     let mut bloque = [0u8; BLOQUE];
     let mut entrada = io::stdin().lock();
-    let mut v = Validador::new(&mut mem, Mode::Total);
+    let mut v = Validador::con_clave(&mut mem, Mode::Total, clave_aleatoria());
     let inicio = Instant::now();
     loop {
         match entrada.read(&mut bloque) {
@@ -233,15 +250,18 @@ pub struct Validador<'m> {
 
 impl<'m> Validador<'m> {
     pub fn new(mem: &'m mut [u64; STATE_WORDS], modo: Mode) -> Validador<'m> {
+        Validador::con_clave(mem, modo, LIMITES.hash_key)
+    }
+
+    /// Como [`Validador::new`], con otra clave de SipHash (claves repetidas,
+    /// `uniqueItems` y el nombre de cierre XML). Con la clave por defecto,
+    /// que es pública, quien escribe el payload puede fabricar choques; el
+    /// `main` emitido pone una aleatoria (`docs/fase6/pendientes.md` §31).
+    pub fn con_clave(mem: &'m mut [u64; STATE_WORDS], modo: Mode, clave: [u64; 2]) -> Validador<'m> {
+        let mut limits = LIMITES;
+        limits.hash_key = clave;
         Validador {
-            v: Nucleo::new(
-                TABLAS,
-                &Options {
-                    mode: modo,
-                    limits: LIMITES,
-                },
-                mem,
-            ),
+            v: Nucleo::new(TABLAS, &Options { mode: modo, limits }, mem),
         }
     }
 

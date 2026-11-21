@@ -709,7 +709,7 @@ remite a ellas.
   `automaton/tests/corpus.rs` y en `server/src/casos.rs`, y añadir casos con límites.
 - **Tarea:** decisión de las dos personas; después, E1 o F7.5.
 
-### 31. Cambios en la API C y en los límites para el visto bueno (F6.1/F6.2; D42)
+### 31. Cambios en la API C y en los límites para el visto bueno (F6.1/F6.2; D42) — clave aleatoria HECHA (21 nov)
 
 - **Estado:** se suman a lo pendiente de D75 (`docs/fase5/pendientes.md` §10): `sv_report_t` gana `pointer[1024]`,
   `pointer_len` y `pointer_truncated`; `sv_limits_t` gana `max_lexeme` (tras `max_string`); nuevas
@@ -724,6 +724,16 @@ remite a ellas.
   además el choque fabricado del nombre de cierre XML (E3A-5, que **acepta** un cierre que no empareja) y el de
   `uniqueItems` bajo `not`. No arregla E3A-1, que era un desborde y ya está corregido. Queda abierta: en C11 no
   hay una fuente portable de aleatoriedad (habría que leer `/dev/urandom` cuando exista).
+- **Clave aleatoria, hecha (21 nov):** los `main` emitidos validan con una clave de SipHash aleatoria. En Rust sale
+  de `RandomState` (`Validador::con_clave`, nuevo en la fachada; `new` sigue con la de `LIMITES`). En C se leen
+  16 bytes de `/dev/urandom` y, si no existe, se mezcla la clave por defecto con `timespec_get`, `clock` y una
+  dirección (splitmix64): es peor, pero no es pública. Después se llama a `sv_init(&estado, &lim)` con
+  `sv_limits_emitted`. Los reportes no cambian, porque la clave solo decide los choques: lo comprueban
+  `codegen/tests/limites.rs`, que ejecuta los binarios con claves repetidas frente al intérprete, y
+  `c.rs::main_con_clave_aleatoria`. Cierra en los binarios el choque fabricado del nombre de cierre XML (E3A-5)
+  y el de `uniqueItems` bajo `not`. **Queda (pista B):** `server/src/flujo.rs` valida con la clave por defecto;
+  basta con poner en `Limits::hash_key` una de `RandomState` por sesión o por proceso
+  (`docs/fase7/pendientes.md` §24).
 
 ### 32. El fuzzing no corre en `make test` (F6.4-P1)
 

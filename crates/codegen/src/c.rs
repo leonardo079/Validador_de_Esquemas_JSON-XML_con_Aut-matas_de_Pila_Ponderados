@@ -93,6 +93,7 @@ const MAIN: &str = r#"/*
  *
  * Compilar: cc -std=c11 -O2 -Wall -Wextra -o validador *.c
  */
+#include <stdint.h>
 #include <stdio.h>
 #include <time.h>
 
@@ -108,11 +109,53 @@ static sv_state_t estado;
 static uint8_t bloque[BLOQUE];
 static char linea[16384];
 
+/* Clave de SipHash aleatoria para esta ejecución (docs/fase6/pendientes.md
+ * §31): con la de por defecto, que es pública, un payload puede fabricar
+ * choques (un falso «repetido», o aceptar un cierre XML que no empareja o un
+ * arreglo bajo `not: uniqueItems`). C11 no tiene una fuente de aleatoriedad
+ * portable: se lee /dev/urandom si existe y, si no, se mezcla la clave con el
+ * reloj, el tiempo de CPU y una dirección (peor, pero no pública). */
+static void clave_aleatoria(uint64_t k[2]) {
+    uint64_t b[2];
+    FILE* f = fopen("/dev/urandom", "rb");
+    if (f != NULL) {
+        size_t leidos;
+        setvbuf(f, NULL, _IONBF, 0);
+        leidos = fread(b, sizeof b[0], 2, f);
+        fclose(f);
+        if (leidos == 2) {
+            k[0] = b[0];
+            k[1] = b[1];
+            return;
+        }
+    }
+    {
+        struct timespec t;
+        uint64_t x = (uint64_t)(uintptr_t)&t;
+        if (timespec_get(&t, TIME_UTC) == TIME_UTC) {
+            x ^= (uint64_t)t.tv_sec * 0x9E3779B97F4A7C15u ^ (uint64_t)t.tv_nsec;
+        }
+        x ^= (uint64_t)clock() << 32;
+        /* splitmix64 */
+        x += 0x9E3779B97F4A7C15u;
+        x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9u;
+        x = (x ^ (x >> 27)) * 0x94D049BB133111EBu;
+        k[0] ^= x ^ (x >> 31);
+        x += 0x9E3779B97F4A7C15u;
+        x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9u;
+        x = (x ^ (x >> 27)) * 0x94D049BB133111EBu;
+        k[1] ^= x ^ (x >> 31);
+    }
+}
+
 int main(void) {
     sv_report_t r;
+    sv_limits_t lim;
     int codigo, n;
     setvbuf(stdin, NULL, _IONBF, 0);
-    sv_init(&estado, NULL);
+    sv_limits_emitted(&lim);
+    clave_aleatoria(lim.hash_key);
+    sv_init(&estado, &lim);
 #if TIEMPO_MS >= 0
     struct timespec t0, t;
     int reloj = timespec_get(&t0, TIME_UTC) == TIME_UTC;

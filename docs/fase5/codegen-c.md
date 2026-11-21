@@ -43,6 +43,10 @@ sv_report_t r;
 int codigo = sv_finish(&s, &r);    /* 0 válido, 1 inválido, 2 malformado o límite, 3 interno */
 ```
 
+El `main.c` emitido no pasa `NULL`: llena `lim` con `sv_limits_emitted` y pone en `lim.hash_key` una clave
+aleatoria, leída de `/dev/urandom` o, si no existe, mezclada con el reloj (§31 de `docs/fase6/pendientes.md`).
+Quien use la API con payloads hostiles debería hacer lo mismo, porque la clave por defecto es pública.
+
 `sv_limits_t` lleva el modo y los límites de `runtime_rs::Options`. Con límites mayores que los de por defecto, lo
 que no cabe en `SV_STATE_WORDS` es un error `limit`, nunca una escritura fuera de rango. Exponerlos con nombre y
 desde F6.2 se emiten con nombre (`schemac compile --limit`, `sv_limits_emitted`; `docs/fase6/limites.md`).

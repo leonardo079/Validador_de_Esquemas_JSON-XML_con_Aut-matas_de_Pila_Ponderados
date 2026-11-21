@@ -26,7 +26,7 @@ línea, columna y JSON Pointer o ruta XML) y la regla incumplida.
 | Tamaño de M | de 13 estados y 43 transiciones a 216 y 10 054 (XSD del pedido) | §2.1 |
 | Explosión al determinizar | acotada: `limit` antes de crear el estado 4 097 o de pasar 2²⁰ entradas | §2.2 |
 | Corrección | 78 casos del corpus; intérprete = Rust generado = C generado (con ASan/UBSan); veredicto = línea base | §6 |
-| Pruebas | 843 en `make test`, 7 del lema de bombeo, fuzzing con cuatro objetivos | §5, §6 |
+| Pruebas | 844 en `make test`, 7 del lema de bombeo, fuzzing con cuatro objetivos | §5, §6 |
 
 ## 1. Análisis de complejidad
 
@@ -323,13 +323,12 @@ es E3 (§6.3). Lo que se encontró y cómo se cerró:
 
 ### 6.3 Lo que queda
 
-- **Clave de hash pública.** Los binarios de `schemac compile` usan la clave por defecto. Con ella, quien escribe
-  el payload puede fabricar un choque (unas 2³² operaciones) que solo rechaza su propio payload. Con `not` sobre
-  `uniqueItems`, en cambio, podría hacer aceptar un arreglo que el esquema rechaza. Arreglo propuesto: una clave
-  aleatoria al arrancar el binario ([fase6/pendientes.md](fase6/pendientes.md) §31, para E3).
-- **Choque de hash en el nombre de cierre XML.** El nombre de cierre se compara por hash del QName (runtime.md §4).
-  Con la clave pública, quien escribe el payload podría buscar dos nombres con el mismo hash (unas 2³² operaciones)
-  para que se acepte una etiqueta de cierre que no empareja. Se cierra con la misma clave aleatoria.
+- **Clave de hash.** Con la clave pública por defecto, quien escribe el payload podría fabricar choques (unas
+  2³² operaciones). Así podría hacer aceptar un arreglo bajo `not: uniqueItems` o una etiqueta de cierre XML que
+  no empareja, porque el nombre de cierre se compara por hash del QName. **Resuelto tras E3:** los binarios de
+  `schemac compile` toman una clave aleatoria al arrancar: `/dev/urandom` en C, `RandomState` en Rust
+  ([fase6/pendientes.md](fase6/pendientes.md) §31). Sigue con la clave por defecto quien use la biblioteca sin
+  dar la suya, y también el WebSocket del servidor.
 - **Tiempo de compilación y hilos.** `automaton` no tiene reloj. El servidor responde 504 a los 10 s, pero no puede
   cancelar el hilo, que sigue hasta terminar con su permiso de concurrencia ([fase7/pendientes.md](fase7/pendientes.md)
   §12 y §15). El arreglo propuesto es compilar en un proceso aparte con límites de CPU y memoria.
@@ -370,7 +369,7 @@ es E3 (§6.3). Lo que se encontró y cómo se cerró:
 - **Generación:** 20 válidos generados desde la IR (F5.4) y 30 inválidos o malformados por mutación (F6.3), todos
   con doble oráculo: el DPDA y la línea base.
 - **Toda la verificación es local** (D32): `make lint` (rustfmt, clippy `-D warnings`, clang-format,
-  `unsafe-check`), `make test` (843 pruebas) y `make docs-check`.
+  `unsafe-check`), `make test` (844 pruebas) y `make docs-check`.
 
 ## 8. Conclusiones
 

@@ -12,7 +12,9 @@
 //! - **Sin reservas por construcción:** los objetos del camino de validación
 //!   (`validador.c`, `tablas.c`, `sv_nucleo.c`, `sv_lexico.c`) no tienen más
 //!   símbolos externos que `memcmp`, `memcpy`, `memmove`, `memset` y `strlen`
-//!   (`nm -u`): ni `malloc` ni ningún otro asignador.
+//!   (`nm -u`): ni `malloc` ni ningún otro asignador. `main.c` queda fuera:
+//!   lee stdin y, una vez antes de `sv_init`, `/dev/urandom` (§31 de
+//!   `docs/fase6/pendientes.md`), que no son el camino de validación.
 //! - Salida reproducible y núcleo copiado sin cambios.
 //!
 //! La equivalencia en bloques de 1, 7 y 4 096 bytes y en los dos modos, con
@@ -230,4 +232,30 @@ fn nucleo_c_sincronizado() {
             .map(|p| p.1),
         Some(lexer::json::NUM_STATES as u32)
     );
+}
+
+/// §31 de `docs/fase6/pendientes.md`: los dos `main` emitidos validan con una
+/// clave de SipHash aleatoria (de `/dev/urandom` en C, de `RandomState` en
+/// Rust), no con la pública por defecto. Que los reportes no cambian lo
+/// comprueban `limites.rs` (los binarios con claves repetidas, frente al
+/// intérprete) y la diferencial.
+#[test]
+fn main_con_clave_aleatoria() {
+    let g = grupos();
+    let a = &g[0].a;
+    let buscar = |archivos: &[Archivo], nombre: &str| {
+        archivos
+            .iter()
+            .find(|f| f.nombre == nombre)
+            .unwrap()
+            .contenido
+            .clone()
+    };
+    let c = buscar(&emit(a), "main.c");
+    assert!(c.contains("fopen(\"/dev/urandom\", \"rb\")"), "{c}");
+    assert!(c.contains("clave_aleatoria(lim.hash_key);\n    sv_init(&estado, &lim);"));
+    assert!(!c.contains("sv_init(&estado, NULL)"));
+    let r = buscar(&codegen::rust::emit(a), "main.rs");
+    assert!(r.contains("Validador::con_clave(&mut mem, Mode::Total, clave_aleatoria())"));
+    assert!(r.contains("RandomState::new()"));
 }

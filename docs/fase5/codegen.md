@@ -55,6 +55,10 @@ la pila del hilo principal); el `Mutex` existe solo porque un `static mut` exigi
 `validar_por_bloques` la ponen en la pila (para esquemas normales, decenas de KiB); con memoria propia,
 `validar_en` o `Validador::new`.
 
+**Clave de SipHash.** `main` valida con `Validador::con_clave` y una clave aleatoria por ejecución, la de
+`RandomState` de `std` (§31 de `docs/fase6/pendientes.md`). `Validador::new` y `validar` usan la clave por
+defecto de `LIMITES`, que es pública: quien use la biblioteca con payloads hostiles debería pasar la suya.
+
 **Copia del runtime.** `fuentes.rs` incrusta los `.rs` de `lexer` y `runtime-rs` con `include_str!`, así que la
 copia es siempre la del árbol con que se compiló `schemac`. Se reescriben solo tres cosas, de forma mecánica:
 se quita `#![no_std]` (es un atributo de crate); cada `mod x;` de un `lib.rs` lleva delante

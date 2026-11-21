@@ -395,6 +395,8 @@ los dos **High** (§18 y §19) rechazan exponer la aplicación hasta corregirlos
 - E3C-6: el 502 `sandbox` devuelve el *stderr* del compilador y de `docker run` (D15 pide no exponer detalles
   internos).
 - E3C-7: el WebSocket acepta cualquier `Origin`.
+- (§31 de la Fase 6) `flujo.rs` valida con la clave de SipHash por defecto, que es pública: poner en
+  `Limits::hash_key` una aleatoria (`RandomState`) por proceso o por sesión, como ya hacen los binarios emitidos.
 - E3C-8: `sandbox.rs` no mata el contenedor si `try_wait` falla, y el nombre `sv-{pid}-{n}` se repite tras un
   reinicio (pid 1 en el contenedor).
 - E3C-9: Caddy corre como root y sin `read_only`; imágenes sin fijar por *digest* (`debian:trixie-slim` flotante);
