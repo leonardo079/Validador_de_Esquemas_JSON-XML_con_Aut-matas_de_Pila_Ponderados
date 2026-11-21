@@ -70,7 +70,7 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 
 ## Fase 5 — generación de código (`crates/codegen`, `crates/runtime-c`)
 
-- [ ] **F5.1** · Emisor Rust: tablas de M como `const` + el núcleo `no_std` (D51), pila acotada `SV_MAX_DEPTH`, sin asignación dinámica — *Pista:* A · *Depende:* F4.6 · *Resp.:* — · *Estado:* libre
+- [ ] **F5.1** · Emisor Rust: tablas de M como `const` + el núcleo `no_std` (D51), pila acotada `SV_MAX_DEPTH`, sin asignación dinámica — *Pista:* A · *Depende:* F4.6 · *Resp.:* Leonardo · *Estado:* en curso (20 nov)
 - [ ] **F5.2** · Emisor C11 con la API C-ABI (`sv_init`/`sv_feed`/`sv_finish`); header con cbindgen — *Pista:* A · *Depende:* F5.1 · *Resp.:* — · *Estado:* libre
 - [ ] **F5.3** · Prueba diferencial intérprete / C / Rust en todo el corpus (bloques de 1, 7 y 4096 bytes) — *Pista:* A · *Depende:* F5.2 · *Resp.:* — · *Estado:* libre
 - [x] **F5.4** · Generador de payloads válidos desde la IR, con semilla; 20 primeros casos al corpus — *Pista:* AB · *Depende:* PC-C · *Resp.:* Bayron · *Estado:* hecha (20 nov) · D66 · sin rondas (sin agentes) · `cargo run -p bench --release --bin generar`; doc en `docs/fase5/generador.md`; pendiente XML (F5.4-P1)
