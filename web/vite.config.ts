@@ -11,7 +11,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: { "/api": { target: servidor, changeOrigin: false } },
+    proxy: {
+      "/api": { target: servidor, changeOrigin: false },
+      // F7.5: el WebSocket de validación por bloques.
+      "/ws": { target: servidor.replace(/^http/, "ws"), ws: true, changeOrigin: false },
+    },
   },
   build: { outDir: "dist", sourcemap: false },
   test: { environment: "jsdom", include: ["src/**/*.test.ts", "src/**/*.test.tsx"] },

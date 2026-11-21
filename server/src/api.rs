@@ -48,6 +48,11 @@ struct App {
     compilar: Compilador,
     /// La colección `cases` de Atlas (F7.2), si hay `MONGODB_URI`.
     casos: Option<crate::casos::Coleccion>,
+    /// El sandbox Docker (F7.3) para `POST /api/validate` (F7.5), si está
+    /// configurado (`SANDBOX=docker`).
+    sandbox: Option<Arc<crate::sandbox::Sandbox>>,
+    /// Sesiones de `WS /ws/validate` a la vez (F7.5).
+    flujos: Arc<Semaphore>,
 }
 
 /// La API con la compilación real y sin base de datos.
@@ -58,15 +63,30 @@ pub fn router(cfg: Config) -> Router {
 /// [`router`] con la colección de casos de Atlas (F7.2, D72): habilita
 /// `GET /api/tests` y `POST /api/tests/run`.
 pub fn router_con_casos(cfg: Config, casos: Option<crate::casos::Coleccion>) -> Router {
-    construir(cfg, Arc::new(compilar::compilar), casos)
+    construir(cfg, Arc::new(compilar::compilar), casos, None)
+}
+
+/// [`router_con_casos`] con el sandbox de F7.3 para `POST /api/validate`
+/// (F7.5, D81). Sin sandbox, esa ruta responde 503.
+pub fn router_completo(
+    cfg: Config,
+    casos: Option<crate::casos::Coleccion>,
+    sandbox: Option<crate::sandbox::Sandbox>,
+) -> Router {
+    construir(cfg, Arc::new(compilar::compilar), casos, sandbox)
 }
 
 /// [`router`] con otra compilación (para las pruebas).
 pub fn router_con(cfg: Config, compilar: Compilador) -> Router {
-    construir(cfg, compilar, None)
+    construir(cfg, compilar, None, None)
 }
 
-fn construir(cfg: Config, compilar: Compilador, casos: Option<crate::casos::Coleccion>) -> Router {
+fn construir(
+    cfg: Config,
+    compilar: Compilador,
+    casos: Option<crate::casos::Coleccion>,
+    sandbox: Option<crate::sandbox::Sandbox>,
+) -> Router {
     let limite = cfg.max_upload_bytes;
     // Nunca menos que una subida entera: si no, un cuerpo del tope no
     // cabría jamás.
@@ -77,6 +97,8 @@ fn construir(cfg: Config, compilar: Compilador, casos: Option<crate::casos::Cole
         cfg,
         compilar,
         casos,
+        sandbox: sandbox.map(Arc::new),
+        flujos: Arc::new(Semaphore::new(crate::flujo::MAX_FLUJOS)),
     });
     Router::new()
         .route("/api/health", get(health))
@@ -86,6 +108,9 @@ fn construir(cfg: Config, compilar: Compilador, casos: Option<crate::casos::Cole
         .route("/api/compare", post(comparar))
         .route("/api/tests", get(listar_casos))
         .route("/api/tests/run", post(ejecutar_casos))
+        .route("/api/code", post(codigo))
+        .route("/api/validate", post(validar))
+        .route("/ws/validate", get(flujo))
         .fallback(no_encontrado)
         .method_not_allowed_fallback(metodo_no_permitido)
         .layer(DefaultBodyLimit::max(limite))
@@ -368,6 +393,74 @@ async fn ejecutar_casos(State(app): State<Arc<App>>, req: Request) -> Response {
     .await
 }
 
+/// El lenguaje de `?lang=rust|c` (por defecto, `rust`); `None` si es otro.
+fn lenguaje_de(req: &Request) -> Option<crate::sandbox::Lenguaje> {
+    let valor = req
+        .uri()
+        .query()
+        .and_then(|q| q.split('&').find_map(|p| p.strip_prefix("lang=")))
+        .unwrap_or("rust");
+    crate::generado::lenguaje(valor)
+}
+
+/// `POST /api/code?lang=rust|c` (F7.5, D81): el cuerpo es el esquema; la
+/// respuesta, un ZIP con el validador generado y un `LEEME.txt`.
+async fn codigo(State(app): State<Arc<App>>, req: Request) -> Response {
+    let Some(l) = lenguaje_de(&req) else {
+        return responder(
+            StatusCode::BAD_REQUEST,
+            json!({"error": "request", "message": "`lang` debe ser `rust` o `c`"}).to_string(),
+        );
+    };
+    procesar(&app, req, move |bytes| {
+        match crate::generado::zip(&bytes, l) {
+            Ok((nombre, zip)) => (
+                StatusCode::OK,
+                [
+                    (header::CONTENT_TYPE, "application/zip".to_owned()),
+                    (
+                        header::CONTENT_DISPOSITION,
+                        format!("attachment; filename=\"{nombre}\""),
+                    ),
+                ],
+                zip,
+            )
+                .into_response(),
+            Err(f) => vista(Err(f)),
+        }
+    })
+    .await
+}
+
+/// `POST /api/validate` (F7.5, D81): `{"schema", "payload", "lang"}`;
+/// compila y ejecuta el código generado en el sandbox (F7.3) y lo compara
+/// con el intérprete. Plazo: el del sandbox (compilar + ejecutar + holgura).
+async fn validar(State(app): State<Arc<App>>, req: Request) -> Response {
+    let sb = app.sandbox.clone();
+    let plazo = sb
+        .as_ref()
+        .map(|s| s.limites.compilar + s.limites.ejecutar + s.limites.holgura)
+        .unwrap_or(app.cfg.compile_timeout);
+    procesar_con_plazo(&app, req, plazo, move |bytes| {
+        vista(crate::generado::validar(&bytes, sb.as_deref()))
+    })
+    .await
+}
+
+/// `WS /ws/validate` (F7.5, D81): validación por bloques en vivo
+/// (`flujo.rs`). Sin cola: con todas las sesiones ocupadas, 503.
+async fn flujo(State(app): State<Arc<App>>, ws: axum::extract::ws::WebSocketUpgrade) -> Response {
+    let Ok(permiso) = app.flujos.clone().try_acquire_owned() else {
+        return no_disponible(
+            "busy",
+            "hay demasiadas validaciones en vivo; reintente en unos segundos",
+        );
+    };
+    ws.max_message_size(crate::flujo::MAX_BLOQUE)
+        .max_frame_size(crate::flujo::MAX_BLOQUE)
+        .on_upgrade(move |s| crate::flujo::sesion(s, permiso))
+}
+
 /// La respuesta de una vista: 200 con su JSON, o el error que toque.
 fn vista(r: Result<String, crate::vistas::Fallo>) -> Response {
     use crate::vistas::Fallo;
@@ -383,6 +476,17 @@ fn vista(r: Result<String, crate::vistas::Fallo>) -> Response {
             json!({"error": "automaton", "status": status, "message": message}).to_string(),
         ),
         Err(Fallo::Payload(v)) => responder(StatusCode::UNPROCESSABLE_ENTITY, v.to_string()),
+        Err(Fallo::SinSandbox) => no_disponible(
+            "no-sandbox",
+            "el servidor no tiene sandbox para compilar el código generado (SANDBOX sin configurar)",
+        ),
+        Err(Fallo::Sandbox(detalle)) => {
+            registrar(&format!("sandbox: {detalle}"));
+            responder(
+                StatusCode::BAD_GATEWAY,
+                json!({"error": "sandbox", "message": detalle.chars().take(600).collect::<String>()}).to_string(),
+            )
+        }
     }
 }
 
@@ -391,6 +495,19 @@ fn vista(r: Result<String, crate::vistas::Fallo>) -> Response {
 /// corre `trabajo` en un hilo propio con pila explícita (D7) y tope de
 /// tiempo. Un pánico del trabajo da 500; pasarse de tiempo, 504.
 async fn procesar<F>(app: &App, req: Request, trabajo: F) -> Response
+where
+    F: FnOnce(Vec<u8>) -> Response + Send + 'static,
+{
+    procesar_con_plazo(app, req, app.cfg.compile_timeout, trabajo).await
+}
+
+/// [`procesar`] con otro tope de tiempo (el del sandbox, F7.5).
+async fn procesar_con_plazo<F>(
+    app: &App,
+    req: Request,
+    plazo: std::time::Duration,
+    trabajo: F,
+) -> Response
 where
     F: FnOnce(Vec<u8>) -> Response + Send + 'static,
 {
@@ -468,7 +585,7 @@ where
             "no se pudo crear el hilo de compilación; reintente en unos segundos",
         );
     }
-    match tokio::time::timeout(app.cfg.compile_timeout, rx).await {
+    match tokio::time::timeout(plazo, rx).await {
         Err(_) => responder(
             StatusCode::GATEWAY_TIMEOUT,
             json!({

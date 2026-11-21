@@ -880,3 +880,16 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [x] `docs/fase6/bombeo.md`, con la lectura para el informe (E4); `lint OK`; 774 pruebas del workspace en verde (2 binarios bloqueados por Smart App Control: `bombeo`, verde en una repetición, y el `main` del servidor, sin pruebas).
 
 **Estado (21 nov):** hecha.
+
+# Tarea F7.5: descarga del código, POST /api/validate y WebSocket (pista B, Bayron; 21 nov, D81)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario).
+
+- [x] `POST /api/code?lang=rust|c`: ZIP reproducible (escrito a mano, *stored* + CRC-32) con el código emitido y un `LEEME.txt`.
+- [x] `POST /api/validate`: compila y ejecuta el código generado en el sandbox de F7.3 y lo compara con el intérprete. Sin `SANDBOX=docker` da 503; el plazo es el del sandbox.
+- [x] `WS /ws/validate`: esquema, bloques y `fin`, por turnos; validador incremental en un hilo propio, con topes de sesiones, bytes e inactividad.
+- [x] Web: pestaña «Código generado» (descarga, sandbox y streaming con barra de progreso); Vite y Caddy reenvían `/ws`.
+- [x] Pruebas: 10 en `server/tests/codigo.rs` (ZIP, rutas, protocolo del WebSocket sin red) y 1 con Docker (C y Rust iguales al intérprete), incluida en `scripts/test-sandbox.ps1` y `make test-sandbox`; 4 de vitest (38 en total). Verificado en directo y tras Caddy.
+- [x] Doc en `docs/fase7/codigo.md`; `pendientes.md` §14 cerrado y §16 nuevo; `lint OK`; 820 pruebas del workspace en verde (7 de `codegen` necesitan un compilador de C, que no hay en este Windows).
+
+**Estado (21 nov):** hecha. Pendiente: visto bueno de Leonardo a las tres rutas (D42); F7.5-P1 (sandbox en la EC2); F7.3-P1 (caché del binario).

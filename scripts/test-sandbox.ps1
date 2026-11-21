@@ -13,4 +13,7 @@ docker build -t validador-sandbox:1 (Join-Path $repo 'sandbox')
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 cargo test -p server --release --test sandbox -- --ignored --test-threads 1
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+# F7.5: el código generado (C y Rust) compilado y ejecutado en el sandbox.
+cargo test -p server --release --test codigo -- --ignored --test-threads 1
 exit $LASTEXITCODE

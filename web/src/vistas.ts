@@ -348,3 +348,155 @@ const consulta = (categoria: string) => (categoria ? `?category=${encodeURICompo
 export const pedirCasos = (categoria = "") => obtener(`/api/tests${consulta(categoria)}`, "GET", interpretarCasos);
 export const ejecutarCasos = (categoria = "") =>
   obtener(`/api/tests/run${consulta(categoria)}`, "POST", interpretarEjecucion);
+
+// ---------------------------------------------------------------------------
+// F7.5 (D81): código generado (`POST /api/code`, `POST /api/validate`) y
+// validación en streaming (`WS /ws/validate`).
+
+export type Lenguaje = "rust" | "c";
+
+/** Línea JSON del validador (generado o intérprete). */
+export interface Informe {
+  valid: boolean;
+  violations: number | null;
+  errorKind: string | null;
+  offset: number | null;
+  pointer: string | null;
+  rule: string | null;
+}
+
+export interface Validacion {
+  lang: string;
+  status: string;
+  exitCode: number | null;
+  sandboxMs: number;
+  generated: Informe | null;
+  interpreter: Informe;
+  agree: boolean | null;
+}
+
+function informe(v: unknown): Informe | null {
+  if (!esObjeto(v) || typeof v.valid !== "boolean") return null;
+  return {
+    valid: v.valid,
+    violations: numeroONulo(v.violations),
+    errorKind: textoONulo(v.errorKind),
+    offset: numeroONulo(v.offset),
+    pointer: textoONulo(v.pointer),
+    rule: textoONulo(v.rule),
+  };
+}
+
+export function interpretarValidacion(estado: number, cuerpo: string): Respuesta<Validacion> {
+  const v = leer(cuerpo);
+  if (estado !== 200 || !esObjeto(v)) return { ok: false, fallo: fallo(estado, v) };
+  const interprete = informe(v.interpreter);
+  if (!interprete) return { ok: false, fallo: { estado, mensaje: "respuesta sin el reporte del intérprete" } };
+  return {
+    ok: true,
+    datos: {
+      lang: texto(v.lang),
+      status: texto(v.status),
+      exitCode: numeroONulo(v.exitCode),
+      sandboxMs: numero(v.sandboxMs),
+      generated: informe(v.generated),
+      interpreter: interprete,
+      agree: typeof v.agree === "boolean" ? v.agree : null,
+    },
+  };
+}
+
+export const validarGenerado = (esquema: string, payload: string, lang: Lenguaje) =>
+  enviar("/api/validate", JSON.stringify({ schema: esquema, payload, lang }), interpretarValidacion);
+
+/** Descarga el ZIP del validador generado (lo guarda el navegador). */
+export async function descargarCodigo(esquema: string, lang: Lenguaje): Promise<FalloVista | null> {
+  try {
+    const r = await fetch(`/api/code?lang=${lang}`, { method: "POST", body: esquema });
+    if (r.status !== 200) return fallo(r.status, leer(await r.text()));
+    const blob = await r.blob();
+    const nombre = /filename="([^"]+)"/.exec(r.headers.get("content-disposition") ?? "")?.[1] ?? `validador-${lang}.zip`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nombre;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return null;
+  } catch {
+    return { estado: null, mensaje: "no se pudo contactar con el servidor" };
+  }
+}
+
+/** Mensajes de `WS /ws/validate`. */
+export type MensajeFlujo =
+  | { type: "ready"; format: string; states: number; transitions: number; memoryBytes: number }
+  | { type: "progress"; chunk: number; bytes: number; stopped: boolean }
+  | { type: "report"; bytes: number; chunks: number; report: Informe }
+  | { type: "error"; message: string };
+
+export function interpretarMensaje(texto_: string): MensajeFlujo {
+  const v = leer(texto_);
+  if (!esObjeto(v)) return { type: "error", message: "mensaje inesperado del servidor" };
+  switch (v.type) {
+    case "ready":
+      return { type: "ready", format: texto(v.format), states: numero(v.states), transitions: numero(v.transitions), memoryBytes: numero(v.memoryBytes) };
+    case "progress":
+      return { type: "progress", chunk: numero(v.chunk), bytes: numero(v.bytes), stopped: v.stopped === true };
+    case "report": {
+      const r = informe(v.report);
+      return r ? { type: "report", bytes: numero(v.bytes), chunks: numero(v.chunks), report: r } : { type: "error", message: "reporte sin forma" };
+    }
+    default:
+      return { type: "error", message: texto(v.message, "error del servidor") };
+  }
+}
+
+/**
+ * Valida `payload` por bloques de `bloque` bytes sobre `WS /ws/validate`:
+ * manda el esquema, espera `ready`, manda un bloque tras cada `progress` y
+ * `fin` al acabar. `alProgresar` recibe cada mensaje.
+ */
+export function validarEnFlujo(
+  esquema: string,
+  payload: string,
+  bloque: number,
+  alProgresar: (m: MensajeFlujo) => void,
+  crear: (url: string) => WebSocket = (u) => new WebSocket(u),
+): Promise<MensajeFlujo> {
+  return new Promise((resolver) => {
+    const datos = new TextEncoder().encode(payload);
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    let ws: WebSocket;
+    try {
+      ws = crear(`${proto}//${location.host}/ws/validate`);
+    } catch {
+      resolver({ type: "error", message: "no se pudo abrir el WebSocket" });
+      return;
+    }
+    ws.binaryType = "arraybuffer";
+    let i = 0;
+    let terminado = false;
+    const acabar = (m: MensajeFlujo) => {
+      if (terminado) return;
+      terminado = true;
+      resolver(m);
+      ws.close();
+    };
+    const siguiente = () => {
+      if (i < datos.length) {
+        ws.send(datos.slice(i, i + bloque));
+        i += bloque;
+      } else ws.send("fin");
+    };
+    ws.onopen = () => ws.send(esquema);
+    ws.onmessage = (ev) => {
+      const m = interpretarMensaje(typeof ev.data === "string" ? ev.data : "");
+      alProgresar(m);
+      if (m.type === "report" || m.type === "error") acabar(m);
+      else siguiente();
+    };
+    ws.onerror = () => acabar({ type: "error", message: "error en el WebSocket" });
+    ws.onclose = () => acabar({ type: "error", message: "el servidor cerró la conexión" });
+  });
+}

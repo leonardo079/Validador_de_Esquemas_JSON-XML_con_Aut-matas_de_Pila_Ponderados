@@ -13,10 +13,13 @@ use std::time::Duration;
 mod api;
 pub mod casos;
 pub mod compilar;
+pub mod flujo;
+pub mod generado;
 pub mod sandbox;
 pub mod vistas;
+pub mod zip;
 
-pub use api::{router, router_con, router_con_casos, Compilador};
+pub use api::{router, router_completo, router_con, router_con_casos, Compilador};
 
 /// Pila del hilo de cada compilación: el parser es recursivo y su tope de
 /// profundidad (256) está garantizado con ≥ 2 MiB (D7); el mismo valor que

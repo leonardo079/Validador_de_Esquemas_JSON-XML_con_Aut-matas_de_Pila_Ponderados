@@ -280,6 +280,8 @@ aquí solo se remite a ellas.
 
 ### 14. El código generado tiene que compilar sin dependencias (F7.3-P2)
 
+- **Resuelto (F7.5, D81):** los emisores de F5.1 y F5.2 producen archivos planos sin dependencias (`main.rs` o `main.c` y la copia del núcleo), y `POST /api/validate` los compila y ejecuta en el sandbox (`codigo.md` §2).
+
 - **Estado:** el sandbox compila sin red un `main.rs` suelto o un conjunto de `.c`/`.h`, sin Cargo.
 - **Arreglo propuesto:**
   - si F5.1 emite un crate que depende de `runtime-rs` y `lexer`, copiar sus fuentes en la imagen (etapa
@@ -297,3 +299,15 @@ aquí solo se remite a ellas.
   base para esquemas grandes.
 - **Dónde:** `server/src/vistas.rs` (`comparar`).
 - **Tarea:** F7.7, o se acepta para la entrega académica.
+
+### 16. `/api/validate` apagado en la EC2 (F7.5-P1)
+
+- **Estado:** sin `SANDBOX=docker` responde 503 `no-sandbox`. En Compose no se activa: haría falta el cliente
+  `docker` en la imagen del servidor, montar `/var/run/docker.sock` (equivale a ser root en la máquina,
+  `sandbox.md` §5) y tener la imagen del sandbox (1,3 GB) en la `t3.micro`.
+- **Arreglo propuesto:** si se quiere en la URL pública, (1) `apt-get install docker-ce-cli` en
+  `infra/Dockerfile.server`, (2) el volumen del socket con el grupo `docker` del anfitrión (`group_add`), (3)
+  `SANDBOX=docker` en `environment` y (4) `docker build -t validador-sandbox:1 sandbox` en la EC2. Mejor con
+  Docker *rootless* o gVisor (`runsc`).
+- **Dónde:** `infra/docker-compose.yml`, `infra/Dockerfile.server`.
+- **Tarea:** después de la entrega; en la demo se enseña en local.

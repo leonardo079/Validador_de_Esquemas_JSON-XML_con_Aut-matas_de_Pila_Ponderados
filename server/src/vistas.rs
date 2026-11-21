@@ -34,9 +34,13 @@ pub enum Fallo {
     Peticion(String),
     /// El payload no tiene árbol (422), con su JSON.
     Payload(Value),
+    /// El servidor no tiene sandbox (503, F7.5).
+    SinSandbox,
+    /// El sandbox falló o no está disponible (502; el detalle, al registro).
+    Sandbox(String),
 }
 
-fn construir(esquema: &[u8]) -> Result<(Formato, Automaton), Fallo> {
+pub(crate) fn construir(esquema: &[u8]) -> Result<(Formato, Automaton), Fallo> {
     let (f, _, ir) = compilar::ir_de(esquema).map_err(Fallo::Compilacion)?;
     match automaton::build(&ir) {
         Ok(a) => Ok((f, a)),

@@ -25,10 +25,14 @@ baseline.workspace = true
 # F7.2 (D72): los casos de prueba en MongoDB Atlas (`GET /api/tests`,
 # `POST /api/tests/run`); el driver oficial, con rustls (sin OpenSSL).
 atlas.workspace = true
+# F7.5 (D81): el código generado (Rust y C) para descargarlo y validarlo en el sandbox.
+codegen.workspace = true
+runtime-rs.workspace = true
 # Sin las features por defecto: `compat-3-0-0` trae bson 2, que activa
 # `serde_json/preserve_order` en todo el workspace (rompe D49). bson 3 no.
 mongodb = { version = "3.10.2", default-features = false, features = ["compat-3-3-0", "bson-3", "rustls-tls", "dns-resolver"] }
-axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json"] }
+# `ws`: `WS /ws/validate` (F7.5, D81).
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "json", "ws"] }
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "net", "sync", "time", "signal"] }
 serde_json = "1.0.154"
 # `id` del esquema: SHA-256 del contenido (U5), en Rust puro.

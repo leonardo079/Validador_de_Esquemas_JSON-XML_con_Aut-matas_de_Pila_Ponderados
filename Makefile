@@ -34,6 +34,7 @@ test-baseline-xml:
 test-sandbox:
 	docker build -t validador-sandbox:1 sandbox
 	cargo test -p server --release --test sandbox -- --ignored --test-threads 1
+	cargo test -p server --release --test codigo -- --ignored --test-threads 1
 
 fmt:
 	cargo fmt --all

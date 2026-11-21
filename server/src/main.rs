@@ -65,7 +65,24 @@ fn main() -> ExitCode {
                 }
             },
         };
-        match axum::serve(listener, server::router_con_casos(cfg, casos))
+        // F7.5 (D81): el sandbox Docker de F7.3 para `POST /api/validate`,
+        // solo con `SANDBOX=docker` (en el despliegue hace falta el socket de
+        // Docker, `docs/fase7/sandbox.md` §5).
+        let sandbox = match std::env::var("SANDBOX").ok().as_deref() {
+            Some("docker") => {
+                let mut s = server::sandbox::Sandbox::default();
+                if let Ok(img) = std::env::var("SANDBOX_IMAGE") {
+                    s.imagen = img;
+                }
+                avisar(&format!("sandbox: Docker con la imagen {}", s.imagen));
+                Some(s)
+            }
+            _ => {
+                avisar("sin SANDBOX=docker: /api/validate responde 503");
+                None
+            }
+        };
+        match axum::serve(listener, server::router_completo(cfg, casos, sandbox))
             .with_graceful_shutdown(apagado())
             .await
         {

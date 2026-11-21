@@ -8,6 +8,7 @@ import { Automata } from "./Automata";
 import { Arbol } from "./Arbol";
 import { Comparacion } from "./Comparacion";
 import { Casos } from "./Casos";
+import { Generado } from "./Generado";
 
 // Cuatro vistas: «editor de esquema» (F7.4: editar, compilar contra
 // POST /api/schemas y ver el resultado) y, desde F7.6, «autómata» (Cytoscape),
@@ -22,6 +23,7 @@ const VISTAS = [
   ["automata", "Autómata"],
   ["arbol", "Árbol de derivación"],
   ["comparacion", "Comparación DPDA / línea base"],
+  ["generado", "Código generado"],
   ["casos", "Casos de prueba (Atlas)"],
 ] as const;
 type Vista = (typeof VISTAS)[number][0];
@@ -107,6 +109,7 @@ export function App() {
       {vista === "automata" && <Automata esquema={texto} />}
       {vista === "arbol" && <Arbol payload={payload} alCambiarPayload={setPayload} />}
       {vista === "comparacion" && <Comparacion esquema={texto} payload={payload} alCambiarPayload={setPayload} />}
+      {vista === "generado" && <Generado esquema={texto} payload={payload} alCambiarPayload={setPayload} />}
       {vista === "casos" && <Casos />}
 
       <div className={vista === "editor" ? "barra" : "barra oculto"}>

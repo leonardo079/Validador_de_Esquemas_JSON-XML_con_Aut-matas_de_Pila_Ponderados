@@ -51,6 +51,12 @@
 		respond `{"error":"too-large","limit":1048576,"message":"el cuerpo supera el tamaño máximo de 1048576 bytes"}` 413
 	}
 
+	# F7.5 (D81): validación por bloques. Caddy pasa el `Upgrade` del
+	# WebSocket solo; sin `request_buffers` (no hay cuerpo que acumular).
+	handle /ws/* {
+		reverse_proxy server:8080
+	}
+
 	handle /api/* {
 		reverse_proxy server:8080 {
 			request_buffers 1MiB
