@@ -929,3 +929,16 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario). Deta
 - [ ] Visto bueno de Leonardo a los cambios de contrato (`/api/health`, `code` del WebSocket).
 
 **Estado (21 nov):** hecha. Sin cambios: §20, E3C-9 y E3C-10.
+
+# Cambios del visto bueno de la API (pista B, Bayron; 21 nov, D84)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario). Los seis cambios de D82 (`docs/fase7/pendientes.md` §25).
+
+- [x] (1) `lang` por defecto `c` en `/api/code` y `/api/validate`; 400 si `lang` se repite.
+- [x] (2) `code` y cierres del WebSocket (D83). (5) `truncated` en `/api/tests` (D83).
+- [x] (3) `database` y `sandbox` en `/api/health` (D83); `no-sandbox` y `no-database` sin `Retry-After`; `/api/validate` responde 503 antes de leer el cuerpo.
+- [x] (4) 500 `codegen` si el código generado no compila; los `null` documentados.
+- [x] (6) `servidor.md` §2.
+- [x] Pruebas ajustadas y nuevas; servidor en verde.
+
+**Estado (21 nov):** hecha.

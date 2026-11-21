@@ -23,7 +23,8 @@ async fn sin_base_las_rutas_dan_503() {
             .unwrap();
         let r = router(Config::default()).oneshot(req).await.unwrap();
         assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE, "{ruta}");
-        assert!(r.headers().get("retry-after").is_some());
+        // D82 (3): es permanente, sin `Retry-After`.
+        assert!(r.headers().get("retry-after").is_none());
         let b = axum::body::to_bytes(r.into_body(), usize::MAX)
             .await
             .unwrap();

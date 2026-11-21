@@ -38,6 +38,9 @@ pub enum Fallo {
     SinSandbox,
     /// El sandbox falló o no está disponible (502; el detalle, al registro).
     Sandbox(String),
+    /// El código generado no compiló en el sandbox (500 `codegen`, D82 (4)): es
+    /// un fallo del emisor, no del sandbox. El detalle, al registro.
+    Codegen(String),
 }
 
 pub(crate) fn construir(esquema: &[u8]) -> Result<(Formato, Automaton), Fallo> {

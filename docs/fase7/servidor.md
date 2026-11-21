@@ -52,9 +52,12 @@ los 100 primeros se pasan a texto.
 Todas las respuestas del `Router` son `application/json` y llevan
 `X-Content-Type-Options: nosniff` (SEC-L2). Las de error llevan un campo `error` con un
 código estable y un `message` en español. El servidor **nunca responde 400 por el
-esquema**: un esquema malo, vacío o que no es UTF-8 es un 422. Los únicos 400 son de
-lectura de la petición: el de hyper por un `Content-Length` malformado, y el `body` de
-axum cuando la conexión se corta a mitad del cuerpo (CR-I2). Un esquema compilado
+esquema**: un esquema malo, vacío o que no es UTF-8 es un 422. Los 400 son de
+lectura de la petición (el de hyper por un `Content-Length` malformado, y el `body` de
+axum cuando la conexión se corta a mitad del cuerpo, CR-I2) o de **parámetros de las rutas
+nuevas**: 400 `request` por `category` no válida (`/api/tests`), `lang` no válido o repetido
+(`/api/code`), y un cuerpo que no es el JSON esperado (`/api/compare`, `/api/validate`)
+(D82 (6); [vistas.md](vistas.md), [atlas.md](atlas.md) y [codigo.md](codigo.md)). Un esquema compilado
 responde 200, no 201, porque todavía no hay un `GET` del recurso (llegará con la
 persistencia de F7.2).
 

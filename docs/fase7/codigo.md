@@ -27,8 +27,8 @@ El cuerpo es el esquema crudo (D22). La respuesta es un `application/zip` con
   núcleo y del lexer;
 - un `LEEME.txt` con la orden para compilar y ejecutar.
 
-El ZIP es reproducible: fecha fija y mismo orden, así que el mismo esquema da los mismos bytes. Los errores son 400
-si `lang` no es `rust` ni `c`, y 422 si el esquema no compila (como `/api/schemas`) o si M no se puede construir.
+El ZIP es reproducible: fecha fija y mismo orden, así que el mismo esquema da los mismos bytes. `lang` es `c` por defecto, el mismo que en `/api/validate` (D82 (1)). Los errores son
+400 si `lang` no es `rust` ni `c` o aparece más de una vez, y 422 si el esquema no compila (como `/api/schemas`) o si M no se puede construir.
 Ejemplos: el de `objeto-cerrado` en C ocupa 135 KB (9 archivos) y en Rust 213 KB. Los lee `unzip`.
 
 **Topes (E3, D83):** el ZIP no puede pasar de 8 MiB (422 `too-large`). Además, toda respuesta de más de 64 KiB
@@ -51,13 +51,16 @@ El cuerpo es `{"schema": "…", "payload": "…", "lang": "c"|"rust"}`. El servi
  "interpreter":{…},"agree":true}
 ```
 
-- `status` puede ser `ok`, `compile-timeout`, `run-timeout` o `killed`. Si el código no compila o Docker falla, la
-  respuesta es 502 `sandbox`.
+- `status` puede ser `ok`, `compile-timeout`, `run-timeout` o `killed`.
+- Si el código generado **no compila**, la respuesta es **500 `codegen`**: es un fallo del emisor, no del
+  sandbox (D82 (4)). Si Docker falla, 502 `sandbox`.
 - **Sin sandbox** (el servidor arrancó sin `SANDBOX=docker`), la respuesta es 503 `no-sandbox`; el resto de la API
   sigue igual.
 - El plazo es el del sandbox: con `SANDBOX=docker`, 40 + 10 + 5 = **55 s**, por debajo del `write 60s` de Caddy
   (E3C-4). Usa un semáforo propio de 1, así que no ocupa los permisos de compilación (`api::procesar_con_plazo`).
-- El 502 `sandbox` da un mensaje fijo; el diagnóstico del compilador va solo al registro (E3C-6, D15).
+- El 500 `codegen` y el 502 `sandbox` dan un mensaje fijo; el diagnóstico va solo al registro (E3C-6, D15).
+- **Sin sandbox** (sin `SANDBOX=docker`), 503 `no-sandbox` **antes** de leer el cuerpo y **sin** `Retry-After`,
+  porque no es algo pasajero (D82 (3)). `GET /api/health` lo anuncia con `"sandbox": false`.
 - `generated` y `agree` son `null` si el sandbox no terminó (`status` distinto de `ok`).
 
 **Verificado con Docker** (`validate_compila_y_ejecuta_en_el_sandbox`): en C y en Rust, con un payload válido, uno

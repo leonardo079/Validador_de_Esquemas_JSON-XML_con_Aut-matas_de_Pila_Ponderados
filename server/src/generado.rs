@@ -11,6 +11,10 @@ use serde_json::{json, Value};
 use crate::sandbox::{self, Lenguaje, Resultado, Sandbox, Trabajo};
 use crate::vistas::{construir, Fallo};
 
+/// Lenguaje por defecto en `POST /api/code` y `POST /api/validate` (D82 (1)):
+/// el mismo en las dos; C porque compila en 1-2 s (Rust con `-O`, decenas).
+pub const LANG_POR_DEFECTO: &str = "c";
+
 /// `rust` o `c`.
 pub fn lenguaje(s: &str) -> Option<Lenguaje> {
     match s {
@@ -124,7 +128,7 @@ pub fn validar(cuerpo: &[u8], sb: Option<&Sandbox>) -> Result<String, Fallo> {
             "faltan `schema` o `payload` (cadenas)".into(),
         ));
     };
-    let l = lenguaje(v["lang"].as_str().unwrap_or("c"))
+    let l = lenguaje(v["lang"].as_str().unwrap_or(LANG_POR_DEFECTO))
         .ok_or_else(|| Fallo::Peticion("`lang` debe ser `rust` o `c`".into()))?;
     let sb = sb.ok_or(Fallo::SinSandbox)?;
     let (formato, a) = construir(esquema.as_bytes())?;
@@ -154,7 +158,7 @@ pub fn validar(cuerpo: &[u8], sb: Option<&Sandbox>) -> Result<String, Fallo> {
             ("ok", Some(codigo), g)
         }
         Resultado::ErrorCompilacion { diagnostico } => {
-            return Err(Fallo::Sandbox(format!(
+            return Err(Fallo::Codegen(format!(
                 "el código generado no compiló: {}",
                 String::from_utf8_lossy(&diagnostico)
                     .chars()

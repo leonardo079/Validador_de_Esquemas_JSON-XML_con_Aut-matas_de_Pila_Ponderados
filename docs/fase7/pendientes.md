@@ -416,7 +416,7 @@ son los de D82 (1)-(6): `lang` igual en las dos rutas (punto 2 de abajo), `code`
 `truncated` en `/api/tests` (punto 8) y la frase de `servidor.md` (punto 1). Los puntos 5, 6, el payload solo como
 texto del 7 y el cuerpo ignorado del 8 se aceptan como están, documentados. El 9 va con §19.
 
-- **Hecho (21 nov, D83):** .3 (errores del WebSocket con `code` estable y cierres 1008, 1009, 1011 y 1013), .4 (`/api/health` anuncia `database` y `sandbox`), .6 (el 413 habla del «cuerpo de la petición») y .8 (`/api/tests` con `truncated`). **Quedan para la revisión de Leonardo:** .1 (los 400 `request` ya existen: actualizar `servidor.md` §2), .2 (`lang` por defecto distinto: `rust` en `/api/code` porque es lo que se descarga, `c` en `/api/validate` porque compila en 1-2 s), .5 (resuelto por §22), .7 (`generated`/`agree` `null` si el sandbox no termina; documentado en `codigo.md` §2) y .9 (resuelto por §19).
+- **Hecho (21 nov, D83 y D84):** los seis cambios de D82. (1) `lang` por defecto `c` en `/api/code` y `/api/validate` (`generado::LANG_POR_DEFECTO`) y 400 si se repite. (2) Errores del WebSocket con `code` estable (`busy`, `schema`, `timeout`, `too-large`, `idle`, `cpu-limit`, `session-limit`, `protocol`, `internal`) y cierres 1008, 1009, 1011 y 1013. (3) `/api/health` con `database` y `sandbox`; `no-sandbox` y `no-database` sin `Retry-After`; `/api/validate` responde 503 antes de leer el cuerpo. (4) 500 `codegen` si el código generado no compila; los `null` de `generated` y `agree`, documentados en [codigo.md](codigo.md) §2. (5) `truncated` en `/api/tests`. (6) La frase de [servidor.md](servidor.md) §2, corregida. Además, el 413 dice «el cuerpo de la petición» (.6 de abajo).
 
 Observaciones de la auditoría C:
 

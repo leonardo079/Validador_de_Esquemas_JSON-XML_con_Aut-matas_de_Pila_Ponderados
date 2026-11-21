@@ -170,6 +170,15 @@ fn no_disponible(error: &str, message: &str) -> Response {
         .into_response()
 }
 
+/// Un 503 de una parte que este servidor **no tiene** (`no-sandbox`,
+/// `no-database`): sin `Retry-After`, porque reintentar no sirve (D82 (3)).
+fn no_configurado(error: &str, message: &str) -> Response {
+    responder(
+        StatusCode::SERVICE_UNAVAILABLE,
+        json!({"error": error, "message": message}).to_string(),
+    )
+}
+
 fn interno() -> Response {
     responder(
         StatusCode::INTERNAL_SERVER_ERROR,
@@ -377,7 +386,7 @@ fn categoria_no_valida() -> Response {
 fn fallo_casos(e: crate::casos::Error) -> Response {
     use crate::casos::Error;
     match e {
-        Error::SinBase => no_disponible(
+        Error::SinBase => no_configurado(
             "no-database",
             "el servidor no tiene base de datos (MONGODB_URI sin configurar)",
         ),
@@ -423,24 +432,40 @@ async fn ejecutar_casos(State(app): State<Arc<App>>, req: Request) -> Response {
     .await
 }
 
-/// El lenguaje de `?lang=rust|c` (por defecto, `rust`); `None` si es otro.
-fn lenguaje_de(req: &Request) -> Option<crate::sandbox::Lenguaje> {
-    let valor = req
+/// El lenguaje de `?lang=rust|c` (por defecto [`crate::generado::LANG_POR_DEFECTO`],
+/// el mismo que `/api/validate`, D82 (1)); `Err` con el motivo si es otro o si
+/// `lang` viene más de una vez.
+fn lenguaje_de(req: &Request) -> Result<crate::sandbox::Lenguaje, &'static str> {
+    let valores: Vec<&str> = req
         .uri()
         .query()
-        .and_then(|q| q.split('&').find_map(|p| p.strip_prefix("lang=")))
-        .unwrap_or("rust");
-    crate::generado::lenguaje(valor)
+        .map(|q| {
+            q.split('&')
+                .filter_map(|p| p.strip_prefix("lang="))
+                .collect()
+        })
+        .unwrap_or_default();
+    if valores.len() > 1 {
+        return Err("`lang` aparece más de una vez");
+    }
+    let valor = valores
+        .first()
+        .copied()
+        .unwrap_or(crate::generado::LANG_POR_DEFECTO);
+    crate::generado::lenguaje(valor).ok_or("`lang` debe ser `rust` o `c`")
 }
 
 /// `POST /api/code?lang=rust|c` (F7.5, D81): el cuerpo es el esquema; la
 /// respuesta, un ZIP con el validador generado y un `LEEME.txt`.
 async fn codigo(State(app): State<Arc<App>>, req: Request) -> Response {
-    let Some(l) = lenguaje_de(&req) else {
-        return responder(
-            StatusCode::BAD_REQUEST,
-            json!({"error": "request", "message": "`lang` debe ser `rust` o `c`"}).to_string(),
-        );
+    let l = match lenguaje_de(&req) {
+        Ok(l) => l,
+        Err(m) => {
+            return responder(
+                StatusCode::BAD_REQUEST,
+                json!({"error": "request", "message": m}).to_string(),
+            )
+        }
     };
     procesar(&app, req, move |bytes| {
         match crate::generado::zip(&bytes, l) {
@@ -466,6 +491,10 @@ async fn codigo(State(app): State<Arc<App>>, req: Request) -> Response {
 /// compila y ejecuta el código generado en el sandbox (F7.3) y lo compara
 /// con el intérprete. Plazo: el del sandbox (compilar + ejecutar + holgura).
 async fn validar(State(app): State<Arc<App>>, req: Request) -> Response {
+    // D82 (3): sin sandbox, 503 sin leer ni validar el cuerpo.
+    if app.sandbox.is_none() {
+        return vista(Err(crate::vistas::Fallo::SinSandbox));
+    }
     let sb = app.sandbox.clone();
     let plazo = sb
         .as_ref()
@@ -538,10 +567,20 @@ fn vista(r: Result<String, crate::vistas::Fallo>) -> Response {
             json!({"error": "automaton", "status": status, "message": message}).to_string(),
         ),
         Err(Fallo::Payload(v)) => responder(StatusCode::UNPROCESSABLE_ENTITY, v.to_string()),
-        Err(Fallo::SinSandbox) => no_disponible(
+        Err(Fallo::SinSandbox) => no_configurado(
             "no-sandbox",
             "el servidor no tiene sandbox para compilar el código generado (SANDBOX sin configurar)",
         ),
+        Err(Fallo::Codegen(detalle)) => {
+            // D82 (4): el código generado no compiló: es un fallo del emisor (500),
+            // no del sandbox. El diagnóstico, solo al registro (D15).
+            registrar(&format!("codegen: {detalle}"));
+            responder(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json!({"error": "codegen", "message": "el código generado no compiló (error del emisor)"})
+                    .to_string(),
+            )
+        }
         Err(Fallo::Sandbox(detalle)) => {
             registrar(&format!("sandbox: {detalle}"));
             // E3C-6 (D15): el diagnóstico del compilador o de `docker run` va solo al

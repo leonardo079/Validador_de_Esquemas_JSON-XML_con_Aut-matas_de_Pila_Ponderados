@@ -143,11 +143,24 @@ async fn validate_sin_sandbox_da_503_y_cuerpo_malo_400() {
         "{}",
         String::from_utf8_lossy(&b)
     );
-    assert!(h.get("retry-after").is_some());
+    assert!(
+        h.get("retry-after").is_none(),
+        "D82 (3): no-sandbox es permanente"
+    );
     assert_eq!(
         serde_json::from_slice::<Value>(&b).unwrap()["error"],
         "no-sandbox"
     );
+    // D82 (3): sin sandbox, 503 antes de mirar el cuerpo (aunque sea malo).
+    let (e, _, _) = pedir(&app, post("/api/validate", "no json")).await;
+    assert_eq!(e, StatusCode::SERVICE_UNAVAILABLE);
+    // Con sandbox configurado (un `docker` que no existe: nunca se llega a él),
+    // un cuerpo malo es 400.
+    let sb = server::sandbox::Sandbox {
+        docker: "no-existe-docker".into(),
+        ..Default::default()
+    };
+    let app = server::router_completo(Config::default(), None, Some(sb));
     for malo in [
         "no json",
         r#"{"schema": "{}"}"#,
@@ -320,4 +333,23 @@ async fn presupuesto_de_respuestas_se_agota_sin_leer() {
 fn errores_del_flujo_con_codigo() {
     let m = server::flujo::conversar(r#"{"type": 3}"#, &[b"1"]);
     assert_eq!(m[0]["code"], "schema");
+}
+
+/// D82 (1): el mismo `lang` por defecto en `/api/code` y `/api/validate`
+/// (`c`), y 400 si `lang` viene repetido.
+#[tokio::test]
+async fn lang_por_defecto_y_repetido() {
+    let app = router(Config::default());
+    let (e, h, _) = pedir(&app, post("/api/code", ESQUEMA)).await;
+    assert_eq!(e, StatusCode::OK);
+    assert_eq!(
+        h.get("content-disposition").unwrap(),
+        "attachment; filename=\"validador-json-c.zip\""
+    );
+    assert_eq!(server::generado::LANG_POR_DEFECTO, "c");
+    let (e, _, b) = pedir(&app, post("/api/code?lang=c&lang=rust", ESQUEMA)).await;
+    assert_eq!(e, StatusCode::BAD_REQUEST);
+    let v: Value = serde_json::from_slice(&b).unwrap();
+    assert_eq!(v["error"], "request");
+    assert!(v["message"].as_str().unwrap().contains("más de una vez"));
 }
