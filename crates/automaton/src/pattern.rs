@@ -136,6 +136,11 @@ pub(crate) struct PatternDfa {
     pub(crate) dfa: Dfa<bool>,
     /// Los conjuntos de las posiciones (para refinar la partición global).
     pub(crate) sets: Vec<CharSet>,
+    /// Trabajo de construirlo, en palabras: las filas de follow (m · w), la
+    /// determinización (lo que cuenta `MAX_PATTERN_WORK`) y las claves de los
+    /// estados (estados · w). Los constructores lo suman en
+    /// `MAX_SCHEMA_PATTERN_WORK` para todo el esquema (E3B-2, E3B-3).
+    pub(crate) work: usize,
 }
 
 /// Por qué no se construyó el AFD.
@@ -159,6 +164,13 @@ pub(crate) fn compile(src: &str, d: Dialect, cap: usize) -> Result<PatternDfa, P
 /// estados el trabajo sería ≈ 10⁹ palabras, así que se corta antes con
 /// `limit` (como `MAX_CLOSURE_WORK` de los cierres).
 pub(crate) const MAX_PATTERN_WORK: usize = 1 << 26;
+
+/// Trabajo de todos los `pattern` de un esquema juntos (E3B-2, E3B-3): sin él,
+/// cada `pattern` respeta `MAX_PATTERN_WORK` pero un esquema de pocos KB con
+/// cientos de patrones distintos tarda minutos. 2²³ palabras son unos
+/// 1-2 s en release en el peor caso medido (`^a{0,4000}$`, ≈ 1,3 · 10⁶ cada
+/// uno) y decenas de miles de patrones de los habituales.
+pub(crate) const MAX_SCHEMA_PATTERN_WORK: usize = 1 << 23;
 
 fn build(re: &Regex, cap: usize) -> Result<PatternDfa, PatternError> {
     let gs = re.glushkov();
@@ -286,6 +298,9 @@ fn build(re: &Regex, cap: usize) -> Result<PatternDfa, PatternError> {
         .iter()
         .map(|(ps, at_start, found)| *found || hits(ps, &last_end) || (*at_start && empty_ok))
         .collect();
+    let work = work
+        .saturating_add(m.saturating_mul(w))
+        .saturating_add(keys.len().saturating_mul(w));
     let raw = Dfa {
         n_classes: k,
         start: 0,
@@ -296,6 +311,7 @@ fn build(re: &Regex, cap: usize) -> Result<PatternDfa, PatternError> {
         part,
         dfa: hopcroft(&raw),
         sets,
+        work,
     })
 }
 

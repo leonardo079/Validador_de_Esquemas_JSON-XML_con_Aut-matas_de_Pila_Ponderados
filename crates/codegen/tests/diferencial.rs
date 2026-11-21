@@ -462,6 +462,10 @@ const NUMERICOS_JSON: &[&str] = &[
     r#"{"type":"array","items":{"minimum":-99999999999999999999.5,"exclusiveMaximum":1e1000000000000000000000}}"#,
     r#"{"type":"array","items":{"multipleOf":5e-20,"maximum":-0}}"#,
     r#"{"type":"array","items":{"exclusiveMinimum":1e1}}"#,
+    // E3A-1: el hash de `uniqueItems` lee el exponente (tope 2^60); bajo
+    // `not`, un desborde en el C aceptaba lo que Rust da como límite.
+    r#"{"type":"array","uniqueItems":true}"#,
+    r#"{"type":"array","not":{"uniqueItems":true}}"#,
 ];
 
 const NUMERICO_XSD: &str = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
@@ -541,6 +545,14 @@ const BORDES: &[&str] = &[
     "1e10000000000000000001",
     "-1e10000000000000000001",
     "1e-9999999999999999999",
+    // E3A-1: exponentes de 18-25 cifras alrededor del tope 2^60 del hash
+    // de `uniqueItems` (1152921504606846976).
+    "1e1152921504606846976",
+    "1e1152921504606846977",
+    "1e-1152921504606846977",
+    "1e1032535899011918413360",
+    "1e1050982643085627964976",
+    "2e9999999999999999999",
 ];
 
 /// Un número de RFC 8259 al azar: con signo, cifras (también más de 18 y de

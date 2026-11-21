@@ -311,3 +311,95 @@ aquí solo se remite a ellas.
   Docker *rootless* o gVisor (`runsc`).
 - **Dónde:** `infra/docker-compose.yml`, `infra/Dockerfile.server`.
 - **Tarea:** después de la entrega; en la demo se enseña en local.
+
+### Abiertas por E3 (revisión de seguridad consolidada, 21 nov; pista B)
+
+Detalle, reproducciones y cifras en `tasks/contexto/E3 auditoria B.md` y `E3 auditoria C.md` (locales). Por D38,
+los dos **High** (§18 y §19) rechazan exponer la aplicación hasta corregirlos. Lo de la pista A que salió en E3
+(E3B-1, E3B-2, E3B-3 y E3A-1) ya está corregido.
+
+### 17. `WS /ws/validate` sin tope de CPU (E3A-2, High en el servidor)
+
+- **Estado:** el WebSocket acepta el esquema del cliente y valida en el proceso sin plazo. Con cotas numéricas
+  largas (§61 de la Fase 4) cada número cuesta O(|cota|): minutos de CPU por bloque de 1 MiB, 4 sesiones a la vez.
+- **Arreglo propuesto:** plazo de CPU por sesión (comprobar `Instant` entre trozos de, p. ej., 4 KiB dentro de cada
+  bloque y cerrar con `limit`), y con §61 de la Fase 4 el costo por número vuelve a ser O(1 024).
+- **Dónde:** `server/src/flujo.rs:100-110` y `:138-208`.
+
+### 18. El WebSocket compila sin el permiso ni el presupuesto de cuerpos (E3C-1, High, confirmado)
+
+- **Estado:** 4 WebSocket y 2 `POST /api/schemas` con `{"allOf":[{},…]}` de 1 MiB llevaron el proceso a 716 MB,
+  por encima del `mem_limit` de 600 MiB: el contenedor muere y se puede repetir.
+- **Arreglo propuesto:** que la compilación del esquema del WebSocket pida `app.permisos` (y el plazo de 10 s),
+  como `POST /api/schemas`.
+- **Dónde:** `server/src/flujo.rs:141-167`, `server/src/api.rs:452-462`.
+
+### 19. Respuestas grandes sin tope ni permiso hasta enviarlas (E3C-3, High, confirmado sin Caddy)
+
+- **Estado:** es el CR-I3 de §8, pero peor con F7.5: un esquema de 107 KB da un ZIP de 6,4 MB en 0,18 s, sin tope
+  de tamaño. Con 121 respuestas de `/api/code` que el cliente no lee, el proceso llegó a 1,04 GB en 12 s (la IR
+  de `/api/schemas`, 489 MB en 0,8 s). El `write 60s` de Caddy no lo acota.
+- **Arreglo propuesto:** un tope del ZIP y de la IR (413/422 si se pasa), mantener un presupuesto de bytes hasta
+  enviar el cuerpo entero y un `ConcurrencyLimit` global.
+- **Dónde:** `server/src/api.rs:415-431` y `:576-577`, `server/src/generado.rs:441-454`, `infra/Caddyfile:14`.
+
+### 20. Compilaciones lentas que retienen los dos permisos (E3B-4, Medium)
+
+- **Estado:** el plazo de 10 s solo suelta la respuesta (§12). Antes de E3, dos esquemas de 2-6 KB (E3B-1 a E3B-3)
+  dejaban los dos permisos ocupados durante minutos u horas. Corregidos esos tres, lo peor medido es ≈ 2 s, pero la
+  causa (no se puede cancelar el hilo) sigue.
+- **Arreglo propuesto:** compilar en un proceso hijo con `RLIMIT_CPU` y `RLIMIT_AS` (§1), o un plazo cooperativo
+  dentro de `automaton::build` (cambia su API: D42).
+
+### 21. Sesiones WebSocket sin duración máxima (E3C-2, Medium, confirmado)
+
+- **Estado:** un *ping* o un bloque vacío renuevan los 30 s, y los bloques vacíos no cuentan para los 64 MiB:
+  cuatro sesiones ocupan las 4 plazas para siempre (la quinta recibió 503 a los 80 s).
+- **Arreglo propuesto:** duración máxima por sesión (p. ej. 120 s) y contar cada mensaje; documentarlo en
+  [codigo.md](codigo.md) §3.
+
+### 22. `/api/validate` retiene un permiso de compilación 85 s (E3C-4, Medium, teórico: apagado en la EC2)
+
+- **Arreglo propuesto:** un semáforo propio para el sandbox, el plazo por debajo del `write 60s` de Caddy, y
+  contar los 512 MiB de cada contenedor fuera del `mem_limit` del servidor.
+
+### 23. `/api/tests` y `/api/tests/run` consultan Atlas en cada petición (E3C-5, Medium, teórico)
+
+- **Arreglo propuesto:** el corpus es estático: guardarlo en memoria con caducidad, y pedir el permiso antes de
+  consultar. Evita agotar la cuota de Atlas M0.
+
+### 24. Menores (E3C-6 a E3C-11, Low/Info)
+
+- E3C-6: el 502 `sandbox` devuelve el *stderr* del compilador y de `docker run` (D15 pide no exponer detalles
+  internos).
+- E3C-7: el WebSocket acepta cualquier `Origin`.
+- E3C-8: `sandbox.rs` no mata el contenedor si `try_wait` falla, y el nombre `sv-{pid}-{n}` se repite tras un
+  reinicio (pid 1 en el contenedor).
+- E3C-9: Caddy corre como root y sin `read_only`; imágenes sin fijar por *digest* (`debian:trixie-slim` flotante);
+  Caddy 2.8.4 antigua.
+- E3C-10: avisos publicados de `vite` 5.4.10 y `vitest` 2.1.4 (solo desarrollo; sin verificar, no había red).
+- E3C-11: `ec2-preparar.sh` se baja de `main` con `curl | sh`, `accept-new` en SSH, y el `.env` antes del
+  `chmod 600`.
+
+**Bien según la auditoría:** sin XSS (todo como texto, CSP estricta), las órdenes de Docker sin *shell* y con
+nombres validados, consultas a MongoDB en BSON tipado, sin credenciales en el repo ni en el historial.
+
+### 25. Contrato de los endpoints de F7.2, F7.5 y F7.6 (visto bueno de Leonardo, D42)
+
+Observaciones de la auditoría C para decidir el visto bueno:
+
+1. `servidor.md` §2 dice que los únicos 400 son de lectura; ya hay 400 `request` por `category`, `lang` y el
+   cuerpo de `/api/compare` y `/api/validate`.
+2. `lang` por defecto es `rust` en `/api/code` y `c` en `/api/validate`; con `lang` repetido gana el primero.
+3. Errores del WebSocket sin código estable, cierre sin código; el 503 `busy` del *upgrade* no lo lee el
+   navegador. Propuesta: campo `code` y cierres 1008, 1009 y 1013.
+4. `no-sandbox` y `no-database` son permanentes pero llevan `Retry-After: 5`; `/api/validate` valida el JSON antes
+   de decir que no hay sandbox. Propuesta: anunciar `sandbox` y `database` en `/api/health` (aditivo).
+5. El 504 de `/api/validate` (85 s) no llega nunca tras Caddy (`write 60s`).
+6. Mensajes que no corresponden a la ruta (el 413 habla del esquema también con payloads; el 504 de «compilación»
+   en `/api/tests/run` y `/api/validate`).
+7. `/api/validate`: si el código generado no compila es 502 `sandbox` (es un fallo del emisor); `generated` y
+   `agree` pueden ser `null` sin documentar; el payload solo puede ser texto.
+8. `/api/tests`: `total` cuenta lo devuelto (≤ 1 000) sin `truncated`; `/api/tests/run` lee un cuerpo que ignora.
+9. `/api/code`: sin tope documentado del ZIP (§19).
+

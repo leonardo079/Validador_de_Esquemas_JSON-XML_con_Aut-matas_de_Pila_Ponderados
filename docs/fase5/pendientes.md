@@ -7,7 +7,7 @@ y la tarea que debe cerrarla. Lo cerrado pasa a `historial.md` (todavía no hay)
 
 ### Abiertas por la tarea F5.1 (emisor Rust, D74; `docs/fase5/codegen.md`)
 
-#### 1. Revisión de seguridad del validador generado (F5.1-P1; E3)
+#### 1. Revisión de seguridad del validador generado (F5.1-P1; E3) — RESUELTO (E3, 21 nov)
 
 - **Estado:** F5.1 se hizo sin `/autodev` (decisión del usuario), así que nadie más la revisó, ni
   `code-reviewer` ni `security-auditor`. D35 pide `security-auditor` en el validador generado. El riesgo es bajo:
@@ -18,6 +18,10 @@ y la tarea que debe cerrarla. Lo cerrado pasa a `historial.md` (todavía no hay)
   Puntos a mirar: escape de `rule`; que ningún literal emitido dependa del anfitrión; `Mutex` envenenado
   (`into_inner`); stdin cortado a mitad.
 - **Tarea:** E3.
+- **E3 (21 nov, `tasks/contexto/E3 auditoria A.md`):** revisados el emisor Rust y el C, la fachada, `main` y el
+  escape. No se puede inyectar código desde el esquema: en C todo va como arreglos numéricos y en Rust como cadenas de
+  bytes escapadas; se probó con `"`, `*/`, `\`, `\n`, U+2028, NUL y `{{BLOQUE}}` en `$id`, nombres, `pattern`, `enum`
+  y `required`. Los hallazgos menores (E3A-3, E3A-4, E3A-6) están en `docs/fase6/pendientes.md` §33-§35.
 
 #### 2. Límites fijos en el binario (F5.1-P2; F6.2) — RESUELTO (F6.2, D78)
 
@@ -115,7 +119,7 @@ y la tarea que debe cerrarla. Lo cerrado pasa a `historial.md` (todavía no hay)
   hará por el binario en el sandbox, no por esta API.
 - **Tarea:** F7.5 (Bayron).
 
-#### 11. Revisión de seguridad del núcleo C (F5.2-P3; E3)
+#### 11. Revisión de seguridad del núcleo C (F5.2-P3; E3) — RESUELTO (E3, 21 nov)
 
 - **Estado:** hecho sin `/autodev`. La prueba diferencial con ASan/UBSan no encontró ninguna lectura fuera de
   rango en el corpus, las mutaciones ni los sintéticos, pero un fuzzing dirigido del núcleo C no se ha hecho.
@@ -124,4 +128,9 @@ y la tarea que debe cerrarla. Lo cerrado pasa a `historial.md` (todavía no hay)
 - **F6.4 (21 nov):** hecho por reproducción, sin FFI (exigiría `unsafe`): `scripts/fuzz.sh` pasa el corpus del
   fuzzer por la diferencial con ASan/UBSan (`SV_EXTRA_JSON`, `SV_EXTRA_XML`; `docs/fase6/fuzzing.md` §3). Sin
   hallazgos en la primera corrida. Queda la revisión de E3.
+- **E3 (21 nov, `tasks/contexto/E3 auditoria A.md`):** sin accesos fuera de rango con ASan/UBSan en los payloads
+  hostiles de la auditoría. Un hallazgo, **E3A-1 (Medium), corregido**: `number_hash` acumulaba el exponente en
+  `int64_t` y `e * 10` desbordaba (UB); con `-O2` y `not` sobre `uniqueItems`, el C aceptaba
+  `[1e1032535899011918413360,1e1050982643085627964976]`, que Rust da como `limit`. Ahora en `uint64_t`; la
+  diferencial tiene esos esquemas y exponentes, y con el código anterior falla por UBSan.
 - **Tarea:** E3.

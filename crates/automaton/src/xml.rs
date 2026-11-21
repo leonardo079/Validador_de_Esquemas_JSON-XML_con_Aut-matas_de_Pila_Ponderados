@@ -196,6 +196,9 @@ struct Analysis<'a> {
     max_product: usize,
     /// El AFD de cada `xs:pattern`, una vez por regla (F4.4b).
     patterns: HashMap<(NodeId, usize), crate::pattern::PatternDfa>,
+    /// Trabajo de todos los `xs:pattern` construidos (E3B-2) y su tope.
+    pattern_work: usize,
+    max_pattern_work: usize,
     /// Los conjuntos de caracteres de los `pattern` (partición global).
     sets: Vec<ir::regex::CharSet>,
     chars: BTreeSet<char>,
@@ -293,6 +296,8 @@ impl<'a> Analysis<'a> {
             max_delta: opts.max_delta,
             max_product: opts.max_product_states,
             patterns: HashMap::new(),
+            pattern_work: 0,
+            max_pattern_work: opts.max_pattern_work,
             sets: Vec::new(),
             chars,
             upper: FIXED_STATES + decl_size,
@@ -800,6 +805,15 @@ impl<'a> Analysis<'a> {
         }
         match crate::pattern::compile(src, ir::regex::Dialect::Xsd, self.max_product) {
             Ok(p) => {
+                self.pattern_work = self.pattern_work.saturating_add(p.work);
+                if self.pattern_work > self.max_pattern_work {
+                    return Err(BuildError::Limit {
+                        what: "trabajo de los `pattern` del esquema",
+                        limit: self.max_pattern_work,
+                        found: self.pattern_work,
+                        location: location_clipped(ir, id, LOCATION_MAX),
+                    });
+                }
                 self.sets.extend(p.sets.iter().cloned());
                 self.patterns.insert((id, i), p);
                 Ok(())

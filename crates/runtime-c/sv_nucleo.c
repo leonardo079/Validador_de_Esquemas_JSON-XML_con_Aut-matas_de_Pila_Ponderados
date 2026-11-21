@@ -1119,12 +1119,17 @@ static bool number_hash(const sv_core_t* s, uint64_t* out) {
             ex++;
             xn--;
         }
+        /* E3A-1: en uint64_t, porque e <= 2^60 antes del paso y
+         * e * 10 + 9 < 2^64 no desborda; en int64_t era UB (e * 10 pasa de
+         * INT64_MAX) y -O2 dejaba pasar exponentes que Rust da como límite. */
+        uint64_t u = 0;
         for (size_t i = 0; i < xn; i++) {
-            e = e * 10 + (int64_t)(uint8_t)(ex[i] - '0');
-            if (e > ((int64_t)1 << 60)) {
+            u = u * 10 + (uint64_t)(uint8_t)(ex[i] - '0');
+            if (u > ((uint64_t)1 << 60)) {
                 return false;
             }
         }
+        e = (int64_t)u;
         e *= sign;
     }
     size_t nd = mn - (int_len < mn ? 1 : 0);

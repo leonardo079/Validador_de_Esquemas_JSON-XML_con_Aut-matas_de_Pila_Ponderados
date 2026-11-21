@@ -26,7 +26,7 @@ línea, columna y JSON Pointer o ruta XML) y la regla incumplida.
 | Tamaño de M | de 13 estados y 43 transiciones a 216 y 10 054 (XSD del pedido) | §2.1 |
 | Explosión al determinizar | acotada: `limit` antes de crear el estado 4 097 o de pasar 2²⁰ entradas | §2.2 |
 | Corrección | 78 casos del corpus; intérprete = Rust generado = C generado (con ASan/UBSan); veredicto = línea base | §6 |
-| Pruebas | 836 en `make test`, 7 del lema de bombeo, fuzzing con cuatro objetivos | §5, §6 |
+| Pruebas | 838 en `make test`, 7 del lema de bombeo, fuzzing con cuatro objetivos | §5, §6 |
 
 ## 1. Análisis de complejidad
 
@@ -127,7 +127,8 @@ hostil. Todo lo que crece se cuenta **antes** de reservarlo (automata.md §6.6, 
 
 - |Q|·|Σ| más las tablas que crecen con los productos ≤ 2²⁰ entradas (`BuildError::Limit`);
 - 4 096 estados por producto o por AFD de `pattern` (`ProductLimit`);
-- 2²⁴ pasos para los cierres de `$ref`/`allOf` y 2²⁶ palabras para la determinización de un `pattern`;
+- 2²⁴ pasos para los cierres de `$ref`/`allOf` y 2²⁶ palabras para la determinización de un `pattern`, con 2²³
+  palabras para todos los `pattern` del esquema juntos (añadido en E3);
 - 4 096 posiciones por `pattern` y 4 096 partículas por modelo de contenido XSD (D26).
 
 En tiempo, la construcción es O(2²⁰ + n + W·ℓ), con n el tamaño de la IR, W el trabajo de los cierres y ℓ la
@@ -315,6 +316,9 @@ es E3 (§6.3). Lo que se encontró y cómo se cerró:
 | Servidor: conexiones lentas y cuerpos *chunked* de 1 byte (F7.1 SEC-H1, SEC2-H1) | Retener memoria con pocas conexiones | Plazo de lectura de 10 s, búfer contiguo y 32 MiB de cuerpos en vuelo en total ([fase7/servidor.md](fase7/servidor.md) §3) |
 | Esquemas hostiles en la línea base (F6.7a SEC-M1, F6.7b) | `jsonschema` sin tope de CPU; libxml2 acumula todos los errores (12 MB → 962 MB) | Tope de violaciones y de mensajes; libxml2 no está en el servidor (solo en Docker, para las pruebas). **Parcial:** en `/api/compare`, `jsonschema` no tiene tope de CPU propio. Pasado el tope de 10 s el cliente recibe 504, pero el hilo sigue y conserva su permiso. Lo acotan la subida de 1 MiB y la concurrencia de 2 ([fase7/pendientes.md](fase7/pendientes.md) §15) |
 | Frontal XSD sin límites de memoria propios (5.2 SEC-M1/M2) | El AST llega a ≈ 34× la entrada | Profundidad acotada; en el servidor, subida de 1 MiB y concurrencia 2; `mem_limit` del contenedor (D71) |
+| E3: cadena de `anyOf` con puertas que crecen de forma combinatoria (E3B-1) | 2,4 KB de esquema, 206 s; con algo más, horas | Deduplicación y búsqueda de destinos con mapas, y cada puerta copiada se cobra al presupuesto: `limit` en ≤ 2 s |
+| E3: cientos de `pattern` distintos (E3B-2, E3B-3) | 5,6 KB, 39 s en JSON; 24,6 KB, 48 s en XSD; horas con 1 MiB | Tope de trabajo de `pattern` por esquema (2²³ palabras): `limit` en 1-1,5 s |
+| E3: exponente de 19-25 cifras en el hash de `uniqueItems` del C (E3A-1) | Desborde con signo (UB). Con `-O2` y `not` sobre `uniqueItems`, el C aceptaba un payload que Rust da como `limit` | Aritmética en `uint64_t`, igual que Rust; caso en la prueba diferencial |
 | Colisiones de hash en claves y `uniqueItems` | Fabricar un falso «repetido» | SipHash-1-3 con clave y dominios separados por tipo de valor (F4.5b). Un choque solo rechaza, salvo bajo `not` |
 
 ### 6.3 Lo que queda
@@ -332,8 +336,16 @@ es E3 (§6.3). Lo que se encontró y cómo se cerró:
 - **El socket de Docker.** Para encender el sandbox, el servidor necesita `/var/run/docker.sock`, y quien controla
   ese socket controla el anfitrión. Lo mitigan las órdenes fijas en el código ([fase7/sandbox.md](fase7/sandbox.md)
   §5). Por eso en la EC2 `POST /api/validate` queda apagado ([fase7/codigo.md](fase7/codigo.md) §5).
-- **Revisión consolidada.** La revisión de seguridad de las Fases 4-7 (E3) queda por hacer. F7.5 ya está hecha,
-  así que puede empezar, e incluirá sus rutas nuevas: `POST /api/code`, `POST /api/validate` y `WS /ws/validate`.
+- **Revisión consolidada (E3, 21 nov).** Tres auditorías, del validador y el código generado, del compilador
+  ante esquemas hostiles y del servidor. Lo de la pista A está corregido (filas «E3» de §6.2). Quedan del
+  servidor dos High y varios Medium ([fase7/pendientes.md](fase7/pendientes.md) §17-§24):
+  - `/ws/validate` compila sin permiso y valida sin tope de CPU;
+  - respuestas grandes (ZIP, IR) sin tope que se acumulan en memoria;
+  - sesiones WebSocket sin duración máxima.
+
+  Hasta corregirlos, la aplicación no debería quedar expuesta sin más límites que los actuales.
+  También sigue abierto el costo de comparar con cotas de 10⁶ cifras
+  ([fase4/pendientes.md](fase4/pendientes.md) §61).
 - **Fuzzing.** Fueron 10 minutos por objetivo, sin fallos. Es una comprobación, no una garantía: conviene repetirlo
   en E3 y con cada cambio del núcleo.
 
@@ -357,7 +369,7 @@ es E3 (§6.3). Lo que se encontró y cómo se cerró:
 - **Generación:** 20 válidos generados desde la IR (F5.4) y 30 inválidos o malformados por mutación (F6.3), todos
   con doble oráculo: el DPDA y la línea base.
 - **Toda la verificación es local** (D32): `make lint` (rustfmt, clippy `-D warnings`, clang-format,
-  `unsafe-check`), `make test` (836 pruebas) y `make docs-check`.
+  `unsafe-check`), `make test` (838 pruebas) y `make docs-check`.
 
 ## 8. Conclusiones
 

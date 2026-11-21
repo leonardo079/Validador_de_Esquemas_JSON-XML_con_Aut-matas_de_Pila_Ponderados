@@ -5,7 +5,9 @@
 //! acota el costo es la forma (un AFD, una pasada, límites), y eso es lo
 //! que se comprueba.
 
-use automaton::{build, validate, Automaton, BuildError, ErrorKind, Mode, Report};
+use automaton::{
+    build, build_with, validate, Automaton, BuildError, BuildOptions, ErrorKind, Mode, Report,
+};
 use runtime_rs::Weight;
 
 fn en_hilo<R: Send>(f: impl FnOnce() -> R + Send) -> R {
@@ -29,6 +31,23 @@ fn json(src: &str) -> Result<Automaton, String> {
             BuildError::Limit { .. } => format!("limit: {e}"),
             _ => e.to_string(),
         })
+    })
+}
+
+/// Como [`json`] con opciones de construcción, y el error sin convertir.
+fn json_con(src: &str, opts: &BuildOptions) -> Result<Automaton, BuildError> {
+    en_hilo(|| {
+        let s = schema_parser::parse(src.as_bytes()).unwrap();
+        let t = semantic::analyze(&s).unwrap();
+        build_with(&semantic::lower(&t).unwrap(), opts)
+    })
+}
+
+fn xsd_con(src: &str, opts: &BuildOptions) -> Result<Automaton, BuildError> {
+    en_hilo(|| {
+        let s = xsd::parse(src.as_bytes()).unwrap();
+        let a = xsd::analyze(&s).unwrap();
+        build_with(&xsd::lower(&a).unwrap(), opts)
     })
 }
 
@@ -177,4 +196,90 @@ fn numeros_enormes() {
     assert_eq!(r.violations.get(), Some(2), "{r:?}");
     let t = json("true").unwrap();
     assert!(correr(&t, format!("[{}]", "9".repeat(100_000)).as_bytes()).valid);
+}
+
+/// E3B-2 y E3B-3: el tope de trabajo de `pattern` es del esquema entero, no
+/// de cada patrón. Antes, cientos de patrones distintos, cada uno dentro de
+/// su tope, tardaban minutos con un esquema de pocos KB (`allOf` en JSON,
+/// una cadena de restricciones en XSD). Con un tope bajo para que la prueba
+/// sea rápida: un patrón compila y muchos dan `limit` con ese motivo (D1: no
+/// se mide tiempo).
+#[test]
+fn trabajo_de_pattern_por_esquema() {
+    let opts = BuildOptions {
+        max_pattern_work: 1 << 18,
+        ..BuildOptions::default()
+    };
+    let es_del_pattern = |e: &BuildError| {
+        matches!(e, BuildError::Limit { what, limit, .. }
+            if what.contains("trabajo de los `pattern`") && *limit == 1 << 18)
+    };
+    assert!(json_con(r#"{"type":"string","pattern":"^a{0,300}$"}"#, &opts).is_ok());
+    let ramas: Vec<String> = (0..200)
+        .map(|i| format!(r#"{{"pattern":"^a{{0,{}}}$"}}"#, 300 + i))
+        .collect();
+    let e = json_con(&format!(r#"{{"allOf":[{}]}}"#, ramas.join(",")), &opts).unwrap_err();
+    assert!(es_del_pattern(&e), "{e}");
+    // Repartido en propiedades distintas (cada cadena con un solo `pattern`,
+    // lejos del tope de 64 por cadena): patrones pequeños, porque con los
+    // grandes salta antes el presupuesto de δ de cada cadena.
+    let poco = BuildOptions {
+        max_pattern_work: 1 << 10,
+        ..BuildOptions::default()
+    };
+    let props: Vec<String> = (0..200)
+        .map(|i| format!(r#""p{i}":{{"pattern":"^a{{0,20}}$"}}"#))
+        .collect();
+    let e = json_con(
+        &format!(r#"{{"properties":{{{}}}}}"#, props.join(",")),
+        &poco,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&e, BuildError::Limit { what, .. } if what.contains("trabajo de los `pattern`")),
+        "{e}"
+    );
+    // XSD: una cadena de restricciones, cada una con su `xs:pattern`.
+    let n = 200;
+    let mut x = format!(
+        "<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'><xs:element name='r' type='t0'/>\
+         <xs:simpleType name='t{n}'><xs:restriction base='xs:string'/></xs:simpleType>"
+    );
+    for i in 0..n {
+        x += &format!(
+            "<xs:simpleType name='t{i}'><xs:restriction base='t{}'>\
+             <xs:pattern value='a{{0,{}}}'/></xs:restriction></xs:simpleType>",
+            i + 1,
+            300 + i
+        );
+    }
+    x += "</xs:schema>";
+    let e = xsd_con(&x, &opts).unwrap_err();
+    assert!(es_del_pattern(&e), "{e}");
+}
+
+/// E3B-1: una cadena de `anyOf` que se nombran entre sí por `$ref` y por una
+/// propiedad hace crecer las puertas de cada conjunto de forma
+/// combinatoria. La unión de conjuntos las deduplicaba y buscaba sus
+/// destinos con búsquedas lineales (O(g²), sin cobrar), y con 21 niveles
+/// (2,4 KB) tardaba más de 3 minutos. Ahora todo cuesta lo que cobra el
+/// presupuesto de los cierres y acaba en `limit`.
+#[test]
+fn cadena_de_anyof_acotada() {
+    for (n, comb) in [(21, "anyOf"), (21, "oneOf")] {
+        let defs: Vec<String> = (0..n)
+            .map(|i| {
+                format!(
+                    r##""d{i}":{{"{comb}":[{{"$ref":"#/$defs/d{s}"}},{{"type":"object","properties":{{"k":{{"$ref":"#/$defs/d{s}"}}}}}}]}}"##,
+                    s = i + 1
+                )
+            })
+            .collect();
+        let src = format!(
+            r##"{{"$defs":{{{},"d{n}":{{"type":"integer"}}}},"$ref":"#/$defs/d0"}}"##,
+            defs.join(",")
+        );
+        let e = json_con(&src, &BuildOptions::default()).unwrap_err();
+        assert!(matches!(e, BuildError::Limit { .. }), "{comb}: {e}");
+    }
 }

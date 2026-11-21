@@ -533,18 +533,28 @@ impl<'a> Closures<'a> {
             return Ok((self.sets.intern(v, Meta::default()), OUT_IDENTITY));
         }
         // Salidas del hijo que van al padre, por orden de aparición.
+        // E3B-1: el índice de cada destino en un mapa; `contains` y
+        // `position` sobre `targets` eran O(partes²).
         let mut targets: Vec<u32> = Vec::new();
+        let mut indice: HashMap<u32, u32> = HashMap::new();
         for &(_, t) in &distintos {
-            if t != 0 && !targets.contains(&t) {
+            if t != 0 && !indice.contains_key(&t) {
+                indice.insert(t, targets.len() as u32);
                 targets.push(t);
             }
         }
+        self.spend(distintos.len())?;
         let mut next = targets.len() as u32;
         let mut comps: Vec<NodeId> = Vec::new();
         let mut gates: Vec<GateSpec> = Vec::new();
+        // E3B-1: la búsqueda de repetidas era lineal en `gates` (O(g²) por
+        // conjunto, con g que crece de forma combinatoria en cadenas de
+        // `anyOf`); con el conjunto de claves es O(g), que es lo que cobra
+        // `spend`.
+        let mut vistas: HashSet<(NodeId, usize, Option<String>, u32)> = HashSet::new();
         for &(p, t) in &distintos {
-            let base = match targets.iter().position(|&x| x == t) {
-                Some(j) if t != 0 => j as u32 + 1,
+            let base = match indice.get(&t) {
+                Some(&j) if t != 0 => j + 1,
                 _ => 0,
             };
             let off = next;
@@ -559,16 +569,18 @@ impl<'a> Closures<'a> {
                 comps.push(v);
             }
             for g in meta.gates.iter() {
-                let mut g = g.clone();
-                g.target = remap(g.target);
+                let target = remap(g.target);
                 // S-3: el mismo combinador hacia el mismo destino cuenta una
                 // vez aunque llegue por dos partes (sus ramas repetidas
                 // escriben salidas que nadie lee).
-                if gates.iter().any(|h: &GateSpec| {
-                    (h.node, h.rule, &h.key, h.target) == (g.node, g.rule, &g.key, g.target)
-                }) {
+                if !vistas.insert((g.node, g.rule, g.key.clone(), target)) {
                     continue;
                 }
+                // E3B-1: copiar la puerta cuesta sus entradas, que no
+                // cobraba nadie.
+                self.spend(g.inputs.len())?;
+                let mut g = g.clone();
+                g.target = target;
                 for k in &mut g.inputs {
                     *k = remap(*k);
                 }

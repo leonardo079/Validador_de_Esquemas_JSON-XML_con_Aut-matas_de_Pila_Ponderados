@@ -69,7 +69,11 @@ Es una **prueba de humo**, no una campaña: unos minutos en total, y `validar_js
 | `esquema_xsd` | 221 592 | 2 345 |
 
 La reproducción en el C (como mucho 1 000 payloads por formato) dio el mismo reporte en las tres implementaciones.
-Conviene repetirla en E3 (`docs/fase6/pendientes.md` §32). El script sigue con los demás
+
+**Tercera corrida (21 nov, E3, `SEG=120 make fuzz`)**, tras los cambios de E3 en el núcleo C (`number_hash`, E3A-1)
+y en la construcción (E3B-1 a E3B-3): sin fallos, con 13 289, 14 939, 17 078 y 38 093 ejecuciones y corpus de
+1 242, 787, 2 519 y 2 632 entradas; la reproducción en el C, igual en las tres implementaciones. Conviene repetirla
+tras cada cambio del núcleo (`docs/fase6/pendientes.md` §32). El script sigue con los demás
 objetivos si uno falla y sale con 1 al final, con el fallo en `fuzz/artifacts/`.
 
 Los dos fallos que salieron al montar los objetivos eran de las propias pruebas: un esquema fijo con

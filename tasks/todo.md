@@ -674,6 +674,16 @@ Criterios propuestos y aplicados por Claude con la delegación del usuario («to
 - [x] El C, por reproducción del corpus del fuzzer en la diferencial con ASan/UBSan (sin FFI). — `SV_EXTRA_JSON`/`SV_EXTRA_XML` en `diferencial.rs`, `scripts/fuzz.sh`
 - [x] `make fuzz` fuera de `make test`; F6.3-P1 resuelto con la opción a (`corpus.rs`, `docs/fase6/pendientes.md` §28).
 
+## Tarea E3: revisión de seguridad consolidada de las Fases 4-7 — REVISIÓN HECHA (21 nov); esperan los High del servidor (pista B)
+
+- [x] Tres auditorías con `security-auditor` (D35): A validador y código generado (Rust, C, emisores), B compilador con esquemas hostiles, C servidor, sandbox, infra y web. — `tasks/contexto/E3 auditoria {A,B,C}.md`
+- [x] E3B-1 (High): cadena de `anyOf`/`oneOf` con puertas combinatorias (206 s con 2,4 KB) → mapas en `Closures::union` y cobro de cada puerta; `limit` en ≤ 2 s. — `conj.rs`, `mitigaciones.rs::cadena_de_anyof_acotada`
+- [x] E3B-2/E3B-3 (High): cientos de `pattern` distintos (39-48 s, horas con 1 MiB) → tope de trabajo por esquema (`BuildOptions::max_pattern_work`, 2²³); `limit` en 1,2-1,5 s. — `pattern.rs`, `json.rs`, `xml.rs`, `mitigaciones.rs::trabajo_de_pattern_por_esquema`
+- [x] E3A-1 (Medium): desborde con signo del exponente en `number_hash` del C (aceptaba lo que Rust rechaza bajo `not` sobre `uniqueItems`) → `uint64_t`; caso en la diferencial (con el código anterior falla por UBSan). — `sv_nucleo.c`, `diferencial.rs`
+- [x] Documentación: `docs/fase4/pattern.md` §6, `runtime.md` §4 (E3A-5), `docs/fase6/mitigaciones.md`, `docs/informe-final.md` §6; pendientes en Fase 4 §61, Fase 5 §1/§11 (resueltos), Fase 6 §31-§35, Fase 7 §17-§25.
+- [ ] Pista B: los High del servidor (`docs/fase7/pendientes.md` §17-§19) y los Medium §20-§23.
+- [ ] Visto bueno de los endpoints de F7.2, F7.5 y F7.6 (Leonardo, `docs/fase7/pendientes.md` §25).
+
 ## Tarea E4: informe final — HECHA (21 nov; parte de la pista A)
 
 - [x] Complejidad: O(n) en bytes y O(d) en pila con el argumento formal, las gráficas y tablas de E1/F6.5 y una medición de los binarios generados Rust y C. — `docs/informe-final.md` §1

@@ -158,6 +158,10 @@ pub struct BuildOptions {
     /// en F4.1b: |Q| · |Σ| más comprobaciones, máscaras, dependencias y
     /// lexemas; 2²⁰ por defecto). Configurable a la baja para las pruebas.
     pub max_delta: usize,
+    /// Trabajo de todos los `pattern` del esquema juntos, en palabras (E3B-2,
+    /// E3B-3; 2²³ por defecto, unos 1-2 s en el peor caso). Configurable a la
+    /// baja para las pruebas.
+    pub max_pattern_work: usize,
 }
 
 impl Default for BuildOptions {
@@ -165,6 +169,7 @@ impl Default for BuildOptions {
         BuildOptions {
             max_product_states: MAX_PRODUCT_STATES,
             max_delta: MAX_DELTA,
+            max_pattern_work: crate::pattern::MAX_SCHEMA_PATTERN_WORK,
         }
     }
 }

@@ -720,6 +720,10 @@ remite a ellas.
   fabricados, que `main` tome una clave aleatoria al arrancar (en Rust, de `RandomState`; en C no hay una fuente
   portable).
 - **Tarea:** visto bueno de Bayron; la clave aleatoria, E3 si se decide.
+- **E3 (21 nov):** la auditoría la deja en Low y recomienda hacerla también en `server/src/flujo.rs`. Cierra
+  además el choque fabricado del nombre de cierre XML (E3A-5, que **acepta** un cierre que no empareja) y el de
+  `uniqueItems` bajo `not`. No arregla E3A-1, que era un desborde y ya está corregido. Queda abierta: en C11 no
+  hay una fuente portable de aleatoriedad (habría que leer `/dev/urandom` cuando exista).
 
 ### 32. El fuzzing no corre en `make test` (F6.4-P1)
 
@@ -728,4 +732,36 @@ remite a ellas.
   (21 nov), de 600 s por objetivo, sin fallos ([fuzzing.md](fuzzing.md) §4).
 - **Arreglo propuesto:** volver a correr `SEG=600 make fuzz` en E3 y tras cada cambio del núcleo, y versionar los
   fallos que aparezcan como casos del corpus o pruebas.
-- **Tarea:** E3.
+- **E3 (21 nov):** tras el cambio de `number_hash` en el C (E3A-1), corrida de 120 s por objetivo; resultado en
+  [fuzzing.md](fuzzing.md) §4.
+- **Tarea:** tras cada cambio del núcleo.
+
+### Abiertas por E3 (revisión de seguridad consolidada; `tasks/contexto/E3 auditoria A.md`)
+
+### 33. `maxTimeMs` solo se mira entre bloques de 64 KiB (E3A-3, Low)
+
+- **Estado:** el `main` emitido mira el reloj después de leer cada bloque de 64 KiB. Con un esquema de cotas
+  largas (§61 de la Fase 4), un bloque cuesta segundos: con `maxTimeMs=1000`, el binario C terminó a los 23,5 s.
+- **Arreglo propuesto:** entregar el bloque en trozos de 4 KiB y mirar el reloj entre ellos, y corregir
+  [limites.md](limites.md) §1 («entre dos miradas pasa a lo sumo lo que cuesta un bloque» depende del esquema).
+  Con el arreglo de §61, cada trozo vuelve a costar O(4 KiB).
+- **Dónde:** `crates/codegen/src/c.rs:120-133`, `rust.rs:148-159`.
+- **Tarea:** junto con §61 de la Fase 4.
+
+### 34. El reloj de `main.c` no es monótono (E3A-4, Low)
+
+- **Estado:** `timespec_get(TIME_UTC)` es reloj de pared; un ajuste hacia atrás alarga el plazo.
+- **Arreglo propuesto:** `CLOCK_MONOTONIC` cuando exista (POSIX), y una diferencia negativa cuenta como tiempo
+  agotado.
+- **Dónde:** `crates/codegen/src/c.rs:118,124`.
+- **Tarea:** sin bloqueo.
+
+### 35. `STATE_WORDS` en la pila de quien use la biblioteca (E3A-6 y E3A-7, Info)
+
+- **Estado:** la fachada `validar` (Rust) y el ejemplo de la cabecera C ponen el estado (`STATE_WORDS` palabras)
+  en la pila; con `--limit` puede llegar a 128 MiB. El `main` emitido no lo hace. Además, que `coprime` de
+  `multipleOf` sea < 2⁶⁰ solo lo garantiza el compilador (el núcleo confía en sus tablas).
+- **Arreglo propuesto:** documentarlo en `validador.h` y `codegen.md` (estado `static` o del montón del llamador);
+  una comprobación del rango de `coprime` al cargar las tablas.
+- **Tarea:** sin bloqueo.
+

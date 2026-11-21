@@ -342,6 +342,8 @@ struct Analysis<'a> {
     divisors: HashMap<(NodeId, usize), Divisor>,
     /// El AFD de cada `pattern`, una vez por regla (F4.4b).
     patterns: HashMap<(NodeId, usize), crate::pattern::PatternDfa>,
+    /// Trabajo de todos los `pattern` construidos (E3B-3).
+    pattern_work: usize,
     /// Los conjuntos de caracteres de los `pattern`: refinan la partición
     /// global de clases (F4-B3).
     sets: Vec<ir::regex::CharSet>,
@@ -379,6 +381,7 @@ impl<'a> Analysis<'a> {
             enum_ids: HashMap::new(),
             strsets: Vec::new(),
             patterns: HashMap::new(),
+            pattern_work: 0,
             sets: Vec::new(),
             str_ids: HashMap::new(),
             lexeme_rules: HashSet::new(),
@@ -819,6 +822,15 @@ impl<'a> Analysis<'a> {
         let cap = opts.max_product_states;
         match crate::pattern::compile(src, ir::regex::Dialect::Ecma, cap) {
             Ok(p) => {
+                self.pattern_work = self.pattern_work.saturating_add(p.work);
+                if self.pattern_work > opts.max_pattern_work {
+                    return Err(BuildError::Limit {
+                        what: "trabajo de los `pattern` del esquema",
+                        limit: opts.max_pattern_work,
+                        found: self.pattern_work,
+                        location: location_clipped(ir, id, LOCATION_MAX),
+                    });
+                }
                 self.sets.extend(p.sets.iter().cloned());
                 self.patterns.insert((id, i), p);
                 Ok(())

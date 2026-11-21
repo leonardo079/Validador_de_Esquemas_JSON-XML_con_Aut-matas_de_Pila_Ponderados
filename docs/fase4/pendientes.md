@@ -1057,7 +1057,12 @@ remite a ellas.
 ### 61. Costo de comparar con una cota larga (F4.1b-CR-S3; recorte de F4.6)
 
 - **Gravedad:** Medium (rendimiento con esquemas hostiles: el esquema lo controla quien
-  valida, no el payload).
+  valida, no el payload). **High en el servidor desde F7.5 (E3A-2):** `WS /ws/validate` acepta el esquema
+  del cliente (≤ 1 MiB) y valida en el proceso sin tope de CPU. Medido en E3: 2 000 números contra un
+  `minimum` de 10⁶ cifras cuestan 1,6 s en C y 3,0 s en Rust (0,004 s con `minimum: 1`), lineal en los
+  números: un bloque de 1 MiB serían minutos de CPU por sesión, con 4 sesiones a la vez.
+- **Mitigación inmediata (pista B):** plazo de CPU por sesión en `server/src/flujo.rs` (como el de las
+  compilaciones), en `docs/fase7/pendientes.md` §17.
 - **Estado:** al cerrar cada número, `num::compare` e `is_multiple` cuestan
   O(|cota del esquema|), hasta 16 MiB. No se hizo en F4.6 (orden de recorte de
   `tasks/plan.md`: no cambia ningún veredicto).
