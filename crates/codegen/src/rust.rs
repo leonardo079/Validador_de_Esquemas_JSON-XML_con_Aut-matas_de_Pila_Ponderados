@@ -22,7 +22,7 @@ use runtime_rs::tables::{
 use runtime_rs::Tables;
 
 use crate::fuentes::COPIADOS;
-use crate::Archivo;
+use crate::{Archivo, Opciones};
 
 /// Bytes que `main` lee de stdin por llamada (y entrega al validador como un
 /// bloque).
@@ -42,17 +42,28 @@ pub mod salida {
     pub const INTERNO: u8 = 3;
 }
 
-/// Los archivos del validador Rust de `a`, en orden: `main.rs`,
-/// `validador.rs`, `tablas.rs` y las fuentes copiadas.
+/// Los archivos del validador Rust de `a` con los límites por defecto, en
+/// orden: `main.rs`, `validador.rs`, `tablas.rs` y las fuentes copiadas.
 pub fn emit(a: &Automaton) -> Vec<Archivo> {
+    emitir(a, &Opciones::default())
+}
+
+/// Como [`emit`], con los límites y el tiempo de `op` (F6.2), o el error de
+/// [`Opciones::comprobar`] (memoria de más o profundidad 0).
+pub fn emit_con(a: &Automaton, op: &Opciones) -> Result<Vec<Archivo>, String> {
+    op.comprobar(a)?;
+    Ok(emitir(a, op))
+}
+
+fn emitir(a: &Automaton, op: &Opciones) -> Vec<Archivo> {
     let mut v = vec![
         Archivo {
             nombre: "main.rs".into(),
-            contenido: main_rs(),
+            contenido: main_rs(op),
         },
         Archivo {
             nombre: "validador.rs".into(),
-            contenido: validador_rs(a),
+            contenido: validador_rs(a, op),
         },
         Archivo {
             nombre: "tablas.rs".into(),
@@ -76,11 +87,16 @@ pub fn emit(a: &Automaton) -> Vec<Archivo> {
 
 const CABECERA: &str = "// Generado por schemac (F5.1, `docs/fase5/codegen.md`); no editar.\n";
 
-fn main_rs() -> String {
+fn main_rs(op: &Opciones) -> String {
     let mut s = String::from(CABECERA);
     s.push_str(MAIN);
+    let tiempo = match op.tiempo_ms {
+        Some(ms) => format!("Some({ms})"),
+        None => "None".into(),
+    };
     s.replace("{{BLOQUE}}", &BLOQUE_STDIN.to_string())
         .replace("{{INTERNO}}", &salida::INTERNO.to_string())
+        .replace("{{TIEMPO_MS}}", &tiempo)
 }
 
 /// `main.rs`. La memoria del núcleo es un `static` (en `.bss`: no ocupa la
@@ -101,6 +117,7 @@ mod validador;
 use std::io::{self, Read, Write};
 use std::process::ExitCode;
 use std::sync::Mutex;
+use std::time::Instant;
 
 use runtime_rs::{Flow, Mode};
 use validador::{Validador, STATE_WORDS};
@@ -109,9 +126,13 @@ use validador::{Validador, STATE_WORDS};
 const BLOQUE: usize = {{BLOQUE}};
 /// Código de salida de un error interno o de E/S.
 const INTERNO: u8 = {{INTERNO}};
+/// Tiempo máximo de validación en milisegundos (F6.2): se mira antes de
+/// entregar cada bloque leído; pasarlo es un error `limit` donde se quedó
+/// la entrada (el fin de la entrada no lo mira).
+const TIEMPO_MS: Option<u64> = {{TIEMPO_MS}};
 
 /// Memoria fija del núcleo: pila de marcos y reservas de hashes
-/// (`Tables::state_words` con los límites por defecto).
+/// (`Tables::state_words` con los límites del validador).
 static MEMORIA: Mutex<[u64; STATE_WORDS]> = Mutex::new([0; STATE_WORDS]);
 
 fn main() -> ExitCode {
@@ -123,10 +144,15 @@ fn ejecutar() -> u8 {
     let mut bloque = [0u8; BLOQUE];
     let mut entrada = io::stdin().lock();
     let mut v = Validador::new(&mut mem, Mode::Total);
+    let inicio = Instant::now();
     loop {
         match entrada.read(&mut bloque) {
             Ok(0) => break,
             Ok(n) => {
+                if TIEMPO_MS.is_some_and(|ms| inicio.elapsed().as_millis() >= u128::from(ms)) {
+                    v.abort_limit();
+                    break;
+                }
                 if v.feed(&bloque[..n]) == Flow::Stop {
                     break;
                 }
@@ -152,7 +178,7 @@ fn ejecutar() -> u8 {
 }
 "#;
 
-fn validador_rs(a: &Automaton) -> String {
+fn validador_rs(a: &Automaton, op: &Opciones) -> String {
     let (formato, tipo) = match a.format() {
         PayloadFormat::Json => ("json", "JsonValidator"),
         PayloadFormat::Xml => ("xml", "XmlValidator"),
@@ -161,11 +187,9 @@ fn validador_rs(a: &Automaton) -> String {
     s.push_str(VALIDADOR);
     s.replace("{{FORMATO}}", formato)
         .replace("{{TIPO}}", tipo)
-        .replace(
-            "{{STATE_WORDS}}",
-            &a.state_words(&Limits::DEFAULT).to_string(),
-        )
-        .replace("{{SV_MAX_DEPTH}}", &Limits::DEFAULT.max_depth.to_string())
+        .replace("{{STATE_WORDS}}", &a.state_words(&op.limites).to_string())
+        .replace("{{SV_MAX_DEPTH}}", &op.limites.max_depth.to_string())
+        .replace("{{LIMITES}}", &limites_rs(&op.limites))
         .replace("{{VALIDO}}", &salida::VALIDO.to_string())
         .replace("{{INVALIDO}}", &salida::INVALIDO.to_string())
         .replace("{{MALFORMADO}}", &salida::MALFORMADO.to_string())
@@ -191,11 +215,14 @@ pub const FORMATO: &str = "{{FORMATO}}";
 /// `SV_MAX_DEPTH` marcos; el siguiente es `limit`.
 pub const SV_MAX_DEPTH: usize = {{SV_MAX_DEPTH}};
 
-/// Palabras `u64` de memoria del núcleo con los límites por defecto
-/// (`Tables::state_words(&Limits::DEFAULT)`).
+/// Los límites con que se emitió (F6.2; `schemac compile --limit`).
+pub const LIMITES: Limits = {{LIMITES}};
+
+/// Palabras `u64` de memoria del núcleo con esos límites
+/// (`Tables::state_words(&LIMITES)`).
 pub const STATE_WORDS: usize = {{STATE_WORDS}};
 
-const _: () = assert!(SV_MAX_DEPTH == Limits::DEFAULT.max_depth);
+const _: () = assert!(SV_MAX_DEPTH == LIMITES.max_depth);
 
 /// Validador en streaming: `feed` por bloques de cualquier tamaño y
 /// `finish`. No reserva memoria: usa la que se le presta.
@@ -207,12 +234,24 @@ pub struct Validador<'m> {
 impl<'m> Validador<'m> {
     pub fn new(mem: &'m mut [u64; STATE_WORDS], modo: Mode) -> Validador<'m> {
         Validador {
-            v: Nucleo::new(TABLAS, &Options::new(modo), mem),
+            v: Nucleo::new(
+                TABLAS,
+                &Options {
+                    mode: modo,
+                    limits: LIMITES,
+                },
+                mem,
+            ),
         }
     }
 
     pub fn feed(&mut self, bloque: &[u8]) -> Flow {
         self.v.feed(bloque)
+    }
+
+    /// Error `limit` donde se quedó la entrada (el tiempo máximo de `main`).
+    pub fn abort_limit(&mut self) {
+        self.v.abort_limit()
     }
 
     pub fn finish(self) -> Report {
@@ -268,8 +307,9 @@ pub fn clase(k: ErrorKind) -> &'static str {
 
 /// El reporte en una línea JSON (sin el salto final), con los campos del
 /// DPDA de `/api/compare`: `valid`, `violations` (`null` si es ∞),
-/// `errorKind`, `offset`, `line`, `column`, `rule` (ubicación de la regla
-/// en el esquema) y `keyword`.
+/// `errorKind`, `offset`, `line`, `column`, `pointer` y `pointerTruncated`
+/// (la instancia del primer error, F6.1), `rule` (ubicación de la regla en
+/// el esquema) y `keyword`.
 pub fn escribir_json(r: &Report, out: &mut impl Write) -> fmt::Result {
     write!(out, "{{\"valid\":{},\"violations\":", r.valid)?;
     match r.violations.get() {
@@ -282,8 +322,15 @@ pub fn escribir_json(r: &Report, out: &mut impl Write) -> fmt::Result {
         None => out.write_str("null")?,
     }
     match r.first {
-        Some(f) => write!(out, ",\"offset\":{},\"line\":{},\"column\":{}", f.offset, f.line, f.column)?,
-        None => out.write_str(",\"offset\":null,\"line\":null,\"column\":null")?,
+        Some(f) => {
+            write!(out, ",\"offset\":{},\"line\":{},\"column\":{}", f.offset, f.line, f.column)?;
+            out.write_str(",\"pointer\":")?;
+            cadena(r.pointer.as_bytes(), out)?;
+            write!(out, ",\"pointerTruncated\":{}", r.pointer.truncated())?;
+        }
+        None => out.write_str(
+            ",\"offset\":null,\"line\":null,\"column\":null,\"pointer\":null,\"pointerTruncated\":false",
+        )?,
     }
     out.write_str(",\"rule\":")?;
     let regla = r.first.and_then(|f| f.rule);
@@ -319,6 +366,28 @@ fn cadena(bytes: &[u8], out: &mut impl Write) -> fmt::Result {
     out.write_char('"')
 }
 "#;
+
+/// El literal de `l` (exhaustivo: un campo nuevo de `Limits` rompe aquí).
+fn limites_rs(l: &Limits) -> String {
+    let Limits {
+        max_depth,
+        max_string,
+        max_lexeme,
+        max_keys,
+        key_pool,
+        max_unique,
+        max_xml_refs,
+        max_payload,
+        hash_key,
+    } = *l;
+    format!(
+        "Limits {{\n    max_depth: {max_depth},\n    max_string: {max_string},\n    \
+         max_lexeme: {max_lexeme},\n    max_keys: {max_keys},\n    key_pool: {key_pool},\n    \
+         max_unique: {max_unique},\n    max_xml_refs: {max_xml_refs},\n    \
+         max_payload: {max_payload},\n    hash_key: [{:#x}, {:#x}],\n}}",
+        hash_key[0], hash_key[1]
+    )
+}
 
 /// `tablas.rs`: cada tabla de [`Tables`] como un `static` de literales.
 fn tablas_rs(a: &Automaton) -> String {

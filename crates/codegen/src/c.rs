@@ -25,7 +25,7 @@ use runtime_rs::Tables;
 
 use crate::fuentes::LEXER;
 use crate::rust::{salida, BLOQUE_STDIN};
-use crate::Archivo;
+use crate::{Archivo, Opciones};
 
 /// El núcleo C escrito a mano (`crates/runtime-c`), copiado tal cual.
 pub const NUCLEO: [(&str, &str); 2] = [
@@ -35,12 +35,23 @@ pub const NUCLEO: [(&str, &str); 2] = [
 
 const CABECERA: &str = "/* Generado por schemac (F5.2, docs/fase5/codegen-c.md); no editar. */\n";
 
-/// Los archivos del validador C de `a`.
+/// Los archivos del validador C de `a` con los límites por defecto.
 pub fn emit(a: &Automaton) -> Vec<Archivo> {
+    emitir(a, &Opciones::default())
+}
+
+/// Como [`emit`], con los límites y el tiempo de `op` (F6.2), o el error de
+/// [`Opciones::comprobar`] (memoria de más o profundidad 0).
+pub fn emit_con(a: &Automaton, op: &Opciones) -> Result<Vec<Archivo>, String> {
+    op.comprobar(a)?;
+    Ok(emitir(a, op))
+}
+
+fn emitir(a: &Automaton, op: &Opciones) -> Vec<Archivo> {
     let mut v = vec![
-        archivo("main.c", main_c()),
-        archivo("validador.h", validador_h(a)),
-        archivo("validador.c", validador_c(a)),
+        archivo("main.c", main_c(op)),
+        archivo("validador.h", validador_h(a, op)),
+        archivo("validador.c", validador_c(a, op)),
         archivo("tablas.c", tablas_c(a)),
         archivo("sv_lexico.h", lexico_h()),
         archivo("sv_lexico.c", lexico_c()),
@@ -61,11 +72,15 @@ fn archivo(nombre: &str, contenido: String) -> Archivo {
     }
 }
 
-fn main_c() -> String {
+fn main_c(op: &Opciones) -> String {
+    let tiempo = op
+        .tiempo_ms
+        .map_or("-1".to_owned(), |ms| ms.min(i64::MAX as u64).to_string());
     format!(
         "{CABECERA}{}",
         MAIN.replace("{{BLOQUE}}", &BLOQUE_STDIN.to_string())
             .replace("{{INTERNO}}", &salida::INTERNO.to_string())
+            .replace("{{TIEMPO_MS}}", &tiempo)
     )
 }
 
@@ -79,23 +94,41 @@ const MAIN: &str = r#"/*
  * Compilar: cc -std=c11 -O2 -Wall -Wextra -o validador *.c
  */
 #include <stdio.h>
+#include <time.h>
 
 #include "validador.h"
 
 #define BLOQUE {{BLOQUE}}
 #define INTERNO {{INTERNO}}
+/* Tiempo máximo de validación en milisegundos, -1 sin tiempo (F6.2): se mira
+ * antes de entregar cada bloque leído; pasarlo es un error `limit`. */
+#define TIEMPO_MS {{TIEMPO_MS}}LL
 
 static sv_state_t estado;
 static uint8_t bloque[BLOQUE];
-static char linea[8192];
+static char linea[16384];
 
 int main(void) {
     sv_report_t r;
     int codigo, n;
     setvbuf(stdin, NULL, _IONBF, 0);
     sv_init(&estado, NULL);
+#if TIEMPO_MS >= 0
+    struct timespec t0, t;
+    int reloj = timespec_get(&t0, TIME_UTC) == TIME_UTC;
+#endif
     for (;;) {
         size_t k = fread(bloque, 1, sizeof bloque, stdin);
+#if TIEMPO_MS >= 0
+        /* Sin reloj, el tiempo se da por agotado. */
+        if (k > 0 && (!reloj || timespec_get(&t, TIME_UTC) != TIME_UTC ||
+                      (long long)(t.tv_sec - t0.tv_sec) * 1000 +
+                              (t.tv_nsec - t0.tv_nsec) / 1000000 >=
+                          TIEMPO_MS)) {
+            sv_abort_limit(&estado);
+            break;
+        }
+#endif
         if (k > 0 && sv_feed(&estado, bloque, k) < 0) {
             break;
         }
@@ -120,17 +153,39 @@ int main(void) {
 }
 "#;
 
-fn validador_h(a: &Automaton) -> String {
+fn validador_h(a: &Automaton, op: &Opciones) -> String {
     let formato = a.format().name();
     format!(
         "{CABECERA}{}",
         VALIDADOR_H
             .replace("{{FORMATO}}", formato)
-            .replace(
-                "{{STATE_WORDS}}",
-                &a.state_words(&Limits::DEFAULT).to_string()
-            )
-            .replace("{{SV_MAX_DEPTH}}", &Limits::DEFAULT.max_depth.to_string())
+            .replace("{{STATE_WORDS}}", &a.state_words(&op.limites).to_string())
+            .replace("{{SV_MAX_DEPTH}}", &op.limites.max_depth.to_string())
+    )
+}
+
+/// El cuerpo de `sv_limits_emitted` (exhaustivo: un campo nuevo de `Limits`
+/// rompe aquí).
+fn limites_c(l: &Limits) -> String {
+    let Limits {
+        max_depth,
+        max_string,
+        max_lexeme,
+        max_keys,
+        key_pool,
+        max_unique,
+        max_xml_refs,
+        max_payload,
+        hash_key,
+    } = *l;
+    format!(
+        "    lim->mode = SV_MODE_TOTAL;\n    lim->max_depth = {max_depth}u;\n    \
+         lim->max_string = {max_string}ULL;\n    lim->max_lexeme = {max_lexeme}u;\n    \
+         lim->max_keys = {max_keys}u;\n    lim->key_pool = {key_pool}u;\n    \
+         lim->max_unique = {max_unique}u;\n    lim->max_xml_refs = {max_xml_refs}ULL;\n    \
+         lim->max_payload = {max_payload}ULL;\n    lim->hash_key[0] = {:#x}ULL;\n    \
+         lim->hash_key[1] = {:#x}ULL;\n",
+        hash_key[0], hash_key[1]
     )
 }
 
@@ -141,7 +196,7 @@ const VALIDADOR_H: &str = r#"/*
  * sv_state_t (tamaño fijo) en la pila o en memoria estática.
  *
  *   sv_state_t s;
- *   sv_init(&s, NULL);                      // NULL: límites por defecto
+ *   sv_init(&s, NULL);                      // NULL: los límites emitidos
  *   while (hay_bloque) if (sv_feed(&s, p, n) < 0) break;
  *   sv_report_t r;
  *   int codigo = sv_finish(&s, &r);         // 0/1/2/3, como el binario
@@ -153,9 +208,9 @@ const VALIDADOR_H: &str = r#"/*
 
 /* Formato del payload: "json" o "xml". */
 #define SV_FORMATO "{{FORMATO}}"
-/* Profundidad máxima de anidamiento con los límites por defecto. */
+/* Profundidad máxima de anidamiento con los límites emitidos. */
 #define SV_MAX_DEPTH {{SV_MAX_DEPTH}}
-/* Palabras de memoria del núcleo con los límites por defecto. */
+/* Palabras de memoria del núcleo con los límites emitidos. */
 #define SV_STATE_WORDS {{STATE_WORDS}}u
 
 typedef struct {
@@ -166,22 +221,30 @@ typedef struct {
 /* Las tablas de M (tablas.c). */
 extern const sv_tables_t sv_tablas;
 
-/* Prepara `s`. `lim` NULL da los límites por defecto (sv_limits_default) en
- * conformidad total; la memoria está dimensionada para ellos: con límites
- * mayores, lo que no quepa es un error `limit`, nunca una escritura fuera. */
+/* Los límites con que se emitió el validador (schemac compile --limit; F6.2),
+ * en conformidad total. Sin --limit son los de sv_limits_default. */
+void sv_limits_emitted(sv_limits_t* lim);
+
+/* Prepara `s`. `lim` NULL da los límites emitidos (sv_limits_emitted); la
+ * memoria está dimensionada para ellos: con límites mayores, lo que no quepa
+ * es un error `limit`, nunca una escritura fuera. */
 void sv_init(sv_state_t* s, const sv_limits_t* lim);
 
 /* Consume un bloque de cualquier tamaño: 0 = sigue, -1 = se detuvo (malformado,
  * límite o, en fallo temprano, la primera violación). */
 int sv_feed(sv_state_t* s, const uint8_t* chunk, size_t len);
 
+/* Error `limit` donde se quedó la entrada, si no se había detenido (F6.2: el
+ * tiempo máximo que vigila quien llama). */
+void sv_abort_limit(sv_state_t* s);
+
 /* Fin de la entrada: el reporte en `out` y el código de salida del binario
  * (0 válido, 1 inválido, 2 malformado o límite, 3 error interno). */
 int sv_finish(sv_state_t* s, sv_report_t* out);
 
 /* El reporte en una línea JSON (sin el salto final), con los campos del binario
- * Rust: valid, violations (null si ∞), errorKind, offset, line, column, rule,
- * keyword. Devuelve su longitud, o -1 si no cabe en `cap` bytes. */
+ * Rust: valid, violations (null si ∞), errorKind, offset, line, column, pointer,
+ * pointerTruncated, rule, keyword. Devuelve su longitud, o -1 si no cabe en `cap` bytes. */
 int sv_report_json(const sv_report_t* r, char* buf, size_t cap);
 
 /* Código de salida para `r`. */
@@ -190,7 +253,7 @@ int sv_exit_code(const sv_report_t* r);
 #endif /* VALIDADOR_H */
 "#;
 
-fn validador_c(a: &Automaton) -> String {
+fn validador_c(a: &Automaton, op: &Opciones) -> String {
     let t = a.tables();
     let mut palabras = String::new();
     for k in 0..t.rules.len() {
@@ -215,6 +278,7 @@ fn validador_c(a: &Automaton) -> String {
             )
             .replace("{{N_ARREGLO}}", &t.rules.len().max(1).to_string())
             .replace("{{PALABRAS}}", &palabras)
+            .replace("{{LIMITES}}", &limites_c(&op.limites))
             .replace("{{VALIDO}}", &salida::VALIDO.to_string())
             .replace("{{INVALIDO}}", &salida::INVALIDO.to_string())
             .replace("{{MALFORMADO}}", &salida::MALFORMADO.to_string())
@@ -240,18 +304,25 @@ const VALIDADOR_C: &str = r#"/* Fachada del validador generado: las tablas de ta
 static const char* const palabras[{{N_ARREGLO}}] = {
 {{PALABRAS}}};
 
+void sv_limits_emitted(sv_limits_t* lim) {
+{{LIMITES}}}
+
 void sv_init(sv_state_t* s, const sv_limits_t* lim) {
     sv_limits_t l;
     if (lim != NULL) {
         l = *lim;
     } else {
-        sv_limits_default(&l);
+        sv_limits_emitted(&l);
     }
     sv_validator_init(&s->v, &sv_tablas, {{XML}}, &l, s->mem, SV_STATE_WORDS);
 }
 
 int sv_feed(sv_state_t* s, const uint8_t* chunk, size_t len) {
     return sv_validator_feed(&s->v, chunk, len);
+}
+
+void sv_abort_limit(sv_state_t* s) {
+    sv_validator_abort_limit(&s->v);
 }
 
 int sv_exit_code(const sv_report_t* r) {
@@ -415,8 +486,13 @@ int sv_report_json(const sv_report_t* r, char* buf, size_t cap) {
         put_u64(&w, r->line);
         put_str(&w, ",\"column\":");
         put_u64(&w, r->column);
+        put_str(&w, ",\"pointer\":");
+        put_cadena(&w, r->pointer, r->pointer_len);
+        put_str(&w, r->pointer_truncated ? ",\"pointerTruncated\":true"
+                                         : ",\"pointerTruncated\":false");
     } else {
-        put_str(&w, ",\"offset\":null,\"line\":null,\"column\":null");
+        put_str(&w, ",\"offset\":null,\"line\":null,\"column\":null,\"pointer\":null,"
+                    "\"pointerTruncated\":false");
     }
     put_str(&w, ",\"rule\":");
     if (r->has_first && r->has_rule) {

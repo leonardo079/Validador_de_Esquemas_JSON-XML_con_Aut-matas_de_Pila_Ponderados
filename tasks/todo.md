@@ -646,6 +646,34 @@ Sin `/autodev` («termina la fase 5», decisiones delegadas por Leonardo). Detal
 - [x] Corpus, mutaciones, números sintéticos y bordes de buena formación; bloques de 1, 7 y 4 096 y los dos modos; reporte idéntico en las tres implementaciones, con ASan/UBSan en C. — `interprete_c_y_rust_iguales`
 - [x] Validada con mutaciones del núcleo C (`docs/fase5/codegen-c.md` §5).
 
+## Tarea F6.1: puntero del primer error — HECHA (21 nov, D77)
+
+Criterios propuestos y aplicados por Claude con la delegación del usuario («toma las decisiones que creas más recomendables»), sin `/autodev`.
+
+- [x] `Report::pointer`: JSON Pointer (RFC 6901, `~0`/`~1`) en JSON y ruta de elementos en XML, de la instancia abierta en el evento que detecta el primer error (el contenedor para claves, comas y cierres). — `tests/puntero.rs`
+- [x] Memoria fija (búfer de 1 024 bytes, sin palabras por marco), O(1) por evento más los bytes de la clave; mismo puntero en bloques de 1, 7 y 4 096 y en fallo temprano. — `tests/puntero.rs`, `fuzz/`
+- [x] Recorte: si no cabe, el antepasado más profundo que cabe con `truncated`, y vuelve a ser exacto al salir de los niveles recortados. — `puntero_recortado_y_vuelta_atras`, proptest `puntero_del_primer_negativo`
+- [x] Los casos del corpus con `expected.pointer` (5 JSON y 2 XML nuevos) dan ese puntero en el intérprete y en los binarios Rust y C; en JSON el puntero está entre los de `jsonschema` o debajo de uno. — `automaton/tests/corpus.rs`, `codegen/tests/comun` (`cumple_expected`)
+- [x] Mismo algoritmo en el núcleo C, comprobado por la diferencial (con payloads para el puntero) y `pointer`/`pointerTruncated` en la línea JSON de los dos binarios. — `diferencial.rs`, `rust.rs`, `c.rs`
+- [x] Documentación: `docs/fase6/puntero.md`; `docs/fase5/pendientes.md` §4 resuelto; aviso a Bayron en `docs/fase6/pendientes.md` §29 y §31.
+
+## Tarea F6.2: límites configurables — HECHA (21 nov, D78)
+
+- [x] `Limits::max_lexeme` («dígitos», defecto y tope 1 024) en Rust y C, también en XML y en el hash de `uniqueItems`. — `automaton/tests/limites.rs::lexema_configurable`
+- [x] `schemac compile --limit nombre=valor` con los nueve nombres; los binarios Rust y C emiten esos límites y su memoria; errores de argumentos (2) y de memoria (1, sin escribir). — `cli/tests/compile.rs`, `codegen/tests/limites.rs::opciones_invalidas`
+- [x] Cada límite emitido da lo mismo que el intérprete con esos límites, en Rust y en C, en su valor y en su valor + 1 (JSON y XML). — `codegen/tests/limites.rs`
+- [x] Tiempo máximo: `main` lo mira antes de cada bloque y da `limit` con `abort_limit`; probado con 0 ms (sin medir tiempo, D1). — `tiempo_agotado`, `abort_limit_en_la_posicion_actual`
+- [x] Sin `--limit`, lo emitido es lo de antes con los valores por defecto. — `sin_opciones_los_de_por_defecto`
+- [x] Documentación: `docs/fase6/limites.md`; `docs/fase5/pendientes.md` §2 resuelto; formato del campo `limits` del corpus como propuesta (§30, D42).
+
+## Tarea F6.4: mitigaciones y fuzzing — HECHA (21 nov, D79; parte de la pista A)
+
+- [x] Mitigaciones de punta a punta en un solo sitio: DTD, XXE, entidades de parámetro y referencias inválidas; ReDoS y explosión al determinizar; `$ref` cíclico no productivo y recursivo hondo; números enormes. — `automaton/tests/mitigaciones.rs`
+- [x] Tabla ataque → mitigación → prueba y lo que no se cubre. — `docs/fase6/mitigaciones.md`
+- [x] cargo-fuzz: cuatro objetivos (payloads JSON contra la línea base, payloads XML, esquemas JSON y XSD) con las propiedades comunes; primera corrida sin fallos. — `fuzz/`, `docs/fase6/fuzzing.md`
+- [x] El C, por reproducción del corpus del fuzzer en la diferencial con ASan/UBSan (sin FFI). — `SV_EXTRA_JSON`/`SV_EXTRA_XML` en `diferencial.rs`, `scripts/fuzz.sh`
+- [x] `make fuzz` fuera de `make test`; F6.3-P1 resuelto con la opción a (`corpus.rs`, `docs/fase6/pendientes.md` §28).
+
 ## Punto de control PC-E (tras F4.6 + F5.1)
 
 - [x] Un esquema JSON y el pedido XSD pasan por esquema → M → validador Rust generado, y el corpus pasa. — **hecho (20 nov, F5.1)**: los 32 esquemas del corpus, con `valid-xml-pedido-01`, por `rustc --edition 2021 -O main.rs`; todo payload da `expected` (`crates/codegen/tests/rust.rs`)

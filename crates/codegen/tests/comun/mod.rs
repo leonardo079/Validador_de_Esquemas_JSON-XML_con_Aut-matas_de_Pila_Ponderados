@@ -124,6 +124,8 @@ pub fn json_esperado(a: &Automaton, r: &Report) -> Value {
         "offset": r.first.map(|f| f.offset),
         "line": r.first.map(|f| f.line),
         "column": r.first.map(|f| f.column),
+        "pointer": r.first.map(|_| r.pointer.as_str()),
+        "pointerTruncated": r.first.is_some() && r.pointer.truncated(),
         "rule": regla.map(|k| a.rule_location(k)),
         "keyword": regla.map(|k| a.rule(k).1.name()),
     })
@@ -159,6 +161,11 @@ pub fn cumple_expected(c: &Case, v: &Value) {
     }
     if let Some(off) = e.offset {
         assert_eq!(v["offset"], off, "{}: {v}", c.id);
+    }
+    // F6.1: el puntero del primer error.
+    if let Some(p) = &e.pointer {
+        assert_eq!(v["pointer"].as_str(), Some(p.as_str()), "{}: {v}", c.id);
+        assert_eq!(v["pointerTruncated"], false, "{}: {v}", c.id);
     }
 }
 

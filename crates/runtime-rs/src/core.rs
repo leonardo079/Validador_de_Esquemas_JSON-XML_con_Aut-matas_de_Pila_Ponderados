@@ -93,6 +93,68 @@ pub struct ErrorAt {
     pub rule: Option<u32>,
 }
 
+/// Bytes del puntero del primer error que se guardan (F6.1).
+pub const POINTER_MAX: usize = 1024;
+
+/// Dónde está, en la instancia, el primer error (F6.1;
+/// `docs/fase6/puntero.md`): un JSON Pointer (RFC 6901, `~0` y `~1`) en
+/// JSON y una ruta de nombres de elemento (`/pedido/linea`) en XML. Es la
+/// instancia abierta en el evento que lo detecta: el valor del miembro o
+/// elemento del arreglo que se lee, o el contenedor si el error está en una
+/// clave, una coma o el cierre. Si no cabe en [`POINTER_MAX`] bytes, es el
+/// antepasado más profundo que cabe y [`Pointer::truncated`] es `true`.
+#[derive(Clone, Copy)]
+pub struct Pointer {
+    bytes: [u8; POINTER_MAX],
+    len: u16,
+    truncated: bool,
+}
+
+impl Pointer {
+    /// El puntero de la raíz (`""`).
+    pub const ROOT: Pointer = Pointer {
+        bytes: [0; POINTER_MAX],
+        len: 0,
+        truncated: false,
+    };
+
+    /// Sus bytes (UTF-8: solo se corta entre segmentos).
+    pub fn as_bytes(&self) -> &[u8] {
+        self.bytes.get(..self.len as usize).unwrap_or(&[])
+    }
+
+    /// El puntero como texto.
+    pub fn as_str(&self) -> &str {
+        core::str::from_utf8(self.as_bytes()).unwrap_or("")
+    }
+
+    /// Si el puntero real era más largo que [`POINTER_MAX`] y este es un
+    /// antepasado suyo.
+    pub fn truncated(&self) -> bool {
+        self.truncated
+    }
+}
+
+/// Dos punteros son iguales si lo son su texto y su marca de recorte (los
+/// bytes del búfer más allá de la longitud no cuentan).
+impl PartialEq for Pointer {
+    fn eq(&self, o: &Pointer) -> bool {
+        self.as_bytes() == o.as_bytes() && self.truncated == o.truncated
+    }
+}
+
+impl Eq for Pointer {}
+
+impl core::fmt::Debug for Pointer {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:?}", self.as_str())?;
+        if self.truncated {
+            f.write_str(" (recortado)")?;
+        }
+        Ok(())
+    }
+}
+
 /// Resultado de una validación.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Report {
@@ -105,6 +167,8 @@ pub struct Report {
     /// El primer error: el de peso ∞ si lo hay (el payload no es JSON o
     /// pasa un límite); si no, la primera violación.
     pub first: Option<ErrorAt>,
+    /// La instancia del primer error ([`Pointer::ROOT`] si no lo hay).
+    pub pointer: Pointer,
 }
 
 /// Longitud máxima del lexema de un número que se guarda
@@ -194,6 +258,25 @@ pub struct Core<'t, 'm> {
     first: Option<ErrorAt>,
     fault: Option<ErrorKind>,
     stopped: bool,
+    /// Ruta de la instancia abierta (F6.1): segmentos `/…` guardados en
+    /// `path[..plen]`; los `pextra` más profundos no cupieron.
+    path: [u8; POINTER_MAX],
+    plen: usize,
+    pextra: u32,
+    /// Segmento que se escribe (una clave JSON o un nombre de elemento XML)
+    /// y aún no está activo: llega hasta `pend`; `pend_ok` si cabe.
+    pending: bool,
+    pend: usize,
+    pend_ok: bool,
+    /// El segmento más profundo no cuenta (una coma de un arreglo, entre dos
+    /// elementos).
+    phide: bool,
+    /// JSON: contenedores abiertos y si el más profundo tiene activo el
+    /// segmento de un miembro o elemento.
+    pnest: u32,
+    popen: bool,
+    /// El puntero del primer error.
+    pointer: Pointer,
 }
 
 /// Dónde cuenta una comprobación o una puerta: la zona de la instancia
@@ -288,10 +371,22 @@ impl<'t, 'm> Core<'t, 'm> {
             first: None,
             fault: None,
             stopped: false,
+            path: [0; POINTER_MAX],
+            plen: 0,
+            pextra: 0,
+            pending: false,
+            pend: 0,
+            pend_ok: false,
+            phide: false,
+            pnest: 0,
+            popen: false,
+            pointer: Pointer::ROOT,
         };
         // El comienzo de una región va en los 32 bits bajos de la palabra de
         // buena formación: la reserva no pasa de 2³² − 1 entradas.
         c.limits.key_pool = c.limits.key_pool.min(u32::MAX as usize);
+        // El lexema se guarda en un búfer fijo de LEXEME_MAX bytes.
+        c.limits.max_lexeme = c.limits.max_lexeme.min(LEXEME_MAX);
         if c.t.n_classes <= class::CHAR {
             c.stop(ErrorKind::Internal, Pos::START);
         }
@@ -316,6 +411,17 @@ impl<'t, 'm> Core<'t, 'm> {
         if !matches!(ev, Event::StringChar(_)) {
             self.run = 0;
         }
+        // F6.1: el cierre y la coma son del contenedor, no de su miembro.
+        let in_array = !self.top_is_object();
+        match ev {
+            Event::EndObject | Event::EndArray if self.popen => self.seg_pop(),
+            Event::Comma if in_array => self.phide = true,
+            Event::Comma if self.popen => {
+                self.seg_pop();
+                self.popen = false;
+            }
+            _ => {}
+        }
         let a = match ev {
             Event::BeginObject => {
                 self.next_wf = WF_OBJECT | self.pool_top as u64;
@@ -336,6 +442,7 @@ impl<'t, 'm> Core<'t, 'm> {
                 self.chars = 0;
                 self.in_key = self.key_next;
                 if self.in_key {
+                    self.seg_begin();
                     self.hasher = SipHasher13::new(self.limits.hash_key);
                 } else if self.hash_depth > 0 {
                     self.vhash = SipHasher13::new(self.limits.hash_key);
@@ -348,6 +455,7 @@ impl<'t, 'm> Core<'t, 'm> {
                 self.chars = self.chars.saturating_add(1);
                 self.run_char(c, span.start)?;
                 if self.in_key {
+                    self.seg_char(c, true);
                     self.hasher.write_char(c);
                 } else if self.hash_depth > 0 {
                     self.vhash.write_char(c);
@@ -409,6 +517,32 @@ impl<'t, 'm> Core<'t, 'm> {
             None
         };
         self.step(a, at)?;
+        match ev {
+            Event::BeginObject => {
+                self.pnest = self.pnest.saturating_add(1);
+                self.popen = false;
+            }
+            Event::BeginArray => {
+                self.pnest = self.pnest.saturating_add(1);
+                self.seg_begin();
+                self.seg_byte(b'0');
+                self.seg_commit();
+                self.popen = true;
+            }
+            Event::EndObject | Event::EndArray => {
+                self.pnest = self.pnest.saturating_sub(1);
+                self.popen = self.pnest > 0;
+            }
+            Event::Colon => {
+                self.seg_commit();
+                self.popen = true;
+            }
+            Event::Comma if in_array => {
+                self.phide = false;
+                self.seg_next();
+            }
+            _ => {}
+        }
         if self.hash_depth > 0 {
             if let Some(h) = value_hash {
                 self.deliver(h, at)?;
@@ -458,7 +592,7 @@ impl<'t, 'm> Core<'t, 'm> {
     /// D sin ceros a los lados (`1`, `1.0` y `10e-1` son iguales). `None`
     /// si el lexema no cupo o el exponente no cabe en un `i64` (`limit`).
     fn number_hash(&self) -> Option<u64> {
-        let lex = self.lex.get(..self.lex_len)?;
+        let lex = self.lexeme().ok()?;
         let (neg, rest) = match lex.split_first() {
             Some((b'-', r)) => (true, r),
             _ => (false, lex),
@@ -594,6 +728,7 @@ impl<'t, 'm> Core<'t, 'm> {
         }
         let a = match ev {
             XmlEvent::StartTagOpen => {
+                self.seg_begin();
                 self.begin_name(Name::Elem);
                 self.tag_region = self.pool_top;
                 xclass::START_TAG
@@ -654,6 +789,9 @@ impl<'t, 'm> Core<'t, 'm> {
             }
             XmlEvent::NameChar(c) => {
                 self.run_char(c, at)?;
+                if self.name == Name::Elem {
+                    self.seg_char(c, false);
+                }
                 if matches!(self.name, Name::Elem | Name::End | Name::Attr) {
                     self.hasher.write_char(c);
                     self.last_colon = c == ':';
@@ -681,13 +819,20 @@ impl<'t, 'm> Core<'t, 'm> {
                 self.begin_name(Name::Attr);
                 self.dup_at = at;
             }
-            XmlEvent::AttrValueBegin | XmlEvent::EndTagClose | XmlEvent::PiClose => {
+            XmlEvent::AttrValueBegin | XmlEvent::PiClose => {
                 self.name = Name::None;
+            }
+            XmlEvent::EndTagClose => {
+                self.name = Name::None;
+                self.seg_pop();
             }
             XmlEvent::StartTagClose | XmlEvent::EmptyTagClose => {
                 // Los atributos de la etiqueta ya no se repiten.
                 self.pool_top = self.pool_top.min(self.tag_region);
                 self.name = Name::None;
+                if ev == XmlEvent::EmptyTagClose {
+                    self.seg_pop();
+                }
             }
             _ => {}
         }
@@ -718,6 +863,8 @@ impl<'t, 'm> Core<'t, 'm> {
     /// de buena formación del marco que se apile.
     fn end_elem_name(&mut self, at: Pos) -> Result<(), Stop> {
         if self.name == Name::Elem {
+            // F6.1: lo que se detecta desde aquí es del elemento.
+            self.seg_commit();
             self.end_name(at)?;
             self.next_wf = self.name_hash;
             self.name = Name::None;
@@ -800,6 +947,11 @@ impl<'t, 'm> Core<'t, 'm> {
                 Some(ErrorKind::Schema)
             }),
             first: self.first,
+            pointer: if self.first.is_some() {
+                self.pointer
+            } else {
+                Pointer::ROOT
+            },
         }
     }
 
@@ -807,7 +959,119 @@ impl<'t, 'm> Core<'t, 'm> {
         self.weight = Weight::INFINITY;
         self.fault = Some(kind);
         self.first = Some(error_at(at, None));
+        self.snapshot();
         self.stopped = true;
+    }
+
+    /// F6.1: empieza un segmento `/…` que aún no está activo. Si ya hay
+    /// segmentos que no cupieron, este tampoco se guarda (la ruta guardada
+    /// es siempre un prefijo de la real).
+    fn seg_begin(&mut self) {
+        self.pending = true;
+        self.pend_ok = self.pextra == 0 && self.plen < POINTER_MAX;
+        self.pend = self.plen;
+        if self.pend_ok {
+            self.path[self.plen] = b'/';
+            self.pend = self.plen + 1;
+        }
+    }
+
+    fn seg_byte(&mut self, b: u8) {
+        if !(self.pending && self.pend_ok) {
+            return;
+        }
+        match self.path.get_mut(self.pend) {
+            Some(x) => {
+                *x = b;
+                self.pend += 1;
+            }
+            None => self.pend_ok = false,
+        }
+    }
+
+    /// Un carácter del segmento; en JSON, `~` y `/` como `~0` y `~1`.
+    fn seg_char(&mut self, c: char, escape: bool) {
+        match c {
+            '~' if escape => {
+                self.seg_byte(b'~');
+                self.seg_byte(b'0');
+            }
+            '/' if escape => {
+                self.seg_byte(b'~');
+                self.seg_byte(b'1');
+            }
+            _ => {
+                let mut buf = [0u8; 4];
+                for &b in c.encode_utf8(&mut buf).as_bytes() {
+                    self.seg_byte(b);
+                }
+            }
+        }
+    }
+
+    /// El segmento pendiente pasa a ser el más profundo.
+    fn seg_commit(&mut self) {
+        if !self.pending {
+            return;
+        }
+        self.pending = false;
+        if self.pend_ok {
+            self.plen = self.pend;
+        } else {
+            self.pextra = self.pextra.saturating_add(1);
+        }
+    }
+
+    /// Quita el segmento más profundo.
+    fn seg_pop(&mut self) {
+        if self.pextra > 0 {
+            self.pextra -= 1;
+        } else {
+            self.plen = last_slash(&self.path, self.plen);
+        }
+    }
+
+    /// El siguiente elemento del arreglo: suma 1 al índice del último
+    /// segmento, en su sitio.
+    fn seg_next(&mut self) {
+        if self.pextra > 0 {
+            return;
+        }
+        let s = last_slash(&self.path, self.plen) + 1;
+        let mut i = self.plen;
+        while i > s {
+            i -= 1;
+            if self.path[i] == b'9' {
+                self.path[i] = b'0';
+            } else {
+                self.path[i] += 1;
+                return;
+            }
+        }
+        // Todo nueves: una cifra más.
+        if self.plen < POINTER_MAX && s <= self.plen {
+            self.path[s] = b'1';
+            self.path[s + 1..=self.plen].fill(b'0');
+            self.plen += 1;
+        } else {
+            self.plen = s.saturating_sub(1);
+            self.pextra = 1;
+        }
+    }
+
+    /// Guarda la ruta activa como puntero del primer error.
+    fn snapshot(&mut self) {
+        let (mut len, mut extra) = (self.plen, self.pextra);
+        if self.phide {
+            if extra > 0 {
+                extra -= 1;
+            } else {
+                len = last_slash(&self.path, len);
+            }
+        }
+        self.pointer.bytes[..len].copy_from_slice(&self.path[..len]);
+        self.pointer.len = len as u16;
+        self.pointer.truncated = extra > 0;
     }
 
     fn fail(&mut self, f: Fault, at: Pos) -> Result<(), Stop> {
@@ -821,7 +1085,8 @@ impl<'t, 'm> Core<'t, 'm> {
     }
 
     /// Error `limit` en `at` (el tamaño del payload, que vigila el
-    /// validador que alimenta al núcleo).
+    /// validador que alimenta al núcleo, o el tiempo, que vigila quien lo
+    /// llama).
     pub(crate) fn limit(&mut self, at: Pos) {
         if !self.stopped {
             self.stop(ErrorKind::Limit, at);
@@ -1019,6 +1284,7 @@ impl<'t, 'm> Core<'t, 'm> {
             self.weight = self.weight.times(Weight::finite(n));
             if self.first.is_none() {
                 self.first = Some(error_at(at, rule));
+                self.snapshot();
             }
             if self.mode == Mode::EarlyFail {
                 self.stopped = true;
@@ -1246,6 +1512,9 @@ impl<'t, 'm> Core<'t, 'm> {
 
     /// El lexema del número que se cierra, o [`Fault::Limit`] si no cupo.
     fn lexeme(&self) -> Result<&[u8], Fault> {
+        if self.lex_len > self.limits.max_lexeme {
+            return Err(Fault::Limit);
+        }
         self.lex.get(..self.lex_len).ok_or(Fault::Limit)
     }
 
@@ -1449,6 +1718,11 @@ fn after(p: Pos, bytes: u64, cols: u64) -> Pos {
         line: p.line,
         column: u32::try_from(u64::from(p.column).saturating_add(cols)).unwrap_or(u32::MAX),
     }
+}
+
+/// Dónde empieza el último segmento de `path[..len]` (0 si no hay).
+fn last_slash(path: &[u8; POINTER_MAX], len: usize) -> usize {
+    path[..len].iter().rposition(|&b| b == b'/').unwrap_or(0)
 }
 
 fn error_at(at: Pos, rule: Option<u32>) -> ErrorAt {

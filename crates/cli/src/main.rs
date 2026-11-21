@@ -23,12 +23,15 @@ comandos:
                          y escribe el resumen de sus tamaños en JSON (o M
                          completo en DOT con --dot); lo que aún no se compila
                          es un error con la tarea que lo cubrirá
-  compile <esquema> --lang <rust|c> --out <dir>
+  compile <esquema> --lang <rust|c> --out <dir> [--limit nombre=valor]...
                          construye M y escribe en <dir> un validador autocontenido
                          (Fase 5): con rust, main.rs y sus módulos, que compilan
                          con `rustc --edition 2021 -O main.rs` sin Cargo; con c,
                          main.c, validador.h/.c y el núcleo C, que compilan con
-                         `cc -std=c11 -O2 -Wall -Wextra -o validador *.c`
+                         `cc -std=c11 -O2 -Wall -Wextra -o validador *.c`;
+                         --limit cambia un límite (F6.2): maxDepth, maxString,
+                         maxLexeme, maxKeys, keyPool, maxUnique, maxXmlRefs,
+                         maxPayload o maxTimeMs
   dot <utf8|json|xml>    escribe el AFD indicado en formato DOT (Graphviz)
   version                muestra la versión
 
@@ -105,7 +108,7 @@ fn main() -> ExitCode {
             automata(Path::new(ruta), Salida::Json)
         }
         ([Some("compile"), ..], [_, resto @ ..]) => match opciones_compile(resto) {
-            Ok((ruta, lang, out)) => compilar(Path::new(ruta), lang, Path::new(out)),
+            Ok((ruta, lang, out, op)) => compilar(Path::new(ruta), lang, Path::new(out), op),
             Err(m) => error(&m),
         },
         ([Some("version")], _) => ExitCode::from(imprimir(&format!(
@@ -509,15 +512,40 @@ fn construir(bytes: &[u8], salida: Salida) -> Result<String, Fallo> {
     Ok(out)
 }
 
-/// Argumentos de `schemac compile`: `<esquema> --lang <rust|c> --out <dir>`,
-/// las opciones en cualquier orden. Da `(esquema, dir)` o el mensaje de
+/// Argumentos de `schemac compile`: `<esquema> --lang <rust|c> --out <dir>`
+/// y `--limit nombre=valor` las veces que haga falta (F6.2), las opciones en
+/// cualquier orden. Da `(esquema, lenguaje, dir, opciones)` o el mensaje de
 /// error (código 2): opción desconocida, repetida o sin valor, falta el
-/// esquema, `--lang` o `--out`, o un lenguaje que no es `rust` ni `c`.
-fn opciones_compile(args: &[OsString]) -> Result<(&OsString, Lenguaje, &OsString), String> {
+/// esquema, `--lang` o `--out`, un lenguaje que no es `rust` ni `c`, o un
+/// límite desconocido, repetido o que no es un entero.
+type Compile<'a> = (&'a OsString, Lenguaje, &'a OsString, codegen::Opciones);
+
+fn opciones_compile(args: &[OsString]) -> Result<Compile<'_>, String> {
     let (mut ruta, mut lang, mut out) = (None, None, None);
+    let mut op = codegen::Opciones::default();
+    let mut vistos: Vec<String> = Vec::new();
     let mut i = 0;
     while i < args.len() {
         let a = &args[i];
+        if a.to_str() == Some("--limit") {
+            let Some(v) = args.get(i + 1).and_then(|v| v.to_str()) else {
+                return Err("--limit necesita un valor nombre=valor".into());
+            };
+            let Some((nombre, valor)) = v.split_once('=') else {
+                return Err(format!("--limit {v}: falta «=valor»"));
+            };
+            let valor: u64 = Some(valor)
+                .filter(|v| !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()))
+                .and_then(|v| v.parse().ok())
+                .ok_or_else(|| format!("--limit {nombre}: «{valor}» no es un entero ≥ 0"))?;
+            if vistos.iter().any(|n| n == nombre) {
+                return Err(format!("--limit {nombre} repetido"));
+            }
+            op.fijar(nombre, valor)?;
+            vistos.push(nombre.to_owned());
+            i += 2;
+            continue;
+        }
         let destino = match a.to_str() {
             Some("--lang") => &mut lang,
             Some("--out") => &mut out,
@@ -541,8 +569,8 @@ fn opciones_compile(args: &[OsString]) -> Result<(&OsString, Lenguaje, &OsString
     let ruta = ruta.ok_or("falta el esquema")?;
     let out = out.ok_or("falta --out <dir>")?;
     match lang.and_then(|l| l.to_str()) {
-        Some("rust") => Ok((ruta, Lenguaje::Rust, out)),
-        Some("c") => Ok((ruta, Lenguaje::C, out)),
+        Some("rust") => Ok((ruta, Lenguaje::Rust, out, op)),
+        Some("c") => Ok((ruta, Lenguaje::C, out, op)),
         Some(l) => Err(format!("lenguaje desconocido: {l} (rust o c)")),
         None if lang.is_some() => Err("lenguaje desconocido".into()),
         None => Err("falta --lang <rust|c>".into()),
@@ -559,13 +587,13 @@ enum Lenguaje {
 /// `schemac compile` (F5.1, F5.2): 0 con los archivos del validador escritos
 /// en `out` (se crea si no existe; los archivos con el mismo nombre se
 /// sobrescriben y los demás no se tocan) y una línea de resumen en stdout;
-/// 1 con los errores del esquema, una regla pendiente o un límite (los de
-/// `automaton`); 2 si no se pudo leer el esquema o escribir los archivos; 3
-/// si hay un error interno.
-fn compilar(path: &Path, lang: Lenguaje, out: &Path) -> ExitCode {
+/// 1 con los errores del esquema, una regla pendiente, un límite (los de
+/// `automaton`) o unos `--limit` que piden demasiada memoria; 2 si no se
+/// pudo leer el esquema o escribir los archivos; 3 si hay un error interno.
+fn compilar(path: &Path, lang: Lenguaje, out: &Path, op: codegen::Opciones) -> ExitCode {
     let ruta = path.display().to_string();
     let err = &mut io::stderr();
-    let resultado = match en_hilo(path, "schemac-compile", err, move |b| emitir(b, lang)) {
+    let resultado = match en_hilo(path, "schemac-compile", err, move |b| emitir(b, lang, &op)) {
         Ok(r) => r,
         Err(code) => return ExitCode::from(code),
     };
@@ -606,16 +634,21 @@ fn compilar(path: &Path, lang: Lenguaje, out: &Path) -> ExitCode {
 
 /// La bajada, la construcción de M y el emisor del lenguaje (en el hilo de
 /// [`en_hilo`]). Errores como en [`construir`].
-fn emitir(bytes: &[u8], lang: Lenguaje) -> Result<Vec<codegen::Archivo>, Fallo> {
+fn emitir(
+    bytes: &[u8],
+    lang: Lenguaje,
+    op: &codegen::Opciones,
+) -> Result<Vec<codegen::Archivo>, Fallo> {
     let ir = bajar(bytes)?;
     let a = automaton::build(&ir).map_err(|e| match e {
         automaton::BuildError::Internal(_) => Fallo::Constructor(e.to_string()),
         _ => Fallo::Esquema(vec![e.to_string()]),
     })?;
-    Ok(match lang {
-        Lenguaje::Rust => codegen::rust::emit(&a),
-        Lenguaje::C => codegen::c::emit(&a),
-    })
+    match lang {
+        Lenguaje::Rust => codegen::rust::emit_con(&a, op),
+        Lenguaje::C => codegen::c::emit_con(&a, op),
+    }
+    .map_err(|m| Fallo::Esquema(vec![format!("límites: {m}")]))
 }
 
 fn escribir_archivos(dir: &Path, archivos: &[codegen::Archivo]) -> io::Result<()> {

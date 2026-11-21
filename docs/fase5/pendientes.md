@@ -19,7 +19,11 @@ y la tarea que debe cerrarla. Lo cerrado pasa a `historial.md` (todavía no hay)
   (`into_inner`); stdin cortado a mitad.
 - **Tarea:** E3.
 
-#### 2. Límites fijos en el binario (F5.1-P2; F6.2)
+#### 2. Límites fijos en el binario (F5.1-P2; F6.2) — RESUELTO (F6.2, D78)
+
+- **Resuelto en F6.2:** `schemac compile --limit nombre=valor` emite los límites (`LIMITES` en Rust,
+  `sv_limits_emitted` en C) y dimensiona `STATE_WORDS` con ellos; `maxTimeMs` da el tiempo máximo de `main`
+  (`docs/fase6/limites.md`). El campo `limits` del corpus queda como propuesta (`docs/fase6/pendientes.md` §30).
 
 - **Estado:** `STATE_WORDS` y `SV_MAX_DEPTH` salen de `Limits::DEFAULT` al emitir, y el binario no lee opciones.
 - **Dónde:** `crates/codegen/src/rust.rs:165` (sustitución de `{{STATE_WORDS}}`) y la plantilla `VALIDADOR`.
@@ -37,7 +41,10 @@ y la tarea que debe cerrarla. Lo cerrado pasa a `historial.md` (todavía no hay)
   hace falta, se deja así.
 - **Tarea:** F7.5 (decisión de Bayron).
 
-#### 4. Puntero JSON del primer error (F5.1-P4; F6.1)
+#### 4. Puntero JSON del primer error (F5.1-P4; F6.1) — RESUELTO (F6.1, D77)
+
+- **Resuelto en F6.1:** `Report::pointer` en el núcleo Rust y en el C, y `pointer`/`pointerTruncated` en la línea
+  JSON de los dos binarios (`docs/fase6/puntero.md`).
 
 - **Estado:** la línea JSON no tiene `pointer` (el `expected.pointer` del corpus), porque el núcleo aún no lo
   calcula.
@@ -114,4 +121,7 @@ y la tarea que debe cerrarla. Lo cerrado pasa a `historial.md` (todavía no hay)
   rango en el corpus, las mutaciones ni los sintéticos, pero un fuzzing dirigido del núcleo C no se ha hecho.
 - **Arreglo propuesto:** en F6.4, un objetivo de fuzzing que compare el C con el intérprete (el banco de F5.3 ya
   lee payloads de archivos). En E3, revisión de `sv_nucleo.c` con `security-auditor`.
-- **Tarea:** F6.4 y E3.
+- **F6.4 (21 nov):** hecho por reproducción, sin FFI (exigiría `unsafe`): `scripts/fuzz.sh` pasa el corpus del
+  fuzzer por la diferencial con ASan/UBSan (`SV_EXTRA_JSON`, `SV_EXTRA_XML`; `docs/fase6/fuzzing.md` §3). Sin
+  hallazgos en la primera corrida. Queda la revisión de E3.
+- **Tarea:** E3.

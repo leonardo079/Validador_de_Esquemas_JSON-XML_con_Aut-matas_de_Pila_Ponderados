@@ -45,7 +45,7 @@ int codigo = sv_finish(&s, &r);    /* 0 válido, 1 inválido, 2 malformado o lí
 
 `sv_limits_t` lleva el modo y los límites de `runtime_rs::Options`. Con límites mayores que los de por defecto, lo
 que no cabe en `SV_STATE_WORDS` es un error `limit`, nunca una escritura fuera de rango. Exponerlos con nombre y
-documentarlos es F6.2.
+desde F6.2 se emiten con nombre (`schemac compile --limit`, `sv_limits_emitted`; `docs/fase6/limites.md`).
 
 **Sin cbindgen.** El plan preveía generar con cbindgen la cabecera de una C-ABI del validador *Rust*. Exponer
 `extern "C"` con `#[no_mangle]` y punteros crudos exige `unsafe`, que está prohibido salvo la excepción de D52. El
@@ -111,5 +111,5 @@ Ninguna prueba mide tiempo (D1). Las de `c.rs` tardan unos 40 s y la diferencial
   avisa. En Windows sin `cc` fallarían (`docs/fase5/pendientes.md` §9).
 - **Tamaño.** El núcleo C son unas 2 900 líneas. El pedido da 204 KB de fuentes y un binario de 130 KB, que
   compila con `-O2` en 1,3 s.
-- **Fuera de esta tarea:** límites configurables con nombre (F6.2), puntero JSON (F6.1) y el fallo temprano en
-  `main` (F7.5).
+- **Después de esta tarea:** límites con nombre y tiempo (F6.2, `docs/fase6/limites.md`), puntero del error
+  (F6.1, `docs/fase6/puntero.md`); el fallo temprano en `main` sigue en F7.5.

@@ -45,7 +45,7 @@ pub use location::{location_clipped, LOCATION_MAX};
 pub use model::{
     Automaton, ClassId, FrameId, PayloadFormat, StateId, StateInfo, Summary, TransId, ERROR,
 };
-pub use runtime_rs::{ErrorAt, ErrorKind, Limits, Mode, Options, Report};
+pub use runtime_rs::{ErrorAt, ErrorKind, Limits, Mode, Options, Pointer, Report, POINTER_MAX};
 
 /// Tarea del plan que implementará una regla pendiente, en el orden en que
 /// llegan (F4-U5 con las etiquetas de D51).

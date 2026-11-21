@@ -53,6 +53,13 @@ impl<'t, 'm> XmlValidator<'t, 'm> {
         Flow::Continue
     }
 
+    /// Detiene la validación con un error `limit` en la posición actual,
+    /// si no se había detenido ya (F6.2): el tiempo máximo, u otro tope que
+    /// vigile el llamador (`docs/fase6/limites.md`).
+    pub fn abort_limit(&mut self) {
+        self.core.limit(self.lexer.position());
+    }
+
     /// Fin de la entrada: el reporte.
     pub fn finish(mut self) -> Report {
         if !self.core.is_stopped() {

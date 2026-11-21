@@ -217,3 +217,80 @@ fn salida_que_no_es_directorio_da_2() {
     assert!(out.is_empty());
     assert!(err.contains("compile-archivo"), "{err}");
 }
+
+/// F6.2: `--limit nombre=valor` llega a lo emitido (Rust y C); un límite
+/// desconocido, repetido, sin `=` o no entero da 2, y unos que piden
+/// demasiada memoria dan 1 sin escribir nada.
+#[test]
+fn limit_cambia_los_limites_emitidos() {
+    let p = ruta("schemas/parse-ok/objeto-cerrado.json");
+    let base = |d: &Path, lang: &str| -> Vec<std::ffi::OsString> {
+        vec![
+            "compile".into(),
+            p.clone().into_os_string(),
+            "--lang".into(),
+            lang.into(),
+            "--out".into(),
+            d.as_os_str().to_owned(),
+        ]
+    };
+    let correr = |args: &[std::ffi::OsString]| {
+        let a: Vec<&OsStr> = args.iter().map(|x| x.as_os_str()).collect();
+        schemac(&a)
+    };
+    let d = salida("limit-rust");
+    let mut args = base(&d, "rust");
+    for l in ["maxDepth=8", "maxLexeme=20", "maxTimeMs=1500"] {
+        args.extend(["--limit".into(), l.into()]);
+    }
+    let (code, _, err) = correr(&args);
+    assert_eq!(code, 0, "{err}");
+    let v = leer(&d, "validador.rs");
+    assert!(v.contains("pub const SV_MAX_DEPTH: usize = 8;"), "{v}");
+    assert!(v.contains("max_lexeme: 20,"), "{v}");
+    assert!(leer(&d, "main.rs").contains("const TIEMPO_MS: Option<u64> = Some(1500);"));
+    let d = salida("limit-c");
+    let mut args = base(&d, "c");
+    args.extend(["--limit".into(), "maxString=99".into()]);
+    let (code, _, err) = correr(&args);
+    assert_eq!(code, 0, "{err}");
+    assert!(leer(&d, "validador.c").contains("lim->max_string = 99ULL;"));
+    assert!(leer(&d, "main.c").contains("#define TIEMPO_MS -1LL"));
+    for (malo, msg) in [
+        ("maxProfundidad=3", "desconocido"),
+        ("maxDepth", "falta"),
+        ("maxDepth=-1", "entero"),
+        ("maxDepth=x", "entero"),
+        ("maxDepth=+5", "entero"),
+        ("maxDepth=", "entero"),
+    ] {
+        let d = salida("limit-malo");
+        let mut args = base(&d, "rust");
+        args.extend(["--limit".into(), malo.into()]);
+        let (code, _, err) = correr(&args);
+        assert_eq!(code, 2, "{malo}: {err}");
+        assert!(err.contains(msg), "{malo}: {err}");
+        assert!(!d.exists(), "{malo}");
+    }
+    let d = salida("limit-repetido");
+    let mut args = base(&d, "rust");
+    args.extend([
+        "--limit".into(),
+        "maxDepth=3".into(),
+        "--limit".into(),
+        "maxDepth=4".into(),
+    ]);
+    let (code, _, err) = correr(&args);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("repetido"), "{err}");
+    let mut args = base(&d, "rust");
+    args.push("--limit".into());
+    assert_eq!(correr(&args).0, 2);
+    let d = salida("limit-grande");
+    let mut args = base(&d, "c");
+    args.extend(["--limit".into(), "keyPool=999999999".into()]);
+    let (code, _, err) = correr(&args);
+    assert_eq!(code, 1, "{err}");
+    assert!(err.contains("palabras de memoria"), "{err}");
+    assert!(!d.exists());
+}

@@ -10,6 +10,7 @@
     "valid": false,
     "violations": 1,
     "errorKind": "schema",
+    "pointer": "/persona/edad",
     "offset": 38
   }
 }

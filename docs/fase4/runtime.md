@@ -14,7 +14,7 @@ El ejecutor es el núcleo `no_std` de [`crates/runtime-rs`](../../crates/runtime
 | `finish() -> Report` | Fin de la entrada: cierra el número pendiente y da el reporte. |
 | `automaton::validate(a, payload, mode, chunk)` / `validate_with(a, payload, &opts, chunk)` | Envoltura `std` (F4-B24): reserva `state_words` palabras **antes** de validar (F4.1a-CR-S3, §13/§45 de [pendientes.md](pendientes.md)) y parte el payload en bloques de `chunk` bytes. |
 
-`Report`: `valid` (bien formado y peso 0), `violations` (el peso: `u64` saturado o ∞), `error_kind` (`lexical`, `syntax`, `schema`, `limit`, o `internal` si las tablas son incoherentes) y el **primer** error `ErrorAt { offset, line, column, rule }`. La regla da el `RuleKind`, el `NodeId` y la ubicación del esquema recortada a 256 bytes (`location_clipped`, guardada en las tablas: `Tables::location`). Si hay un error de peso ∞ es el primero, aunque antes hubiera violaciones. El puntero de la instancia es de F6.1; `sv_limits_t`, el tiempo máximo y el campo `limits` del corpus, de F6.2.
+`Report`: `valid` (bien formado y peso 0), `violations` (el peso: `u64` saturado o ∞), `error_kind` (`lexical`, `syntax`, `schema`, `limit`, o `internal` si las tablas son incoherentes) y el **primer** error `ErrorAt { offset, line, column, rule }`. La regla da el `RuleKind`, el `NodeId` y la ubicación del esquema recortada a 256 bytes (`location_clipped`, guardada en las tablas: `Tables::location`). Si hay un error de peso ∞ es el primero, aunque antes hubiera violaciones. Desde F6.1, `Report::pointer` es la instancia del primer error ([../fase6/puntero.md](../fase6/puntero.md)); los límites con nombre, `max_lexeme` y el tiempo de los binarios son de F6.2 ([../fase6/limites.md](../fase6/limites.md)).
 
 ## 2. Memoria y complejidad
 
@@ -63,7 +63,7 @@ Lo que M no ve por diseño lo comprueba el núcleo junto a δ, en la misma pasad
 
 **Fines de línea (XML 1.0 §2.11 y §3.3.3, [pendientes.md](pendientes.md) §35).** En el texto y en los valores de atributo, `\r\n` y `\r` llegan a M como un solo `\n`; en un valor, además, `\t` y `\n` llegan como espacio. Una referencia de carácter (`&#13;`, `&#9;`) no se normaliza: el núcleo la distingue porque el rango de su evento es más largo que el carácter que da. Así `length`, `enum` y `fixed` de `xs:string` ven el valor normalizado.
 
-**Colisiones.** Un choque de SipHash-1-3 entre dos nombres distintos del mismo objeto o etiqueta da un falso «repetido» (nunca acepta un payload mal formado). Con una clave que el atacante no conoce, la probabilidad es ≤ n²/2⁶⁵ con n ≤ 1 024 (< 2⁻⁴⁵). La clave por defecto es pública; quien valide payloads hostiles y no quiera que se puedan fabricar choques pone una propia en `Limits::hash_key` (F6.2 la expone).
+**Colisiones.** Un choque de SipHash-1-3 entre dos nombres distintos del mismo objeto o etiqueta da un falso «repetido» (nunca acepta un payload mal formado). Con una clave que el atacante no conoce, la probabilidad es ≤ n²/2⁶⁵ con n ≤ 1 024 (< 2⁻⁴⁵). La clave por defecto es pública; quien valide payloads hostiles y no quiera que se puedan fabricar choques pone una propia en `Limits::hash_key` (o `sv_limits_t.hash_key` en C); los binarios de `schemac compile` usan la de por defecto (`docs/fase6/pendientes.md` §31).
 
 **Lo que queda fuera.** Los espacios de nombres del payload se comparan por nombre local, sin resolver el URI ([pendientes.md](pendientes.md) §34, decisión de las dos personas); `xml:lang` y `xsi:*` cuentan como atributos no declarados.
 

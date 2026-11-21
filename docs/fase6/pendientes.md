@@ -663,7 +663,12 @@ remite a ellas.
   `crates/baseline/tests/xml.rs` (`entradas_no_utf8`).
 - **Tarea:** la próxima que toque `xml.rs` (F6.5 o F4.6).
 
-### 28. Fallo temprano frente a un error léxico posterior (F6.3-P1)
+### 28. Fallo temprano frente a un error léxico posterior (F6.3-P1) — RESUELTO (opción a, 21 nov)
+
+- **Resuelto:** opción a. El criterio 6 de `crates/automaton/tests/corpus.rs` admite ahora que, con un error de
+  peso ∞, el fallo temprano dé `schema` si su primera violación está antes de él (peso 1, offset ≤). Es también
+  una propiedad de los objetivos de fuzzing (`docs/fase6/fuzzing.md` §2). Los casos así ya pueden entrar al corpus;
+  el filtro de `bench::mutar::clasificar` puede quedarse o quitarse (decide Bayron).
 
 - **Estado:** las mutaciones de F6.3 encontraron un payload en el que los dos modos del DPDA dan
   clases distintas. Con `{"type": "string"}` y el payload `1.`:
@@ -683,3 +688,43 @@ remite a ellas.
   - opción b: no tocar nada y dejar el filtro de `clasificar` como está.
 - **Dónde:** `crates/automaton/tests/corpus.rs:225-235`, `crates/bench/src/mutar.rs` (`clasificar`).
 - **Tarea:** F5.x o E3 (pista A); sin bloqueo.
+
+### Abiertas por las tareas F6.1, F6.2 y F6.4 (puntero, límites y fuzzing; D77-D79)
+
+### 29. El servidor no muestra el puntero (F6.1-P1; para Bayron)
+
+- **Estado:** `runtime_rs::Report::pointer` y la línea de los binarios lo traen, pero `server/src/vistas.rs` (la
+  vista de comparación) y `server/src/casos.rs` (`POST /api/tests/run`) no lo copian, y la ejecución de casos no
+  compara `expected.pointer`.
+- **Arreglo propuesto:** añadir `"pointer": r.first.map(|_| r.pointer.as_str())` donde ya están `offset`, `line` y
+  `column`, y comparar `pointer` cuando el caso lo trae (7 casos hoy).
+- **Tarea:** F7.5 o una corrección de F7.2/F7.6 (pista B).
+
+### 30. Formato del campo `limits` del corpus (F6.2-P1; interfaz compartida, D42)
+
+- **Estado:** propuesta en `docs/fase6/limites.md` §3: un objeto con los nombres de `--limit` (`maxDepth`,
+  `maxString`, `maxLexeme`, `maxKeys`, `keyPool`, `maxUnique`, `maxXmlRefs`, `maxPayload`), solo los que cambian.
+  Ningún caso lo usa: `baseline::run_case` da `CaseLimits` y `POST /api/tests/run` los ignoraría.
+- **Arreglo propuesto:** con el visto bueno de Bayron, fijarlo en `tests/README.md`, leerlo en
+  `automaton/tests/corpus.rs` y en `server/src/casos.rs`, y añadir casos con límites.
+- **Tarea:** decisión de las dos personas; después, E1 o F7.5.
+
+### 31. Cambios en la API C y en los límites para el visto bueno (F6.1/F6.2; D42)
+
+- **Estado:** se suman a lo pendiente de D75 (`docs/fase5/pendientes.md` §10): `sv_report_t` gana `pointer[1024]`,
+  `pointer_len` y `pointer_truncated`; `sv_limits_t` gana `max_lexeme` (tras `max_string`); nuevas
+  `sv_limits_emitted`, `sv_abort_limit` (y `sv_validator_abort_limit` en el núcleo); en Rust,
+  `Limits::max_lexeme`, `Report::pointer`, `JsonValidator::abort_limit`/`XmlValidator::abort_limit`. La línea JSON
+  gana `pointer` y `pointerTruncated` (aditivo). Los binarios usan la clave de SipHash por defecto (pública).
+- **Arreglo propuesto:** dar el visto bueno junto con D75. Si se quiere que los binarios resistan choques
+  fabricados, que `main` tome una clave aleatoria al arrancar (en Rust, de `RandomState`; en C no hay una fuente
+  portable).
+- **Tarea:** visto bueno de Bayron; la clave aleatoria, E3 si se decide.
+
+### 32. El fuzzing no corre en `make test` (F6.4-P1)
+
+- **Estado:** `make fuzz` necesita nightly y cargo-fuzz y corre por tiempo; no es parte de `make test` (D1). El
+  corpus que encuentra no se versiona (`.gitignore`). La primera corrida fue de 100-120 s por objetivo.
+- **Arreglo propuesto:** correr `SEG=600 make fuzz` antes de la entrega y en E3, y versionar los fallos que
+  aparezcan como casos del corpus o pruebas.
+- **Tarea:** E3.

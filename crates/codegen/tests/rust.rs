@@ -133,7 +133,7 @@ fn banco_equivale_al_interprete() {
 /// código de salida. Corre en un hilo con pila explícita (D7): la memoria
 /// de `validar_por_bloques` va en la pila.
 const BANCO: &str = r#"
-use runtime_rs::{ErrorKind, Mode, Report, Weight};
+use runtime_rs::{ErrorKind, Mode, Pointer, Report, Weight};
 
 type Fila = (Report, fn(&Report, &mut String) -> core::fmt::Result, fn(&Report) -> u8);
 
@@ -149,6 +149,7 @@ fn correr() {
         violations: Weight::INFINITY,
         error_kind: Some(ErrorKind::Internal),
         first: None,
+        pointer: Pointer::ROOT,
     };
     println!("INTERNO {}", e0::validador::codigo_de_salida(&interno));
     let trabajos = std::fs::read_to_string("trabajos.txt").unwrap();

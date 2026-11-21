@@ -1,7 +1,7 @@
 # Tareas comunes del proyecto. En Windows sin `make`, usar scripts/lint.ps1.
 C_SOURCES := $(shell find crates/runtime-c -name '*.c' -o -name '*.h' 2>/dev/null)
 
-.PHONY: all build test test-baseline-xml test-sandbox fmt fmt-check clippy c-fmt-check unsafe-check lint coverage docs docs-check doradas clean
+.PHONY: all build test test-baseline-xml test-sandbox fuzz fmt fmt-check clippy c-fmt-check unsafe-check lint coverage docs docs-check doradas clean
 
 all: build
 
@@ -73,6 +73,13 @@ unsafe-check:
 		exit 1; \
 	fi; \
 	echo "unsafe-check: sin unsafe salvo la excepción registrada ($(UNSAFE_OK), docs/fase4/pendientes.md §8)"
+
+# F6.4 (docs/fase6/fuzzing.md): cargo-fuzz con nightly, SEG segundos por
+# objetivo, y lo encontrado por la prueba diferencial con el C. No es parte
+# de `test` (necesita nightly y no es determinista en tiempo).
+SEG ?= 60
+fuzz:
+	sh scripts/fuzz.sh $(SEG)
 
 # El frontend (web/) se añade a este objetivo en T7.7 (eslint + prettier).
 lint: fmt-check clippy c-fmt-check unsafe-check

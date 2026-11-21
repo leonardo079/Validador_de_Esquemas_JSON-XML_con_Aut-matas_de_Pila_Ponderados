@@ -191,6 +191,7 @@ typedef struct {
     int mode;
     size_t max_depth;
     uint64_t max_string;
+    size_t max_lexeme;
     size_t max_keys;
     size_t key_pool;
     size_t max_unique;
@@ -214,7 +215,12 @@ void sv_limits_default(sv_limits_t* lim);
 /* Peso ∞ (runtime_rs::Weight::INFINITY). */
 #define SV_INFINITY UINT64_MAX
 
-/* El resultado (runtime_rs::Report). */
+/* Bytes del puntero del primer error (runtime_rs::POINTER_MAX, F6.1). */
+#define SV_POINTER_MAX 1024
+
+/* El resultado (runtime_rs::Report). `pointer` es la instancia del primer error
+ * (runtime_rs::Pointer): JSON Pointer en JSON, ruta de elementos en XML;
+ * `pointer_truncated` si no cupo y es un antepasado. */
 typedef struct {
     bool valid;
     uint64_t violations;
@@ -224,6 +230,9 @@ typedef struct {
     uint32_t line, column;
     bool has_rule;
     uint32_t rule;
+    uint8_t pointer[SV_POINTER_MAX];
+    size_t pointer_len;
+    bool pointer_truncated;
 } sv_report_t;
 
 /* ------------------------------------------------------------ piezas internas --- */
@@ -298,6 +307,14 @@ typedef struct {
     uint32_t first_rule;
     int fault;
     bool stopped;
+    /* F6.1: ruta de la instancia abierta (core.rs `path`…`pointer`). */
+    uint8_t path[SV_POINTER_MAX];
+    size_t plen, pend;
+    uint32_t pextra, pnest;
+    bool pending, pend_ok, phide, popen;
+    uint8_t ptr[SV_POINTER_MAX];
+    size_t ptr_len;
+    bool ptr_truncated;
 } sv_core_t;
 
 typedef struct {
@@ -340,6 +357,9 @@ void sv_validator_init(sv_validator_t* v, const sv_tables_t* t, bool xml, const 
                        uint64_t* mem, size_t len);
 /* feed: 0 = sigue, -1 = se detuvo (error de peso ∞ o fallo temprano). */
 int sv_validator_feed(sv_validator_t* v, const uint8_t* chunk, size_t len);
+/* abort_limit (F6.2): error `limit` en la posición actual, si no se había
+ * detenido (el tiempo máximo que vigila el llamador). */
+void sv_validator_abort_limit(sv_validator_t* v);
 /* finish: el reporte. */
 void sv_validator_finish(sv_validator_t* v, sv_report_t* out);
 

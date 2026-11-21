@@ -32,7 +32,8 @@ use comun::*;
 
 /// El reporte en una línea, igual en las tres implementaciones: válido,
 /// peso (`inf` si ∞), clase (0 ninguna, 1 léxico, 2 sintaxis, 3 esquema, 4
-/// límite, 5 interno) y el primer error (`-` si no hay).
+/// límite, 5 interno) y el primer error (`-` si no hay) con su puntero
+/// en hexadecimal y si está recortado (F6.1).
 fn norma(r: &Report) -> String {
     let kind = match r.error_kind {
         None => 0,
@@ -49,11 +50,17 @@ fn norma(r: &Report) -> String {
     let first = match r.first {
         None => "-".to_owned(),
         Some(f) => format!(
-            "{} {} {} {}",
+            "{} {} {} {} x{} {}",
             f.offset,
             f.line,
             f.column,
-            f.rule.map_or("-".to_owned(), |k| k.to_string())
+            f.rule.map_or("-".to_owned(), |k| k.to_string()),
+            r.pointer
+                .as_bytes()
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>(),
+            u8::from(r.pointer.truncated())
         ),
     };
     format!("{} {peso} {kind} {first}", u8::from(r.valid))
@@ -238,11 +245,13 @@ fn norma(r: &Report) -> String {
     let first = match r.first {
         None => "-".to_owned(),
         Some(f) => format!(
-            "{} {} {} {}",
+            "{} {} {} {} x{} {}",
             f.offset,
             f.line,
             f.column,
-            f.rule.map_or("-".to_owned(), |k| k.to_string())
+            f.rule.map_or("-".to_owned(), |k| k.to_string()),
+            r.pointer.as_bytes().iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            u8::from(r.pointer.truncated())
         ),
     };
     format!("{} {peso} {kind} {first}", u8::from(r.valid))
@@ -415,10 +424,17 @@ int main(void) {
                 printf(" %d ", r.error_kind);
                 if (!r.has_first) {
                     printf("-\n");
-                } else if (r.has_rule) {
-                    printf("%llu %u %u %u\n", (unsigned long long)r.offset, r.line, r.column, r.rule);
                 } else {
-                    printf("%llu %u %u -\n", (unsigned long long)r.offset, r.line, r.column);
+                    if (r.has_rule) {
+                        printf("%llu %u %u %u x", (unsigned long long)r.offset, r.line, r.column,
+                               r.rule);
+                    } else {
+                        printf("%llu %u %u - x", (unsigned long long)r.offset, r.line, r.column);
+                    }
+                    for (size_t q = 0; q < r.pointer_len; q++) {
+                        printf("%02x", r.pointer[q]);
+                    }
+                    printf(" %d\n", r.pointer_truncated ? 1 : 0);
                 }
             }
         }
@@ -641,10 +657,32 @@ fn payloads_json() -> Vec<Vec<u8>> {
         r#"{"e": "~"~~/~u0008~f~r"}"#,
         r#"{"e": "~"~~/~b~f~n"}"#,
         "\u{feff}{\"ab\": 1}",
+        // F6.1: punteros con `~` y `/` en la clave, índices de dos cifras y
+        // errores en miembros.
+        r#"{"z": {"a/b~u007ec": [0,0,0,0,0,0,0,0,0,0,1,]}}"#,
+        r#"{"z": [[], {"": [0, {"k": tru}]}]}"#,
+        r#"{"ab": "x", "e": 1}"#,
+        r#"{"c": 1, "e": "~u00e9", "ab": [1]}"#,
     ]
     .iter()
     .map(|s| s.replace('~', "\\").into_bytes())
     .collect();
+    // F6.1: un puntero de más de 1 024 bytes (recortado) y, tras salir de
+    // él, uno exacto.
+    let k = "x".repeat(300);
+    v.push(
+        format!(r#"{{"z": {{"{k}": {{"{k}": {{"{k}": {{"{k}": [1, tru]}}}}}}}}}}"#).into_bytes(),
+    );
+    v.push(
+        format!(r#"{{"z": {{"{k}": {{"{k}": {{"{k}": {{"{k}": [1]}}}}}}}}, "ab": "x"}}"#)
+            .into_bytes(),
+    );
+    // El índice que deja de caber al crecer (`/z/q…` llega a 1 022 bytes:
+    // cabe `/9`, no `/10`) y un error en la coma con segmentos recortados.
+    let q = "q".repeat(1019);
+    v.push(format!(r#"{{"z": {{"{q}": [0,0,0,0,0,0,0,0,0,0,tru]}}}}"#).into_bytes());
+    let q = "q".repeat(1020);
+    v.push(format!(r#"{{"z": {{"{q}": [0,,1]}}}}"#).into_bytes());
     v.push(claves(1024).into_bytes());
     v.push(claves(1025).into_bytes());
     for d in [256, 257] {
@@ -688,6 +726,39 @@ fn payloads_xml() -> Vec<Vec<u8>> {
     .collect();
     for n in [100_000, 100_001] {
         v.push(format!("<r b=\"{}\"/>", "&amp;".repeat(n)).into_bytes());
+    }
+    v
+}
+
+/// Los payloads del directorio de la variable `var` (F6.4; relativo a la
+/// raíz del repositorio o absoluto): como mucho 1 000 archivos de hasta
+/// 64 KiB, en orden de nombre.
+fn extra(var: &str) -> Vec<Vec<u8>> {
+    let Some(dir) = std::env::var_os(var) else {
+        return Vec::new();
+    };
+    // Relativo a la raíz del repositorio (`cargo test` corre en el crate).
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(dir);
+    let mut rutas: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("{var}: {e}"))
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.is_file())
+        .collect();
+    rutas.sort();
+    let v: Vec<Vec<u8>> = rutas
+        .iter()
+        .map(|p| std::fs::read(p).unwrap_or_else(|e| panic!("{}: {e}", p.display())))
+        .filter(|b| b.len() <= 64 << 10)
+        .take(1000)
+        .collect();
+    if v.len() < rutas.len() {
+        eprintln!(
+            "{var}: se usan {} de {} archivos (≤ 64 KiB, como mucho 1 000)",
+            v.len(),
+            rutas.len()
+        );
     }
     v
 }
@@ -744,6 +815,19 @@ fn interprete_c_y_rust_iguales() {
             }
             for m in mutantes(p, 0xbf00 + ((k as u64) << 16) + j as u64) {
                 entradas.push((k, m));
+            }
+        }
+    }
+    // F6.4: lo que encontró el fuzzer (`scripts/fuzz.sh`), con cada esquema
+    // del corpus de su formato. Sin las variables, nada.
+    for (var, xml) in [("SV_EXTRA_JSON", false), ("SV_EXTRA_XML", true)] {
+        let extra = extra(var);
+        if !extra.is_empty() {
+            eprintln!("{var}: {} payloads", extra.len());
+        }
+        for p in &extra {
+            for (k, _) in grupos.iter().enumerate().filter(|(_, g)| g.xml == xml) {
+                entradas.push((k, p.clone()));
             }
         }
     }

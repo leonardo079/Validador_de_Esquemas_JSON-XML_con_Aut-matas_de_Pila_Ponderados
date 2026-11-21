@@ -3,7 +3,8 @@
 //! rechaza con ∞ los malformados en su offset; todo caso cuyo esquema
 //! compila (JSON y XML) da el `valid`, `errorKind`, `violations` y `offset` de
 //! `expected`, con el mismo reporte en bloques de 1, 7 y 4096 bytes y el
-//! mismo veredicto en fallo temprano; en JSON, el veredicto coincide con la
+//! mismo veredicto en fallo temprano (o, ante un error de peso ∞, una
+//! violación anterior: F6.3-P1); en JSON, el veredicto coincide con la
 //! línea base de F6.7a (D48); y los `non-dpda` que aún no compilan dan
 //! `Pending` con la tarea de F4.4/F4.5.
 
@@ -228,10 +229,25 @@ fn todo_el_corpus_da_lo_esperado() {
         if let Some(off) = c.expected.offset {
             assert_eq!(r.first.map(|f| f.offset), Some(off), "{}", c.id);
         }
+        // F6.1: el puntero del primer error.
+        if let Some(p) = &c.expected.pointer {
+            assert_eq!(r.pointer.as_str(), p, "{}", c.id);
+            assert!(!r.pointer.truncated(), "{}", c.id);
+        }
         let e = validate(&a, payload, Mode::EarlyFail, 7);
         assert_eq!(e.valid, r.valid, "{}: fallo temprano {e:?}", c.id);
-        assert_eq!(e.error_kind, r.error_kind, "{}", c.id);
-        if r.error_kind == Some(ErrorKind::Schema) {
+        if e.error_kind != r.error_kind {
+            // F6.3-P1 (opción a, `docs/fase6/pendientes.md` §28): con un error
+            // de peso ∞, el fallo temprano se detiene antes si hay una
+            // violación delante de él.
+            assert_eq!(e.error_kind, Some(ErrorKind::Schema), "{}", c.id);
+            assert_eq!(e.violations, Weight::ONE, "{}", c.id);
+            assert!(
+                e.first.unwrap().offset <= r.first.unwrap().offset,
+                "{}",
+                c.id
+            );
+        } else if r.error_kind == Some(ErrorKind::Schema) {
             assert_eq!(e.violations, Weight::ONE, "{}", c.id);
             assert_eq!(e.first, r.first, "{}", c.id);
         } else {
@@ -281,6 +297,21 @@ fn json_coincide_con_la_linea_base() {
         assert_eq!(o.kind, esperado, "{}: {r:?} / {o:?}", c.id);
         if let Some(v) = r.violations.get() {
             assert_eq!(v, o.violation_count() as u64, "{}", c.id);
+        }
+        // F6.1: el puntero del primer error es el de una de las violaciones
+        // de la línea base (`instance_path` de `jsonschema`) o un
+        // descendiente suyo: `jsonschema` atribuye `additionalProperties:
+        // false` al objeto, y M lo detecta en el valor del miembro
+        // (`docs/fase6/puntero.md` §3).
+        if r.error_kind == Some(ErrorKind::Schema) {
+            let p = r.pointer.as_str();
+            let bajo = |q: &str| p == q || p.strip_prefix(q).is_some_and(|r| r.starts_with('/'));
+            assert!(
+                o.violations.iter().any(|v| bajo(&v.pointer)),
+                "{}: {p:?} no está en {:?}",
+                c.id,
+                o.violations.iter().map(|v| &v.pointer).collect::<Vec<_>>()
+            );
         }
         n += 1;
     }

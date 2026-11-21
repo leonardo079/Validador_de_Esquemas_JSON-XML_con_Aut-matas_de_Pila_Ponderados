@@ -148,6 +148,58 @@ fn lexema() {
     assert!(defecto(&json("true"), "1".repeat(5000).as_bytes()).valid);
 }
 
+/// F6.2: `max_lexeme` configurable, por debajo de [`runtime_rs::LEXEME_MAX`]
+/// (que es el tope: un valor mayor cuenta como 1 024), también en XML y en
+/// el hash de `uniqueItems`.
+#[test]
+fn lexema_configurable() {
+    let a = json(r#"{"items": {"maximum": 10}}"#);
+    let l = |n| Limits {
+        max_lexeme: n,
+        ..Limits::DEFAULT
+    };
+    assert_eq!(con(&a, b"[12345, 1]", l(5)).violations.get(), Some(1));
+    limite_en(&con(&a, b"[1, 123456]", l(5)), 4);
+    assert_eq!(Limits::DEFAULT.max_lexeme, runtime_rs::LEXEME_MAX);
+    // Mayor que LEXEME_MAX: el tope sigue siendo 1 024.
+    let n = format!("[{}]", "1".repeat(1025));
+    limite_en(&con(&a, n.as_bytes(), l(1 << 20)), 1);
+    // Sin comprobación numérica, el lexema no se mira.
+    assert!(con(&json("true"), b"123456", l(5)).valid);
+    // `uniqueItems` hace el hash del valor numérico.
+    let u = json(r#"{"uniqueItems": true}"#);
+    assert!(con(&u, b"[1, 22]", l(2)).valid);
+    limite_en(&con(&u, b"[1, 333]", l(2)), 4);
+    // XML: el texto de un tipo numérico.
+    let x = xml(
+        "<xs:element name='n'><xs:simpleType><xs:restriction base='xs:decimal'>\
+         <xs:maxInclusive value='100'/></xs:restriction></xs:simpleType></xs:element>",
+    );
+    assert!(con(&x, b"<n>1.25</n>", l(4)).valid);
+    limite_en(&con(&x, b"<n>1.255</n>", l(4)), 8);
+}
+
+/// F6.2: `abort_limit` (el tiempo que vigila quien alimenta al núcleo) da
+/// `limit` donde se quedó la entrada, y no cambia un reporte ya detenido.
+#[test]
+fn abort_limit_en_la_posicion_actual() {
+    let a = json(r#"{"maximum": 10}"#);
+    let t = a.tables();
+    let o = Options::default();
+    let mut mem = vec![0u64; a.state_words(&o.limits)];
+    let mut v = runtime_rs::JsonValidator::new(t, &o, &mut mem);
+    assert_eq!(v.feed(b"[1, 2"), runtime_rs::Flow::Continue);
+    v.abort_limit();
+    assert_eq!(v.feed(b"]"), runtime_rs::Flow::Stop);
+    limite_en(&v.finish(), 5);
+    let mut mem = vec![0u64; a.state_words(&o.limits)];
+    let mut v = runtime_rs::JsonValidator::new(t, &o, &mut mem);
+    let _ = v.feed(b"[1, }");
+    v.abort_limit();
+    let r = v.finish();
+    assert_eq!(r.error_kind, Some(ErrorKind::Syntax), "{r:?}");
+}
+
 /// Claves no declaradas: `max_keys` por objeto y `key_pool` entre todos los
 /// abiertos; la que no cabe da `limit` en su comilla de cierre. Las
 /// declaradas (con bit) no cuentan.

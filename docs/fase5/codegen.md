@@ -71,7 +71,7 @@ anfitrión. Mismo esquema, mismos bytes, también reconstruyendo M.
 Una línea JSON en stdout, terminada en `\n`, con los campos del DPDA de `POST /api/compare` (D70) más `keyword`:
 
 ```json
-{"valid":false,"violations":1,"errorKind":"schema","offset":64,"line":1,"column":65,"rule":"#/properties/users/items","keyword":"required"}
+{"valid":false,"violations":1,"errorKind":"schema","offset":64,"line":1,"column":65,"pointer":"/users/1","pointerTruncated":false,"rule":"#/properties/users/items","keyword":"required"}
 ```
 
 | Campo | Valor |
@@ -80,6 +80,7 @@ Una línea JSON en stdout, terminada en `\n`, con los campos del DPDA de `POST /
 | `violations` | peso del recorrido en conformidad total; `null` si es ∞ (malformado o límite) |
 | `errorKind` | `lexical`, `syntax`, `schema`, `limit`, `internal` o `null` |
 | `offset`, `line`, `column` | dónde se detectó el primer error (como `Report::first`), o `null` |
+| `pointer`, `pointerTruncated` | la instancia del primer error (JSON Pointer, o ruta de elementos en XML) y si se recortó a 1 024 bytes; `null` y `false` sin error (F6.1, `docs/fase6/puntero.md`) |
 | `rule` | ubicación recortada de la regla en el esquema (`#/…`, ≤ 256 bytes), o `null` en un error de peso ∞ |
 | `keyword` | palabra clave de la regla (`required`, `maximum`, …), o `null` |
 
@@ -137,8 +138,9 @@ resultado con cualquier partición en bloques (`docs/fase4/runtime.md`).
 
 ## 5. Límites
 
-- **Límites fijos.** Son los de `Limits::DEFAULT` (`docs/00-alcance.md` §4), incluidos en `STATE_WORDS` y
-  `SV_MAX_DEPTH`. Hacerlos configurables (`sv_limits_t`) es F6.2; el binario no lee opciones.
+- **Límites.** Por defecto son los de `Limits::DEFAULT` (`docs/00-alcance.md` §4), incluidos en `STATE_WORDS` y
+  `SV_MAX_DEPTH`. Desde F6.2 se cambian al emitir con `schemac compile --limit nombre=valor`, también el tiempo
+  máximo (`docs/fase6/limites.md`); el binario no lee opciones.
 - **Solo conformidad total en `main`.** El fallo temprano está en la fachada (`Mode::EarlyFail`), pero `main` no lo
   expone.
 - **Memoria.** `STATE_WORDS` crece con el marco más grande × 256. Con el tope del sandbox (512 MiB) sobra para
@@ -147,7 +149,7 @@ resultado con cualquier partición en bloques (`docs/fase4/runtime.md`).
   `validar_en` o `Validador::new`.
 - **Tamaño de la copia.** Se copian enteros los dos crates (unos 6 000 líneas) aunque el binario use una parte.
   Compilar con `-O` tarda alrededor de 1 s; el binario sin `strip` ocupa unos 4,6 MB.
-- **El puntero JSON del error** (`expected.pointer`) no está en el reporte: es F6.1.
+- **El puntero del error** (`pointer`, `pointerTruncated`) está en la línea desde F6.1 (`docs/fase6/puntero.md`).
 
 ## 6. Cómo lo usará el sandbox (F7.5)
 

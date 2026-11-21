@@ -1,0 +1,55 @@
+# Fuzzing con cargo-fuzz (F6.4, `docs/fase6/fuzzing.md`). Fuera del
+# workspace (tiene el suyo): libFuzzer necesita nightly y `make test` no lo
+# compila. Correr con `scripts/fuzz.sh` (o `make fuzz`).
+[package]
+name = "validador-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4.13"
+automaton = { path = "../crates/automaton" }
+baseline = { path = "../crates/baseline" }
+ir = { path = "../crates/ir" }
+runtime-rs = { path = "../crates/runtime-rs" }
+schema-parser = { path = "../crates/schema-parser" }
+semantic = { path = "../crates/semantic" }
+xsd = { path = "../crates/xsd" }
+
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "validar_json"
+path = "fuzz_targets/validar_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "validar_xml"
+path = "fuzz_targets/validar_xml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "esquema_json"
+path = "fuzz_targets/esquema_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "esquema_xsd"
+path = "fuzz_targets/esquema_xsd.rs"
+test = false
+doc = false
+bench = false

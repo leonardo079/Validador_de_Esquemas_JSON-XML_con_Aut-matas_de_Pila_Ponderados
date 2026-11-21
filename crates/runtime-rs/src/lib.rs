@@ -19,7 +19,8 @@ mod weight;
 mod xml;
 
 pub use crate::core::{
-    Core, ErrorAt, ErrorKind, Mode, Options, Report, Stop, FRAME_OVERHEAD, LEXEME_MAX,
+    Core, ErrorAt, ErrorKind, Mode, Options, Pointer, Report, Stop, FRAME_OVERHEAD, LEXEME_MAX,
+    POINTER_MAX,
 };
 pub use json::{Flow, JsonValidator};
 pub use limits::Limits;

@@ -629,6 +629,7 @@ void sv_limits_default(sv_limits_t* lim) {
     lim->mode = SV_MODE_TOTAL;
     lim->max_depth = 256;
     lim->max_string = (uint64_t)1 << 20;
+    lim->max_lexeme = 1024;
     lim->max_keys = 1024;
     lim->key_pool = 4096;
     lim->max_unique = 4096;
@@ -691,6 +692,117 @@ enum {
     XE_PI_CLOSE
 };
 
+/* ------------------------------------------- puntero del primer error (F6.1) --- */
+
+/* Dónde empieza el último segmento de path[..len] (core.rs `last_slash`). */
+static size_t last_slash(const uint8_t* path, size_t len) {
+    while (len > 0) {
+        len--;
+        if (path[len] == '/') {
+            return len;
+        }
+    }
+    return 0;
+}
+
+static void seg_begin(sv_core_t* s) {
+    s->pending = true;
+    s->pend_ok = s->pextra == 0 && s->plen < SV_POINTER_MAX;
+    s->pend = s->plen;
+    if (s->pend_ok) {
+        s->path[s->plen] = '/';
+        s->pend = s->plen + 1;
+    }
+}
+
+static void seg_byte(sv_core_t* s, uint8_t b) {
+    if (!(s->pending && s->pend_ok)) {
+        return;
+    }
+    if (s->pend < SV_POINTER_MAX) {
+        s->path[s->pend] = b;
+        s->pend++;
+    } else {
+        s->pend_ok = false;
+    }
+}
+
+static void seg_char(sv_core_t* s, uint32_t c, bool escape) {
+    if (escape && c == '~') {
+        seg_byte(s, '~');
+        seg_byte(s, '0');
+    } else if (escape && c == '/') {
+        seg_byte(s, '~');
+        seg_byte(s, '1');
+    } else {
+        uint8_t buf[4];
+        size_t n = encode_utf8(c, buf);
+        for (size_t i = 0; i < n; i++) {
+            seg_byte(s, buf[i]);
+        }
+    }
+}
+
+static void seg_commit(sv_core_t* s) {
+    if (!s->pending) {
+        return;
+    }
+    s->pending = false;
+    if (s->pend_ok) {
+        s->plen = s->pend;
+    } else {
+        s->pextra = sat_add32(s->pextra, 1);
+    }
+}
+
+static void seg_pop(sv_core_t* s) {
+    if (s->pextra > 0) {
+        s->pextra--;
+    } else {
+        s->plen = last_slash(s->path, s->plen);
+    }
+}
+
+static void seg_next(sv_core_t* s) {
+    if (s->pextra > 0) {
+        return;
+    }
+    size_t st = last_slash(s->path, s->plen) + 1;
+    size_t i = s->plen;
+    while (i > st) {
+        i--;
+        if (s->path[i] == '9') {
+            s->path[i] = '0';
+        } else {
+            s->path[i]++;
+            return;
+        }
+    }
+    if (s->plen < SV_POINTER_MAX && st <= s->plen) {
+        s->path[st] = '1';
+        memset(s->path + st + 1, '0', s->plen - st);
+        s->plen++;
+    } else {
+        s->plen = st > 0 ? st - 1 : 0;
+        s->pextra = 1;
+    }
+}
+
+static void snapshot(sv_core_t* s) {
+    size_t len = s->plen;
+    uint32_t extra = s->pextra;
+    if (s->phide) {
+        if (extra > 0) {
+            extra--;
+        } else {
+            len = last_slash(s->path, len);
+        }
+    }
+    memcpy(s->ptr, s->path, len);
+    s->ptr_len = len;
+    s->ptr_truncated = extra > 0;
+}
+
 static void core_stop(sv_core_t* s, int kind, sv_pos_t at) {
     s->weight = SV_INFINITY;
     s->fault = kind;
@@ -700,6 +812,7 @@ static void core_stop(sv_core_t* s, int kind, sv_pos_t at) {
     s->first_column = at.column;
     s->first_has_rule = false;
     s->first_rule = 0;
+    snapshot(s);
     s->stopped = true;
 }
 
@@ -731,6 +844,9 @@ static void core_init(sv_core_t* s, const sv_tables_t* t, const sv_limits_t* lim
     s->fault = SV_KIND_NONE;
     if (s->limits.key_pool > UINT32_MAX) {
         s->limits.key_pool = UINT32_MAX;
+    }
+    if (s->limits.max_lexeme > SV_LEXEME_MAX) {
+        s->limits.max_lexeme = SV_LEXEME_MAX;
     }
     if (t->n_classes <= SV_CLASS_CHAR) {
         core_stop(s, SV_KIND_INTERNAL, POS_START);
@@ -960,7 +1076,7 @@ static bool container_hash(const sv_core_t* s, uint64_t* out) {
 
 /* core.rs `number_hash`: false si el lexema no cupo o el exponente es enorme. */
 static bool number_hash(const sv_core_t* s, uint64_t* out) {
-    if (s->lex_len > SV_LEXEME_MAX) {
+    if (s->lex_len > s->limits.max_lexeme) {
         return false;
     }
     const uint8_t* lex = s->lex;
@@ -1170,6 +1286,7 @@ static int add_to(sv_core_t* s, int space, uint32_t target, uint64_t n, bool has
             s->first_column = at.column;
             s->first_has_rule = has_rule;
             s->first_rule = rule;
+            snapshot(s);
         }
         if (s->mode == SV_MODE_EARLY_FAIL) {
             s->stopped = true;
@@ -1277,7 +1394,7 @@ static int propagate(sv_core_t* s, int space, bool has_from, size_t from, uint32
 
 /* El lexema del número que se cierra; false = Limit (no cupo). */
 static bool lexeme(const sv_core_t* s, const uint8_t** p, size_t* n) {
-    if (s->lex_len > SV_LEXEME_MAX) {
+    if (s->lex_len > s->limits.max_lexeme) {
         return false;
     }
     *p = s->lex;
@@ -1634,6 +1751,16 @@ static int core_event(sv_core_t* s, int ev, uint32_t c, int part, uint8_t b, sv_
     if (ev != JE_STRING_CHAR) {
         s->run = 0;
     }
+    /* F6.1: el cierre y la coma son del contenedor, no de su miembro. */
+    bool in_array = !top_is_object(s);
+    if ((ev == JE_END_OBJECT || ev == JE_END_ARRAY) && s->popen) {
+        seg_pop(s);
+    } else if (ev == JE_COMMA && in_array) {
+        s->phide = true;
+    } else if (ev == JE_COMMA && s->popen) {
+        seg_pop(s);
+        s->popen = false;
+    }
     switch (ev) {
     case JE_BEGIN_OBJECT:
         s->next_wf = WF_OBJECT | (uint64_t)s->pool_top;
@@ -1668,6 +1795,7 @@ static int core_event(sv_core_t* s, int ev, uint32_t c, int part, uint8_t b, sv_
         s->chars = 0;
         s->in_key = s->key_next;
         if (s->in_key) {
+            seg_begin(s);
             sip_new(&s->hasher, s->limits.hash_key);
         } else if (s->hash_depth > 0) {
             sip_new(&s->vhash, s->limits.hash_key);
@@ -1682,6 +1810,7 @@ static int core_event(sv_core_t* s, int ev, uint32_t c, int part, uint8_t b, sv_
             return STOP;
         }
         if (s->in_key) {
+            seg_char(s, c, true);
             sip_char(&s->hasher, c);
         } else if (s->hash_depth > 0) {
             sip_char(&s->vhash, c);
@@ -1755,6 +1884,36 @@ static int core_event(sv_core_t* s, int ev, uint32_t c, int part, uint8_t b, sv_
     if (step(s, a, at) != 0) {
         return STOP;
     }
+    switch (ev) {
+    case JE_BEGIN_OBJECT:
+        s->pnest = sat_add32(s->pnest, 1);
+        s->popen = false;
+        break;
+    case JE_BEGIN_ARRAY:
+        s->pnest = sat_add32(s->pnest, 1);
+        seg_begin(s);
+        seg_byte(s, '0');
+        seg_commit(s);
+        s->popen = true;
+        break;
+    case JE_END_OBJECT:
+    case JE_END_ARRAY:
+        s->pnest = s->pnest > 0 ? s->pnest - 1 : 0;
+        s->popen = s->pnest > 0;
+        break;
+    case JE_COLON:
+        seg_commit(s);
+        s->popen = true;
+        break;
+    case JE_COMMA:
+        if (in_array) {
+            s->phide = false;
+            seg_next(s);
+        }
+        break;
+    default:
+        break;
+    }
     if (s->hash_depth > 0) {
         if (has_vh) {
             if (deliver(s, vh, at) != 0) {
@@ -1806,6 +1965,8 @@ static int end_name(sv_core_t* s, sv_pos_t at) {
 
 static int end_elem_name(sv_core_t* s, sv_pos_t at) {
     if (s->name == N_ELEM) {
+        /* F6.1: lo que se detecta desde aquí es del elemento. */
+        seg_commit(s);
         if (end_name(s, at) != 0) {
             return STOP;
         }
@@ -1881,6 +2042,7 @@ static int core_xml_event(sv_core_t* s, int ev, uint32_t c, sv_span_t span) {
     }
     switch (ev) {
     case XE_START_TAG_OPEN:
+        seg_begin(s);
         begin_name(s, N_ELEM);
         s->tag_region = s->pool_top;
         a = SV_XCLASS_START_TAG;
@@ -1950,6 +2112,9 @@ static int core_xml_event(sv_core_t* s, int ev, uint32_t c, sv_span_t span) {
         if (run_char(s, c, at) != 0) {
             return STOP;
         }
+        if (s->name == N_ELEM) {
+            seg_char(s, c, false);
+        }
         if (s->name == N_ELEM || s->name == N_END || s->name == N_ATTR) {
             sip_char(&s->hasher, c);
             s->last_colon = c == ':';
@@ -1985,14 +2150,20 @@ static int core_xml_event(sv_core_t* s, int ev, uint32_t c, sv_span_t span) {
         s->dup_at = at;
         break;
     case XE_ATTR_VALUE_BEGIN:
-    case XE_END_TAG_CLOSE:
     case XE_PI_CLOSE:
         s->name = N_NONE;
+        break;
+    case XE_END_TAG_CLOSE:
+        s->name = N_NONE;
+        seg_pop(s);
         break;
     case XE_START_TAG_CLOSE:
     case XE_EMPTY_TAG_CLOSE:
         s->pool_top = minz(s->pool_top, s->tag_region);
         s->name = N_NONE;
+        if (ev == XE_EMPTY_TAG_CLOSE) {
+            seg_pop(s);
+        }
         break;
     default:
         break;
@@ -2026,6 +2197,9 @@ static void core_finish(sv_core_t* s, sv_pos_t end, sv_report_t* r) {
     r->column = s->first_column;
     r->has_rule = s->first_has_rule;
     r->rule = s->first_rule;
+    r->pointer_len = s->has_first ? s->ptr_len : 0;
+    r->pointer_truncated = s->has_first && s->ptr_truncated;
+    memcpy(r->pointer, s->ptr, r->pointer_len);
 }
 
 /* ------------------------------------------------------------- lexer JSON --- */
@@ -2561,6 +2735,10 @@ int sv_validator_feed(sv_validator_t* v, const uint8_t* chunk, size_t len) {
         return -1;
     }
     return 0;
+}
+
+void sv_validator_abort_limit(sv_validator_t* v) {
+    core_limit(&v->core, v->xml ? v->xmll.pos : v->json.pos);
 }
 
 void sv_validator_finish(sv_validator_t* v, sv_report_t* out) {
