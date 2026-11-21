@@ -1,7 +1,7 @@
 //! `schemac compile <esquema> --lang <rust|c> --out <dir>` (F5.1, D74): escribe
-//! el validador Rust autocontenido (lo que compila y ejecuta lo prueban
-//! `crates/codegen/tests/rust.rs`); `--lang c` es F5.2; códigos 1 (esquema),
-//! 2 (argumentos, E/S) y la salida reproducible.
+//! el validador Rust (F5.1) o C (F5.2) autocontenido (lo que compila y
+//! ejecuta lo prueban `crates/codegen/tests/`); códigos 1 (esquema), 2
+//! (argumentos, E/S) y la salida reproducible.
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -92,9 +92,11 @@ fn xsd_escribe_el_validador() {
     assert!(leer(&d, "validador.rs").contains("XmlValidator as Nucleo"));
 }
 
+/// F5.2: `--lang c` escribe el validador C (lo que compila y ejecuta lo
+/// prueban `crates/codegen/tests/c.rs` y `diferencial.rs`).
 #[test]
-fn lang_c_aun_no() {
-    let p = ruta("schemas/parse-ok/objeto-cerrado.json");
+fn lang_c_escribe_el_validador() {
+    let p = ruta("schemas/xsd/parse-ok/pedido.xsd");
     let d = salida("c");
     let (code, out, err) = schemac(&[
         "compile".as_ref(),
@@ -104,10 +106,23 @@ fn lang_c_aun_no() {
         "--out".as_ref(),
         d.as_os_str(),
     ]);
-    assert_eq!(code, 2);
-    assert!(out.is_empty());
-    assert!(err.contains("F5.2"), "{err}");
-    assert!(!d.exists());
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("validador C en"), "{out}");
+    for f in [
+        "main.c",
+        "validador.h",
+        "validador.c",
+        "tablas.c",
+        "sv_lexico.h",
+        "sv_lexico.c",
+        "sv_nucleo.h",
+        "sv_nucleo.c",
+    ] {
+        assert!(d.join(f).is_file(), "{f}");
+    }
+    assert!(leer(&d, "validador.h").contains("#define SV_FORMATO \"xml\""));
+    assert!(leer(&d, "validador.h")
+        .contains("int sv_feed(sv_state_t* s, const uint8_t* chunk, size_t len);"));
 }
 
 #[test]

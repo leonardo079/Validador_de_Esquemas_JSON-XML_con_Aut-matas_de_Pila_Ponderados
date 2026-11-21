@@ -67,35 +67,35 @@ pub enum Event {
 
 // ---------------------------------------------------------------- clases ---
 
-const C_SPACE: usize = 0;
-const C_WS: usize = 1; // \t \n \r
-const C_LT: usize = 2;
-const C_GT: usize = 3;
-const C_SLASH: usize = 4;
-const C_QMARK: usize = 5;
-const C_BANG: usize = 6;
-const C_EQ: usize = 7;
-const C_DQ: usize = 8;
-const C_SQ: usize = 9;
-const C_AMP: usize = 10;
-const C_HASH: usize = 11;
-const C_SEMI: usize = 12;
-const C_DASH: usize = 13;
-const C_DOT: usize = 14;
-const C_RBRACK: usize = 15;
-const C_LBRACK: usize = 16;
-const C_DIGIT: usize = 17;
-const C_X: usize = 18; // x
-const C_HEXLETTER: usize = 19; // a–c e f B E F
-const C_UA: usize = 20; // A (CDATA y hexadecimal)
-const C_UC: usize = 21; // C
-const C_UD: usize = 22; // D (CDATA, hexadecimal y DOCTYPE)
-const C_UT: usize = 23; // T
-const C_LD: usize = 24; // d (hexadecimal; `<!d` delata un DOCTYPE en minúsculas)
-const C_NAMESTART: usize = 25; // resto de letras, _ :
-const C_CTRL: usize = 26; // 00–1F salvo \t \n \r
-const C_OTHER: usize = 27;
-const C_NONASCII: usize = 28;
+pub const C_SPACE: usize = 0;
+pub const C_WS: usize = 1; // \t \n \r
+pub const C_LT: usize = 2;
+pub const C_GT: usize = 3;
+pub const C_SLASH: usize = 4;
+pub const C_QMARK: usize = 5;
+pub const C_BANG: usize = 6;
+pub const C_EQ: usize = 7;
+pub const C_DQ: usize = 8;
+pub const C_SQ: usize = 9;
+pub const C_AMP: usize = 10;
+pub const C_HASH: usize = 11;
+pub const C_SEMI: usize = 12;
+pub const C_DASH: usize = 13;
+pub const C_DOT: usize = 14;
+pub const C_RBRACK: usize = 15;
+pub const C_LBRACK: usize = 16;
+pub const C_DIGIT: usize = 17;
+pub const C_X: usize = 18; // x
+pub const C_HEXLETTER: usize = 19; // a–c e f B E F
+pub const C_UA: usize = 20; // A (CDATA y hexadecimal)
+pub const C_UC: usize = 21; // C
+pub const C_UD: usize = 22; // D (CDATA, hexadecimal y DOCTYPE)
+pub const C_UT: usize = 23; // T
+pub const C_LD: usize = 24; // d (hexadecimal; `<!d` delata un DOCTYPE en minúsculas)
+pub const C_NAMESTART: usize = 25; // resto de letras, _ :
+pub const C_CTRL: usize = 26; // 00–1F salvo \t \n \r
+pub const C_OTHER: usize = 27;
+pub const C_NONASCII: usize = 28;
 
 pub const NUM_CLASSES: usize = 29;
 
@@ -218,48 +218,48 @@ const fn build_classes() -> [u8; 256] {
 
 // --------------------------------------------------------------- estados ---
 
-const S_CONTENT: usize = 0; // texto entre etiquetas
-const S_RB1: usize = 1; // texto tras `]`
-const S_RB2: usize = 2; // texto tras `]]` (`]]>` está prohibido en el texto)
-const S_LT: usize = 3; // `<`
-const S_STAG_NAME: usize = 4; // nombre de etiqueta de apertura
-const S_STAG_WS: usize = 5; // dentro de la etiqueta, tras un espacio
-const S_ATTR_NAME: usize = 6;
-const S_ATTR_EQ_WS: usize = 7; // tras el nombre del atributo, antes de `=`
-const S_ATTR_VAL_WS: usize = 8; // tras `=`, antes de la comilla
-const S_VAL_DQ: usize = 9; // valor entre comillas dobles
-const S_VAL_SQ: usize = 10; // valor entre comillas simples
-const S_ATTR_DONE: usize = 11; // tras la comilla de cierre
-const S_EMPTY: usize = 12; // `/` dentro de una etiqueta de apertura
-const S_ETAG: usize = 13; // `</`
-const S_ETAG_NAME: usize = 14;
-const S_ETAG_WS: usize = 15;
-const S_PI: usize = 16; // contenido de `<?nombre …`
-const S_PI_Q: usize = 17; // contenido seguido de `?`
-const S_BANG: usize = 18; // `<!`
-const S_BANG_DASH: usize = 19; // `<!-`
-const S_COMMENT: usize = 20; // `<!--…`
-const S_COM_D1: usize = 21; // `…-`
-const S_COM_D2: usize = 22; // `…--` (solo puede seguir `>`)
-const S_CD_LB: usize = 23; // `<![`
-const S_CD_C: usize = 24;
-const S_CD_D: usize = 25;
-const S_CD_A: usize = 26;
-const S_CD_T: usize = 27;
-const S_CD_A2: usize = 28; // `<![CDATA`
-const S_CDATA: usize = 29;
-const S_CD_RB1: usize = 30; // `]` pendiente
-const S_CD_RB2: usize = 31; // `]]` pendientes
-const S_REF: usize = 32; // `&`
-const S_REF_NAME: usize = 33;
-const S_REF_HASH: usize = 34; // `&#`
-const S_REF_DEC: usize = 35;
-const S_REF_X: usize = 36; // `&#x`
-const S_REF_HEX: usize = 37;
-const S_PI_START: usize = 38; // `<?`: se exige un nombre
-const S_PI_TARGET: usize = 39; // nombre de la instrucción
-const S_PI_TQ: usize = 40; // `<?nombre?`: solo puede seguir `>`
-const S_ERR: usize = 41;
+pub const S_CONTENT: usize = 0; // texto entre etiquetas
+pub const S_RB1: usize = 1; // texto tras `]`
+pub const S_RB2: usize = 2; // texto tras `]]` (`]]>` está prohibido en el texto)
+pub const S_LT: usize = 3; // `<`
+pub const S_STAG_NAME: usize = 4; // nombre de etiqueta de apertura
+pub const S_STAG_WS: usize = 5; // dentro de la etiqueta, tras un espacio
+pub const S_ATTR_NAME: usize = 6;
+pub const S_ATTR_EQ_WS: usize = 7; // tras el nombre del atributo, antes de `=`
+pub const S_ATTR_VAL_WS: usize = 8; // tras `=`, antes de la comilla
+pub const S_VAL_DQ: usize = 9; // valor entre comillas dobles
+pub const S_VAL_SQ: usize = 10; // valor entre comillas simples
+pub const S_ATTR_DONE: usize = 11; // tras la comilla de cierre
+pub const S_EMPTY: usize = 12; // `/` dentro de una etiqueta de apertura
+pub const S_ETAG: usize = 13; // `</`
+pub const S_ETAG_NAME: usize = 14;
+pub const S_ETAG_WS: usize = 15;
+pub const S_PI: usize = 16; // contenido de `<?nombre …`
+pub const S_PI_Q: usize = 17; // contenido seguido de `?`
+pub const S_BANG: usize = 18; // `<!`
+pub const S_BANG_DASH: usize = 19; // `<!-`
+pub const S_COMMENT: usize = 20; // `<!--…`
+pub const S_COM_D1: usize = 21; // `…-`
+pub const S_COM_D2: usize = 22; // `…--` (solo puede seguir `>`)
+pub const S_CD_LB: usize = 23; // `<![`
+pub const S_CD_C: usize = 24;
+pub const S_CD_D: usize = 25;
+pub const S_CD_A: usize = 26;
+pub const S_CD_T: usize = 27;
+pub const S_CD_A2: usize = 28; // `<![CDATA`
+pub const S_CDATA: usize = 29;
+pub const S_CD_RB1: usize = 30; // `]` pendiente
+pub const S_CD_RB2: usize = 31; // `]]` pendientes
+pub const S_REF: usize = 32; // `&`
+pub const S_REF_NAME: usize = 33;
+pub const S_REF_HASH: usize = 34; // `&#`
+pub const S_REF_DEC: usize = 35;
+pub const S_REF_X: usize = 36; // `&#x`
+pub const S_REF_HEX: usize = 37;
+pub const S_PI_START: usize = 38; // `<?`: se exige un nombre
+pub const S_PI_TARGET: usize = 39; // nombre de la instrucción
+pub const S_PI_TQ: usize = 40; // `<?nombre?`: solo puede seguir `>`
+pub const S_ERR: usize = 41;
 
 pub const NUM_STATES: usize = 42;
 
@@ -315,45 +315,45 @@ pub const fn is_accepting(s: usize) -> bool {
 
 // -------------------------------------------------------------- acciones ---
 
-const A_ERR: u8 = 0;
-const A_SKIP: u8 = 1;
+pub const A_ERR: u8 = 0;
+pub const A_SKIP: u8 = 1;
 /// Recuerda el inicio de la marca (`<`).
-const A_MARK: u8 = 2;
+pub const A_MARK: u8 = 2;
 /// Carácter ASCII o primer byte de una secuencia UTF-8; el evento depende
 /// del estado destino (texto, nombre, valor o nada en comentarios).
-const A_CHAR: u8 = 3;
-const A_STAG_OPEN: u8 = 4;
-const A_ETAG_OPEN: u8 = 5;
-const A_ATTR_BEGIN: u8 = 6;
-const A_VAL_BEGIN: u8 = 7;
-const A_VAL_END: u8 = 8;
-const A_STAG_CLOSE: u8 = 9;
-const A_EMPTY_CLOSE: u8 = 10;
-const A_ETAG_CLOSE: u8 = 11;
-const A_REF_START: u8 = 12;
-const A_REF_NAME: u8 = 13;
-const A_REF_NAME_END: u8 = 14;
-const A_REF_DEC: u8 = 15;
-const A_REF_HEX: u8 = 16;
-const A_REF_NUM_END: u8 = 17;
+pub const A_CHAR: u8 = 3;
+pub const A_STAG_OPEN: u8 = 4;
+pub const A_ETAG_OPEN: u8 = 5;
+pub const A_ATTR_BEGIN: u8 = 6;
+pub const A_VAL_BEGIN: u8 = 7;
+pub const A_VAL_END: u8 = 8;
+pub const A_STAG_CLOSE: u8 = 9;
+pub const A_EMPTY_CLOSE: u8 = 10;
+pub const A_ETAG_CLOSE: u8 = 11;
+pub const A_REF_START: u8 = 12;
+pub const A_REF_NAME: u8 = 13;
+pub const A_REF_NAME_END: u8 = 14;
+pub const A_REF_DEC: u8 = 15;
+pub const A_REF_HEX: u8 = 16;
+pub const A_REF_NUM_END: u8 = 17;
 /// En CDATA, `]]]`: el primer `]` pendiente era texto.
-const A_CD_RB: u8 = 18;
+pub const A_CD_RB: u8 = 18;
 /// En CDATA, `]x`: el `]` pendiente era texto; luego `x`.
-const A_CD_FLUSH1: u8 = 19;
+pub const A_CD_FLUSH1: u8 = 19;
 /// En CDATA, `]]x`: los dos `]` pendientes eran texto; luego `x`.
-const A_CD_FLUSH2: u8 = 20;
-const A_PI_OPEN: u8 = 21;
+pub const A_CD_FLUSH2: u8 = 20;
+pub const A_PI_OPEN: u8 = 21;
 /// En el contenido de una instrucción, `??`: el primer `?` era contenido.
-const A_PI_Q: u8 = 22;
+pub const A_PI_Q: u8 = 22;
 /// En el contenido, `?x`: el `?` retenido era contenido; luego `x`.
-const A_PI_FLUSH: u8 = 23;
-const A_PI_CLOSE: u8 = 24;
+pub const A_PI_FLUSH: u8 = 23;
+pub const A_PI_CLOSE: u8 = 24;
 
 const ERR: Tr = tr(S_ERR, A_ERR);
 
-type Table = [[Tr; NUM_CLASSES]; NUM_STATES];
+pub type Table = [[Tr; NUM_CLASSES]; NUM_STATES];
 
-static TABLE: Table = build_table();
+pub static TABLE: Table = build_table();
 
 const fn build_table() -> Table {
     let mut t = [[ERR; NUM_CLASSES]; NUM_STATES];

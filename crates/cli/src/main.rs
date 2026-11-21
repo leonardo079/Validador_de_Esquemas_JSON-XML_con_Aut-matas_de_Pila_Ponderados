@@ -26,8 +26,9 @@ comandos:
   compile <esquema> --lang <rust|c> --out <dir>
                          construye M y escribe en <dir> un validador autocontenido
                          (Fase 5): con rust, main.rs y sus módulos, que compilan
-                         con `rustc --edition 2021 -O main.rs` sin Cargo; c aún
-                         no está (F5.2)
+                         con `rustc --edition 2021 -O main.rs` sin Cargo; con c,
+                         main.c, validador.h/.c y el núcleo C, que compilan con
+                         `cc -std=c11 -O2 -Wall -Wextra -o validador *.c`
   dot <utf8|json|xml>    escribe el AFD indicado en formato DOT (Graphviz)
   version                muestra la versión
 
@@ -104,7 +105,7 @@ fn main() -> ExitCode {
             automata(Path::new(ruta), Salida::Json)
         }
         ([Some("compile"), ..], [_, resto @ ..]) => match opciones_compile(resto) {
-            Ok((ruta, out)) => compilar(Path::new(ruta), Path::new(out)),
+            Ok((ruta, lang, out)) => compilar(Path::new(ruta), lang, Path::new(out)),
             Err(m) => error(&m),
         },
         ([Some("version")], _) => ExitCode::from(imprimir(&format!(
@@ -511,8 +512,8 @@ fn construir(bytes: &[u8], salida: Salida) -> Result<String, Fallo> {
 /// Argumentos de `schemac compile`: `<esquema> --lang <rust|c> --out <dir>`,
 /// las opciones en cualquier orden. Da `(esquema, dir)` o el mensaje de
 /// error (código 2): opción desconocida, repetida o sin valor, falta el
-/// esquema, `--lang` o `--out`, o `--lang c` (F5.2).
-fn opciones_compile(args: &[OsString]) -> Result<(&OsString, &OsString), String> {
+/// esquema, `--lang` o `--out`, o un lenguaje que no es `rust` ni `c`.
+fn opciones_compile(args: &[OsString]) -> Result<(&OsString, Lenguaje, &OsString), String> {
     let (mut ruta, mut lang, mut out) = (None, None, None);
     let mut i = 0;
     while i < args.len() {
@@ -540,24 +541,31 @@ fn opciones_compile(args: &[OsString]) -> Result<(&OsString, &OsString), String>
     let ruta = ruta.ok_or("falta el esquema")?;
     let out = out.ok_or("falta --out <dir>")?;
     match lang.and_then(|l| l.to_str()) {
-        Some("rust") => Ok((ruta, out)),
-        Some("c") => Err("--lang c aún no está implementado (F5.2); usa --lang rust".into()),
+        Some("rust") => Ok((ruta, Lenguaje::Rust, out)),
+        Some("c") => Ok((ruta, Lenguaje::C, out)),
         Some(l) => Err(format!("lenguaje desconocido: {l} (rust o c)")),
         None if lang.is_some() => Err("lenguaje desconocido".into()),
         None => Err("falta --lang <rust|c>".into()),
     }
 }
 
-/// `schemac compile` (F5.1): 0 con los archivos del validador Rust escritos
+/// Lenguaje de `schemac compile --lang`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Lenguaje {
+    Rust,
+    C,
+}
+
+/// `schemac compile` (F5.1, F5.2): 0 con los archivos del validador escritos
 /// en `out` (se crea si no existe; los archivos con el mismo nombre se
 /// sobrescriben y los demás no se tocan) y una línea de resumen en stdout;
 /// 1 con los errores del esquema, una regla pendiente o un límite (los de
 /// `automaton`); 2 si no se pudo leer el esquema o escribir los archivos; 3
 /// si hay un error interno.
-fn compilar(path: &Path, out: &Path) -> ExitCode {
+fn compilar(path: &Path, lang: Lenguaje, out: &Path) -> ExitCode {
     let ruta = path.display().to_string();
     let err = &mut io::stderr();
-    let resultado = match en_hilo(path, "schemac-compile", err, emitir) {
+    let resultado = match en_hilo(path, "schemac-compile", err, move |b| emitir(b, lang)) {
         Ok(r) => r,
         Err(code) => return ExitCode::from(code),
     };
@@ -584,23 +592,30 @@ fn compilar(path: &Path, out: &Path) -> ExitCode {
         avisar(err, &format!("schemac: {}: {e}", out.display()));
         return ExitCode::from(2);
     }
+    let (nombre, orden) = match lang {
+        Lenguaje::Rust => ("Rust", "rustc --edition 2021 -O main.rs"),
+        Lenguaje::C => ("C", "cc -std=c11 -O2 -Wall -Wextra -o validador *.c"),
+    };
     ExitCode::from(imprimir(&format!(
-        "{}: validador Rust en {} ({} archivos; compilar con `rustc --edition 2021 -O main.rs`)\n",
+        "{}: validador {nombre} en {} ({} archivos; compilar con `{orden}`)\n",
         ruta,
         out.display(),
         archivos.len()
     )))
 }
 
-/// La bajada, la construcción de M y el emisor Rust (en el hilo de
+/// La bajada, la construcción de M y el emisor del lenguaje (en el hilo de
 /// [`en_hilo`]). Errores como en [`construir`].
-fn emitir(bytes: &[u8]) -> Result<Vec<codegen::Archivo>, Fallo> {
+fn emitir(bytes: &[u8], lang: Lenguaje) -> Result<Vec<codegen::Archivo>, Fallo> {
     let ir = bajar(bytes)?;
     let a = automaton::build(&ir).map_err(|e| match e {
         automaton::BuildError::Internal(_) => Fallo::Constructor(e.to_string()),
         _ => Fallo::Esquema(vec![e.to_string()]),
     })?;
-    Ok(codegen::rust::emit(&a))
+    Ok(match lang {
+        Lenguaje::Rust => codegen::rust::emit(&a),
+        Lenguaje::C => codegen::c::emit(&a),
+    })
 }
 
 fn escribir_archivos(dir: &Path, archivos: &[codegen::Archivo]) -> io::Result<()> {

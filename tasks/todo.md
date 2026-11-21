@@ -630,6 +630,22 @@ Criterios propuestos y aprobados por Leonardo el 20 nov (sin `/autodev`, a pedid
 
 **Verificación:** `cargo test -p codegen -p cli`, `make lint`, `make test`, `make docs-check`.
 
+## Tarea F5.2: emisor C11 con la API C-ABI — HECHA (21 nov, D75)
+
+Sin `/autodev` («termina la fase 5», decisiones delegadas por Leonardo). Detalle en `docs/fase5/codegen-c.md`.
+
+- [x] `codegen::c::emit` y `schemac compile --lang c`: `main.c`, `validador.h`/`.c` (`sv_init`/`sv_feed`/`sv_finish`, `sv_report_json`), `tablas.c`, `sv_lexico.h`/`.c` (volcados del crate `lexer`), núcleo `crates/runtime-c/sv_nucleo.{h,c}`.
+- [x] El `main.c` real de los 32 esquemas, con la orden del sandbox y sin avisos, da la línea JSON y el código del intérprete en todo el corpus. — `main_c_real_en_todo_el_corpus`
+- [x] gcc y clang con `-Werror -pedantic -Wshadow -Wconversion`. — `c_estricto_en_gcc_y_clang`
+- [x] Sin malloc en el camino de validación (`nm -u`: solo `mem*`/`strlen`). — `camino_de_validacion_sin_malloc`
+- [x] Reproducible y núcleo sincronizado con `crates/runtime-c` y las constantes de Rust. — `salida_c_reproducible`, `nucleo_c_sincronizado`
+- [ ] Visto bueno de Bayron a la API C-ABI y a que no se use cbindgen (D42; `docs/fase5/pendientes.md` §10).
+
+## Tarea F5.3: prueba diferencial intérprete / C / Rust — HECHA (21 nov, D76)
+
+- [x] Corpus, mutaciones, números sintéticos y bordes de buena formación; bloques de 1, 7 y 4 096 y los dos modos; reporte idéntico en las tres implementaciones, con ASan/UBSan en C. — `interprete_c_y_rust_iguales`
+- [x] Validada con mutaciones del núcleo C (`docs/fase5/codegen-c.md` §5).
+
 ## Punto de control PC-E (tras F4.6 + F5.1)
 
 - [x] Un esquema JSON y el pedido XSD pasan por esquema → M → validador Rust generado, y el corpus pasa. — **hecho (20 nov, F5.1)**: los 32 esquemas del corpus, con `valid-xml-pedido-01`, por `rustc --edition 2021 -O main.rs`; todo payload da `expected` (`crates/codegen/tests/rust.rs`)

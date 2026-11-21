@@ -14,6 +14,8 @@ automaton.workspace = true
 # Los tipos de `runtime_rs::tables`, para escribir sus literales con una
 # desestructuración exhaustiva (un campo nuevo rompe la compilación aquí).
 runtime-rs.workspace = true
+# Las tablas de los AFD de la Fase 1, que el emisor C vuelca (F5.2).
+lexer.workspace = true
 
 # Las pruebas bajan los esquemas del corpus (frontales, D13), lo leen con
 # `baseline::corpus` (D48) y comparan con `automaton::validate_with`.

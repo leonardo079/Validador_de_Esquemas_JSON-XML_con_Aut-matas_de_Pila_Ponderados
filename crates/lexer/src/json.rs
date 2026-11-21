@@ -57,37 +57,37 @@ pub enum NumPart {
 
 // ---------------------------------------------------------------- clases ---
 
-const C_SPACE: usize = 0;
-const C_WSCTRL: usize = 1; // \t \n \r: espacio fuera de cadenas, prohibidos dentro
-const C_LBRACE: usize = 2;
-const C_RBRACE: usize = 3;
-const C_LBRACK: usize = 4;
-const C_RBRACK: usize = 5;
-const C_COLON: usize = 6;
-const C_COMMA: usize = 7;
-const C_QUOTE: usize = 8;
-const C_BSLASH: usize = 9;
-const C_SLASH: usize = 10;
-const C_MINUS: usize = 11;
-const C_PLUS: usize = 12;
-const C_DOT: usize = 13;
-const C_ZERO: usize = 14;
-const C_DIGIT: usize = 15; // 1–9
-const C_A: usize = 16;
-const C_B: usize = 17;
-const C_E: usize = 18;
-const C_F: usize = 19;
-const C_L: usize = 20;
-const C_N: usize = 21;
-const C_R: usize = 22;
-const C_S: usize = 23;
-const C_T: usize = 24;
-const C_U: usize = 25;
-const C_UPPER_E: usize = 26;
-const C_HEX: usize = 27; // c d A B C D F: solo dígitos hexadecimales
-const C_CTRL: usize = 28; // 00–1F salvo \t \n \r
-const C_OTHER: usize = 29; // resto del ASCII imprimible
-const C_NONASCII: usize = 30; // 80–FF
+pub const C_SPACE: usize = 0;
+pub const C_WSCTRL: usize = 1; // \t \n \r: espacio fuera de cadenas, prohibidos dentro
+pub const C_LBRACE: usize = 2;
+pub const C_RBRACE: usize = 3;
+pub const C_LBRACK: usize = 4;
+pub const C_RBRACK: usize = 5;
+pub const C_COLON: usize = 6;
+pub const C_COMMA: usize = 7;
+pub const C_QUOTE: usize = 8;
+pub const C_BSLASH: usize = 9;
+pub const C_SLASH: usize = 10;
+pub const C_MINUS: usize = 11;
+pub const C_PLUS: usize = 12;
+pub const C_DOT: usize = 13;
+pub const C_ZERO: usize = 14;
+pub const C_DIGIT: usize = 15; // 1–9
+pub const C_A: usize = 16;
+pub const C_B: usize = 17;
+pub const C_E: usize = 18;
+pub const C_F: usize = 19;
+pub const C_L: usize = 20;
+pub const C_N: usize = 21;
+pub const C_R: usize = 22;
+pub const C_S: usize = 23;
+pub const C_T: usize = 24;
+pub const C_U: usize = 25;
+pub const C_UPPER_E: usize = 26;
+pub const C_HEX: usize = 27; // c d A B C D F: solo dígitos hexadecimales
+pub const C_CTRL: usize = 28; // 00–1F salvo \t \n \r
+pub const C_OTHER: usize = 29; // resto del ASCII imprimible
+pub const C_NONASCII: usize = 30; // 80–FF
 
 pub const NUM_CLASSES: usize = 31;
 
@@ -175,38 +175,38 @@ const fn build_classes() -> [u8; 256] {
 
 // --------------------------------------------------------------- estados ---
 
-const S_VALUE: usize = 0; // entre tokens
-const S_T1: usize = 1; // t
-const S_T2: usize = 2; // tr
-const S_T3: usize = 3; // tru
-const S_F1: usize = 4; // f
-const S_F2: usize = 5; // fa
-const S_F3: usize = 6; // fal
-const S_F4: usize = 7; // fals
-const S_N1: usize = 8; // n
-const S_N2: usize = 9; // nu
-const S_N3: usize = 10; // nul
-const S_MINUS: usize = 11; // -
-const S_ZERO: usize = 12; // -?0            (acepta)
-const S_INT: usize = 13; // -?[1-9][0-9]*   (acepta)
-const S_DOT: usize = 14; // int .
-const S_FRAC: usize = 15; // int . [0-9]+   (acepta)
-const S_EXP: usize = 16; // … e
-const S_EXP_SIGN: usize = 17; // … e±
-const S_EXP_DIG: usize = 18; // … e±?[0-9]+ (acepta)
-const S_STR: usize = 19; // dentro de una cadena
-const S_ESC: usize = 20; // tras '\'
-const S_U1: usize = 21; // \u
-const S_U2: usize = 22; // \uX
-const S_U3: usize = 23; // \uXX
-const S_U4: usize = 24; // \uXXX
-const S_LOW_BS: usize = 25; // tras sustituto alto: se exige '\'
-const S_LOW_U: usize = 26; // … '\' se exige 'u'
-const S_L1: usize = 27; // \u (sustituto bajo)
-const S_L2: usize = 28;
-const S_L3: usize = 29;
-const S_L4: usize = 30;
-const S_ERR: usize = 31;
+pub const S_VALUE: usize = 0; // entre tokens
+pub const S_T1: usize = 1; // t
+pub const S_T2: usize = 2; // tr
+pub const S_T3: usize = 3; // tru
+pub const S_F1: usize = 4; // f
+pub const S_F2: usize = 5; // fa
+pub const S_F3: usize = 6; // fal
+pub const S_F4: usize = 7; // fals
+pub const S_N1: usize = 8; // n
+pub const S_N2: usize = 9; // nu
+pub const S_N3: usize = 10; // nul
+pub const S_MINUS: usize = 11; // -
+pub const S_ZERO: usize = 12; // -?0            (acepta)
+pub const S_INT: usize = 13; // -?[1-9][0-9]*   (acepta)
+pub const S_DOT: usize = 14; // int .
+pub const S_FRAC: usize = 15; // int . [0-9]+   (acepta)
+pub const S_EXP: usize = 16; // … e
+pub const S_EXP_SIGN: usize = 17; // … e±
+pub const S_EXP_DIG: usize = 18; // … e±?[0-9]+ (acepta)
+pub const S_STR: usize = 19; // dentro de una cadena
+pub const S_ESC: usize = 20; // tras '\'
+pub const S_U1: usize = 21; // \u
+pub const S_U2: usize = 22; // \uX
+pub const S_U3: usize = 23; // \uXX
+pub const S_U4: usize = 24; // \uXXX
+pub const S_LOW_BS: usize = 25; // tras sustituto alto: se exige '\'
+pub const S_LOW_U: usize = 26; // … '\' se exige 'u'
+pub const S_L1: usize = 27; // \u (sustituto bajo)
+pub const S_L2: usize = 28;
+pub const S_L3: usize = 29;
+pub const S_L4: usize = 30;
+pub const S_ERR: usize = 31;
 
 pub const NUM_STATES: usize = 32;
 
@@ -252,31 +252,31 @@ pub const fn is_accepting(s: usize) -> bool {
 
 // -------------------------------------------------------------- acciones ---
 
-const A_ERR: u8 = 0;
-const A_SKIP: u8 = 1;
-const A_PUNCT: u8 = 2;
-const A_LIT_START: u8 = 3;
-const A_LIT_END: u8 = 4;
-const A_NUM_BEGIN: u8 = 5;
-const A_NUM_BYTE: u8 = 6;
+pub const A_ERR: u8 = 0;
+pub const A_SKIP: u8 = 1;
+pub const A_PUNCT: u8 = 2;
+pub const A_LIT_START: u8 = 3;
+pub const A_LIT_END: u8 = 4;
+pub const A_NUM_BEGIN: u8 = 5;
+pub const A_NUM_BYTE: u8 = 6;
 /// Fin de número: el byte actual no le pertenece y se reprocesa en `S_VALUE`.
-const A_NUM_END: u8 = 7;
-const A_STR_BEGIN: u8 = 8;
-const A_STR_CHAR: u8 = 9;
-const A_STR_END: u8 = 10;
-const A_ESC_START: u8 = 11;
-const A_ESC_CHAR: u8 = 12;
-const A_U_START: u8 = 13;
-const A_HEX: u8 = 14;
-const A_HEX_LAST: u8 = 15;
-const A_LOW_HEX_LAST: u8 = 16;
-const A_UTF8: u8 = 17;
+pub const A_NUM_END: u8 = 7;
+pub const A_STR_BEGIN: u8 = 8;
+pub const A_STR_CHAR: u8 = 9;
+pub const A_STR_END: u8 = 10;
+pub const A_ESC_START: u8 = 11;
+pub const A_ESC_CHAR: u8 = 12;
+pub const A_U_START: u8 = 13;
+pub const A_HEX: u8 = 14;
+pub const A_HEX_LAST: u8 = 15;
+pub const A_LOW_HEX_LAST: u8 = 16;
+pub const A_UTF8: u8 = 17;
 
 const ERR: Tr = tr(S_ERR, A_ERR);
 
-type Table = [[Tr; NUM_CLASSES]; NUM_STATES];
+pub type Table = [[Tr; NUM_CLASSES]; NUM_STATES];
 
-static TABLE: Table = build_table();
+pub static TABLE: Table = build_table();
 
 const fn build_table() -> Table {
     let mut t = [[ERR; NUM_CLASSES]; NUM_STATES];

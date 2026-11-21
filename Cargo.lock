@@ -496,6 +496,7 @@ dependencies = [
  "automaton",
  "baseline",
  "ir",
+ "lexer",
  "runtime-rs",
  "schema-parser",
  "semantic",

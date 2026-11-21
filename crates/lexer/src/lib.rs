@@ -27,6 +27,9 @@ pub mod utf8;
 pub mod xml;
 
 pub use short::{short, Short, SHORT_MAX};
+/// Entrada de las tablas de los AFD con salida (`json::TABLE`, `xml::TABLE`):
+/// las vuelca el emisor C (F5.2) para que el lexer C use las mismas.
+pub use table::Tr;
 
 /// Posición de un byte en la entrada.
 ///

@@ -2,8 +2,8 @@
 //! con salida (máquinas de Mealy) de los tokenizadores.
 
 /// Entrada de la tabla: estado siguiente y acción a ejecutar.
-#[derive(Clone, Copy)]
-pub(crate) struct Tr {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Tr {
     pub next: u8,
     pub action: u8,
 }

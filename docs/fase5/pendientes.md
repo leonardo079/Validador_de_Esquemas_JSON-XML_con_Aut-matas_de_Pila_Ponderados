@@ -88,3 +88,30 @@ y la tarea que debe cerrarla. Lo cerrado pasa a `historial.md` (todavía no hay)
   cual.
 - El mismo recorrido de las tablas (orden de `Tables`) y la desestructuración exhaustiva en el emisor.
 - La prueba diferencial F5.3 puede reutilizar `grupos()` y `json_esperado` de `crates/codegen/tests/rust.rs`.
+
+### Abiertas por las tareas F5.2 y F5.3 (emisor C y prueba diferencial, D75 y D76; `docs/fase5/codegen-c.md`)
+
+#### 9. Las pruebas de C necesitan un compilador y `nm` (F5.2-P1)
+
+- **Estado:** `crates/codegen/tests/c.rs` y `diferencial.rs` llaman a `cc` (o `CC`), `gcc`, `clang` y `nm`. En
+  Linux están todos; en Windows sin MSYS2 o WSL, `make test` fallaría en esas pruebas. Además, el ejecutable de
+  `rustc` se busca como `validador`, sin `.exe`.
+- **Arreglo propuesto:** si Bayron corre `make test` en Windows, saltar las pruebas de C con un aviso cuando no
+  hay `cc` (solo fuera de Unix) y usar `std::env::consts::EXE_SUFFIX`.
+- **Tarea:** E3, o antes si falla en la máquina de Bayron.
+
+#### 10. API C-ABI sin cbindgen, pendiente del visto bueno de Bayron (F5.2-P2; D42)
+
+- **Estado:** la cabecera `validador.h` la escribe el emisor. No hay C-ABI del validador Rust: exigiría `unsafe`.
+  `sv_limits_t` incluye el modo, y `sv_finish` devuelve el código de salida.
+- **Arreglo propuesto:** que Bayron dé el visto bueno a D75; si F7.5 llama al validador C desde el servidor, lo
+  hará por el binario en el sandbox, no por esta API.
+- **Tarea:** F7.5 (Bayron).
+
+#### 11. Revisión de seguridad del núcleo C (F5.2-P3; E3)
+
+- **Estado:** hecho sin `/autodev`. La prueba diferencial con ASan/UBSan no encontró ninguna lectura fuera de
+  rango en el corpus, las mutaciones ni los sintéticos, pero un fuzzing dirigido del núcleo C no se ha hecho.
+- **Arreglo propuesto:** en F6.4, un objetivo de fuzzing que compare el C con el intérprete (el banco de F5.3 ya
+  lee payloads de archivos). En E3, revisión de `sv_nucleo.c` con `security-auditor`.
+- **Tarea:** F6.4 y E3.

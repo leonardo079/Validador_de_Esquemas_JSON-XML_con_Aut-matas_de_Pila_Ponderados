@@ -19,187 +19,23 @@
 //! Ninguna prueba mide tiempo (D1).
 
 use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 
-use automaton::{build, validate_with, Automaton, ErrorKind, Mode, Options, Report};
-use baseline::corpus::{self, Case, ErrorKind as Esperado, Format, Payload};
+use automaton::{build, validate_with, Mode, Options};
 use codegen::fuentes::{self, COPIADOS};
-use codegen::rust::{emit, salida};
+use codegen::rust::emit;
 use codegen::Archivo;
-use ir::VerifiedIr;
-use serde_json::{json, Value};
+use serde_json::Value;
 
-const BLOQUES: [usize; 3] = [1, 7, 4096];
-
-/// Los esquemas distintos del corpus (por su texto exacto) con su M y sus
-/// casos con bytes, en el orden del corpus.
-struct Grupo {
-    texto: Vec<u8>,
-    xml: bool,
-    a: Automaton,
-    casos: Vec<(Case, Vec<u8>)>,
-}
-
-fn ir_de(texto: &[u8], xml: bool) -> VerifiedIr {
-    let texto = texto.to_vec();
-    std::thread::Builder::new()
-        .stack_size(8 << 20)
-        .spawn(move || {
-            if xml {
-                let s = xsd::parse(&texto).unwrap_or_else(|e| panic!("{e}"));
-                xsd::lower(&xsd::analyze(&s).unwrap_or_else(|e| panic!("{e:?}"))).unwrap()
-            } else {
-                let s = schema_parser::parse(&texto).unwrap_or_else(|e| panic!("{e}"));
-                let t = semantic::analyze(&s).unwrap_or_else(|e| panic!("{e:?}"));
-                semantic::lower(&t).unwrap_or_else(|e| panic!("{e}"))
-            }
-        })
-        .unwrap()
-        .join()
-        .unwrap()
-}
-
-fn grupos() -> Vec<Grupo> {
-    let mut g: Vec<Grupo> = Vec::new();
-    for c in corpus::casos().unwrap() {
-        let Payload::Bytes(p) = &c.payload else {
-            continue;
-        };
-        let p = p.clone();
-        let xml = c.format == Format::Xml;
-        if let Some(gr) = g
-            .iter_mut()
-            .find(|gr| gr.texto == c.schema_text && gr.xml == xml)
-        {
-            gr.casos.push((c, p));
-            continue;
-        }
-        let a = build(&ir_de(&c.schema_text, xml)).unwrap_or_else(|e| panic!("{}: {e}", c.id));
-        g.push(Grupo {
-            texto: c.schema_text.clone(),
-            xml,
-            a,
-            casos: vec![(c, p)],
-        });
-    }
-    assert!(g.iter().any(|gr| gr.xml) && g.iter().any(|gr| !gr.xml));
-    g
-}
-
-/// Un directorio vacío bajo `target/` para `nombre`.
-fn directorio(nombre: &str) -> PathBuf {
-    let d = Path::new(env!("CARGO_TARGET_TMPDIR"))
-        .join("codegen-rust")
-        .join(nombre);
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
-    d
-}
-
-fn escribir(dir: &Path, archivos: &[Archivo]) {
-    for a in archivos {
-        std::fs::write(dir.join(&a.nombre), &a.contenido).unwrap();
-    }
-}
-
-/// `rustc` (el de la cadena de herramientas del repositorio) en `dir`;
-/// devuelve stderr y falla si no compila.
-fn rustc(dir: &Path, args: &[&str]) -> String {
-    let rustc = std::env::var("RUSTC").unwrap_or_else(|_| "rustc".into());
-    let out = Command::new(rustc)
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .unwrap();
-    let err = String::from_utf8_lossy(&out.stderr).into_owned();
-    assert!(out.status.success(), "{}: {err}", dir.display());
-    err
-}
-
-fn clase(k: ErrorKind) -> &'static str {
-    match k {
-        ErrorKind::Lexical => "lexical",
-        ErrorKind::Syntax => "syntax",
-        ErrorKind::Schema => "schema",
-        ErrorKind::Limit => "limit",
-        ErrorKind::Internal => "internal",
-    }
-}
-
-/// La línea JSON que debe escribir el validador para el reporte `r` del
-/// intérprete.
-fn json_esperado(a: &Automaton, r: &Report) -> Value {
-    let regla = r.first.and_then(|f| f.rule);
-    json!({
-        "valid": r.valid,
-        "violations": r.violations.get(),
-        "errorKind": r.error_kind.map(clase),
-        "offset": r.first.map(|f| f.offset),
-        "line": r.first.map(|f| f.line),
-        "column": r.first.map(|f| f.column),
-        "rule": regla.map(|k| a.rule_location(k)),
-        "keyword": regla.map(|k| a.rule(k).1.name()),
-    })
-}
-
-fn codigo_esperado(r: &Report) -> u8 {
-    match (r.valid, r.error_kind) {
-        (true, _) => salida::VALIDO,
-        (false, Some(ErrorKind::Schema)) => salida::INVALIDO,
-        (false, Some(ErrorKind::Lexical | ErrorKind::Syntax | ErrorKind::Limit)) => {
-            salida::MALFORMADO
-        }
-        _ => salida::INTERNO,
-    }
-}
-
-/// El caso cumple su `expected` (lo que comprueba el corpus del intérprete,
-/// aquí sobre la salida del binario generado).
-fn cumple_expected(c: &Case, v: &Value) {
-    let e = &c.expected;
-    assert_eq!(v["valid"], e.valid, "{}: {v}", c.id);
-    let kind = e.error_kind.map(|k| match k {
-        Esperado::Lexical => "lexical",
-        Esperado::Syntax => "syntax",
-        Esperado::Schema => "schema",
-        Esperado::Limit => "limit",
-    });
-    assert_eq!(v["errorKind"].as_str(), kind, "{}: {v}", c.id);
-    match e.violations {
-        Some(n) => assert_eq!(v["violations"], n, "{}: {v}", c.id),
-        None if !e.valid => assert!(v["violations"].is_null(), "{}: {v}", c.id),
-        None => {}
-    }
-    if let Some(off) = e.offset {
-        assert_eq!(v["offset"], off, "{}: {v}", c.id);
-    }
-}
-
-/// Lo que el sandbox comprueba de los nombres (`server::sandbox::comprobar`):
-/// `[a-z0-9_]+.rs`, sin repetidos, con `main.rs`.
-fn nombres_del_sandbox(archivos: &[Archivo]) {
-    let mut vistos = BTreeSet::new();
-    for a in archivos {
-        let base = a.nombre.strip_suffix(".rs").expect(&a.nombre);
-        assert!(
-            !base.is_empty()
-                && base
-                    .bytes()
-                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_'),
-            "{}",
-            a.nombre
-        );
-        assert!(vistos.insert(a.nombre.clone()), "{} repetido", a.nombre);
-    }
-    assert!(vistos.contains("main.rs"));
-}
+mod comun;
+use comun::*;
 
 /// Criterio 1: el banco de un solo `rustc` (debug) con todos los esquemas.
 #[test]
 fn banco_equivale_al_interprete() {
     let grupos = grupos();
-    let dir = directorio("banco");
+    let dir = directorio("rust-banco");
     let primeros = emit(&grupos[0].a);
     let runtime: Vec<Archivo> = primeros
         .iter()
@@ -351,86 +187,19 @@ fn main() {
 #[test]
 fn main_real_en_todo_el_corpus() {
     let grupos = grupos();
-    let hilos = std::thread::available_parallelism().map_or(2, |n| n.get().min(8));
-    let binarios: Vec<PathBuf> = std::thread::scope(|s| {
-        let mut out = Vec::new();
-        for lote in grupos.iter().enumerate().collect::<Vec<_>>().chunks(hilos) {
-            let hs: Vec<_> = lote
-                .iter()
-                .map(|&(k, g)| {
-                    s.spawn(move || {
-                        let archivos = emit(&g.a);
-                        nombres_del_sandbox(&archivos);
-                        let dir = directorio(&format!("main{k}"));
-                        escribir(&dir, &archivos);
-                        let avisos = rustc(
-                            &dir,
-                            &["--edition", "2021", "-O", "-o", "validador", "main.rs"],
-                        );
-                        assert!(avisos.is_empty(), "esquema {k}: {avisos}");
-                        dir.join("validador")
-                    })
-                })
-                .collect();
-            out.extend(hs.into_iter().map(|h| h.join().unwrap()));
-        }
-        out
+    let binarios = en_paralelo(&grupos, |k, g| {
+        let archivos = emit(&g.a);
+        nombres_del_sandbox(&archivos, &[".rs"], "main.rs");
+        let dir = directorio(&format!("rust-main{k}"));
+        escribir(&dir, &archivos);
+        let avisos = rustc(
+            &dir,
+            &["--edition", "2021", "-O", "-o", "validador", "main.rs"],
+        );
+        assert!(avisos.is_empty(), "esquema {k}: {avisos}");
+        dir.join("validador")
     });
-
-    let mut codigos = BTreeSet::new();
-    let mut limite = false;
-    let mut n = 0;
-    for (g, bin) in grupos.iter().zip(&binarios) {
-        for (c, p) in &g.casos {
-            let mut h = Command::new(bin)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .unwrap();
-            let mut stdin = h.stdin.take().unwrap();
-            let p2 = p.clone();
-            // El validador puede parar antes de leerlo todo (`Flow::Stop`):
-            // un error de escritura (tubería cerrada) no es un fallo.
-            let escritor = std::thread::spawn(move || {
-                let _ = std::io::Write::write_all(&mut stdin, &p2);
-            });
-            let out = h.wait_with_output().unwrap();
-            escritor.join().unwrap();
-            assert!(out.stderr.is_empty(), "{}", c.id);
-            let texto = String::from_utf8(out.stdout).unwrap();
-            let linea = texto.strip_suffix('\n').expect(&texto);
-            assert!(!linea.contains('\n'), "{}: una sola línea", c.id);
-            let v: Value = serde_json::from_str(linea).expect(linea);
-            let r = validate_with(&g.a, p, &Options::new(Mode::Total), 4096);
-            assert_eq!(v, json_esperado(&g.a, &r), "{}", c.id);
-            cumple_expected(c, &v);
-            let codigo = out.status.code().unwrap();
-            assert_eq!(codigo, i32::from(codigo_esperado(&r)), "{}", c.id);
-            assert!(
-                !(100..=103).contains(&codigo) && !(124..=127).contains(&codigo),
-                "{}",
-                c.id
-            );
-            codigos.insert(codigo);
-            limite |= r.error_kind == Some(ErrorKind::Limit);
-            n += 1;
-        }
-    }
-    // Un caso de cada tipo: válido 0, inválido 1, malformado 2 y límite 2.
-    assert_eq!(codigos, BTreeSet::from([0, 1, 2]));
-    assert!(limite);
-    assert!(n >= 70, "{n}");
-
-    // Un fallo al leer stdin (un directorio) da 3 con el motivo en stderr.
-    let dir = std::fs::File::open(env!("CARGO_TARGET_TMPDIR")).unwrap();
-    let out = Command::new(&binarios[0])
-        .stdin(Stdio::from(dir))
-        .output()
-        .unwrap();
-    assert_eq!(out.status.code(), Some(i32::from(salida::INTERNO)));
-    assert!(out.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("no se pudo leer la entrada"));
+    corpus_por_stdin(&grupos, &binarios);
 }
 
 /// Criterio 4: misma M, mismos bytes; también reconstruyendo M desde el
@@ -455,7 +224,7 @@ fn nucleo_sin_std_ni_alloc() {
     let json = grupos.iter().find(|g| !g.xml).unwrap();
     let xml = grupos.iter().find(|g| g.xml).unwrap();
     for (nombre, g) in [("nostd_json", json), ("nostd_xml", xml)] {
-        let dir = directorio(nombre);
+        let dir = directorio(&format!("rust-{nombre}"));
         let archivos: Vec<Archivo> = emit(&g.a)
             .into_iter()
             .filter(|f| f.nombre != "main.rs")
