@@ -20,6 +20,7 @@ use ir::VerifiedIr;
 use runtime_rs::{Flow, JsonValidator, Mode, Options, XmlValidator};
 
 pub mod generar;
+pub mod graficas;
 pub mod mutar;
 
 /// Pila de los hilos que recorren entrada del usuario (D7), como `schemac`.

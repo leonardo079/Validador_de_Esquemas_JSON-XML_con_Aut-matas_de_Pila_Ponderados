@@ -52,3 +52,9 @@ path = "src/bin/generar.rs"
 [[bin]]
 name = "mutar"
 path = "src/bin/mutar.rs"
+
+# E1: gráficas de bombeo en SVG a partir del CSV de `metricas --bombeo-fino`.
+# `cargo run -p bench --release --bin graficas -- <csv> docs/fase6/graficas`.
+[[bin]]
+name = "graficas"
+path = "src/bin/graficas.rs"

@@ -859,3 +859,14 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [x] 3 pruebas nuevas sin red (8 en `crates/atlas/tests/documento.rs`), una de ellas fija la cabecera de `bench::csv`. `lint OK`.
 
 **Estado (21 nov):** hecha.
+
+# Tarea E1: pruebas de bombeo y gráficas contra k (pista B, Bayron; 21 nov, D80)
+
+Hecha directamente por el orquestador, sin agentes (decisión del usuario).
+
+- [x] `metricas --bombeo-fino`: rejilla densa (k de 1 a 255; n de 10² a 10⁶) en el mismo CSV.
+- [x] `bench::graficas` y el binario `graficas`: 5 SVG (tiempo, pila y memoria contra k y n) y `datos.md`. Revisados renderizándolos con Edge: se corrigió el redondeo del eje lineal, con prueba, y se le puso fondo a la leyenda.
+- [x] 7 pruebas del lema de bombeo (`crates/bench/tests/bombeo.rs`) y 5 del dibujo (`crates/bench/tests/graficas.rs`).
+- [x] `docs/fase6/bombeo.md`, con la lectura para el informe (E4); `lint OK`; 774 pruebas del workspace en verde (2 binarios bloqueados por Smart App Control: `bombeo`, verde en una repetición, y el `main` del servidor, sin pruebas).
+
+**Estado (21 nov):** hecha.

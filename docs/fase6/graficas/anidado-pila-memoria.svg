@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" width="720" height="420" role="img" aria-label="Pila y memoria de [ᵏ ]ᵏ contra k" font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+<style>.f{fill:#ffffff}.t{fill:#1d1d1f}.m{fill:#6b6b72}.r{stroke:#e4e4e8}.e{stroke:#6b6b72}@media (prefers-color-scheme: dark){.f{fill:#1f1f24}.t{fill:#ececf1}.m{fill:#a0a0aa}.r{stroke:#34343c}.e{stroke:#a0a0aa}}</style>
+<rect class="f" width="720" height="420"/>
+<text class="t" x="84" y="28" font-size="16" font-weight="600">Pila y memoria de [ᵏ ]ᵏ contra k</text>
+<line class="r" x1="84" x2="696" y1="356.0" y2="356.0"/>
+<text class="m" x="76.0" y="360.0" font-size="11" text-anchor="end">0</text>
+<line class="r" x1="84" x2="696" y1="279.0" y2="279.0"/>
+<text class="m" x="76.0" y="283.0" font-size="11" text-anchor="end">20000</text>
+<line class="r" x1="84" x2="696" y1="202.0" y2="202.0"/>
+<text class="m" x="76.0" y="206.0" font-size="11" text-anchor="end">40000</text>
+<line class="r" x1="84" x2="696" y1="125.0" y2="125.0"/>
+<text class="m" x="76.0" y="129.0" font-size="11" text-anchor="end">60000</text>
+<line class="r" x1="84" x2="696" y1="48.0" y2="48.0"/>
+<text class="m" x="76.0" y="52.0" font-size="11" text-anchor="end">80000</text>
+<line class="r" x1="84.0" x2="84.0" y1="48" y2="356"/>
+<text class="m" x="84.0" y="374.0" font-size="11" text-anchor="middle">0</text>
+<line class="r" x1="288.0" x2="288.0" y1="48" y2="356"/>
+<text class="m" x="288.0" y="374.0" font-size="11" text-anchor="middle">100</text>
+<line class="r" x1="492.0" x2="492.0" y1="48" y2="356"/>
+<text class="m" x="492.0" y="374.0" font-size="11" text-anchor="middle">200</text>
+<line class="r" x1="696.0" x2="696.0" y1="48" y2="356"/>
+<text class="m" x="696.0" y="374.0" font-size="11" text-anchor="middle">300</text>
+<line class="e" x1="84" x2="696" y1="356" y2="356"/>
+<line class="e" x1="84" x2="84" y1="48" y2="356"/>
+<text class="t" x="390.0" y="402.0" font-size="12" text-anchor="middle">k (profundidad de anidamiento)</text>
+<text class="t" font-size="12" text-anchor="middle" transform="translate(18 202.0) rotate(-90)">bytes</text>
+<polyline fill="none" stroke="#1f7a3d" stroke-width="2" points="86.0,355.9 88.1,355.8 92.2,355.5 100.3,355.0 116.6,354.0 149.3,352.1 181.9,350.1 214.6,348.1 279.8,344.2 345.1,340.2 410.4,336.3 475.7,332.3 541.0,328.4 604.2,324.6"/>
+<circle cx="86.0" cy="355.9" r="3" fill="#1f7a3d"/>
+<circle cx="88.1" cy="355.8" r="3" fill="#1f7a3d"/>
+<circle cx="92.2" cy="355.5" r="3" fill="#1f7a3d"/>
+<circle cx="100.3" cy="355.0" r="3" fill="#1f7a3d"/>
+<circle cx="116.6" cy="354.0" r="3" fill="#1f7a3d"/>
+<circle cx="149.3" cy="352.1" r="3" fill="#1f7a3d"/>
+<circle cx="181.9" cy="350.1" r="3" fill="#1f7a3d"/>
+<circle cx="214.6" cy="348.1" r="3" fill="#1f7a3d"/>
+<circle cx="279.8" cy="344.2" r="3" fill="#1f7a3d"/>
+<circle cx="345.1" cy="340.2" r="3" fill="#1f7a3d"/>
+<circle cx="410.4" cy="336.3" r="3" fill="#1f7a3d"/>
+<circle cx="475.7" cy="332.3" r="3" fill="#1f7a3d"/>
+<circle cx="541.0" cy="328.4" r="3" fill="#1f7a3d"/>
+<circle cx="604.2" cy="324.6" r="3" fill="#1f7a3d"/>
+<polyline fill="none" stroke="#2f5bd3" stroke-width="2" stroke-dasharray="6 4" points="86.0,72.1 88.1,72.1 92.2,72.1 100.3,72.1 116.6,72.1 149.3,72.1 181.9,72.1 214.6,72.1 279.8,72.1 345.1,72.1 410.4,72.1 475.7,72.1 541.0,72.1 604.2,72.1"/>
+<polyline fill="none" stroke="#d9730d" stroke-width="2" points="86.0,355.9 88.1,355.0 92.2,354.0 100.3,351.7 116.6,347.0 149.3,337.6 181.9,326.8 214.6,318.9 279.8,297.2 345.1,281.5 410.4,253.9 475.7,238.1 541.0,222.3 604.2,207.1"/>
+<circle cx="86.0" cy="355.9" r="3" fill="#d9730d"/>
+<circle cx="88.1" cy="355.0" r="3" fill="#d9730d"/>
+<circle cx="92.2" cy="354.0" r="3" fill="#d9730d"/>
+<circle cx="100.3" cy="351.7" r="3" fill="#d9730d"/>
+<circle cx="116.6" cy="347.0" r="3" fill="#d9730d"/>
+<circle cx="149.3" cy="337.6" r="3" fill="#d9730d"/>
+<circle cx="181.9" cy="326.8" r="3" fill="#d9730d"/>
+<circle cx="214.6" cy="318.9" r="3" fill="#d9730d"/>
+<circle cx="279.8" cy="297.2" r="3" fill="#d9730d"/>
+<circle cx="345.1" cy="281.5" r="3" fill="#d9730d"/>
+<circle cx="410.4" cy="253.9" r="3" fill="#d9730d"/>
+<circle cx="475.7" cy="238.1" r="3" fill="#d9730d"/>
+<circle cx="541.0" cy="222.3" r="3" fill="#d9730d"/>
+<circle cx="604.2" cy="207.1" r="3" fill="#d9730d"/>
+<rect class="f" x="428.0" y="42.0" width="262" height="60.0" opacity="0.92" rx="4"/>
+<line x1="436" x2="458.0" y1="54.0" y2="54.0" stroke="#1f7a3d" stroke-width="2"/>
+<text class="t" x="464.0" y="58.0" font-size="12">pila usada por el DPDA (O(k))</text>
+<line x1="436" x2="458.0" y1="72.0" y2="72.0" stroke="#2f5bd3" stroke-width="2" stroke-dasharray="6 4"/>
+<text class="t" x="464.0" y="76.0" font-size="12">memoria reservada del DPDA (fija)</text>
+<line x1="436" x2="458.0" y1="90.0" y2="90.0" stroke="#d9730d" stroke-width="2"/>
+<text class="t" x="464.0" y="94.0" font-size="12">pico de montón de la línea base</text>
+</svg>

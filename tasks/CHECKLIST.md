@@ -98,7 +98,7 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 
 ## Entrega (semana 5)
 
-- [ ] **E1** · Pruebas de bombeo u·vᵏ·x·yᵏ·z y casos extremos; gráficas de tiempo, pila y memoria contra k — *Pista:* AB · *Depende:* F6.5 · *Resp.:* Bayron · *Estado:* asignada (reparto del 20 nov)
+- [x] **E1** · Pruebas de bombeo u·vᵏ·x·yᵏ·z y casos extremos; gráficas de tiempo, pila y memoria contra k — *Pista:* AB · *Depende:* F6.5 · *Resp.:* Bayron · *Estado:* hecha (21 nov) · D80 · sin rondas (sin agentes) · `docs/fase6/bombeo.md` (7 pruebas del lema, 5 gráficas SVG en `docs/fase6/graficas/`)
 - [x] **E2** · Cargar todos los casos y sus métricas en Atlas — *Pista:* B · *Depende:* F7.2, F6.5 · *Resp.:* Bayron · *Estado:* hecha (21 nov) · D73 · sin rondas (sin agentes) · 78 casos y 173 métricas en Atlas (`cargo run -p atlas -- --metricas <csv>`); doc en `docs/fase7/atlas.md` §6
 - [ ] **E3** · Revisión de seguridad consolidada de las Fases 4-7 (D35) — *Pista:* AB · *Depende:* F6.4, F7.5 · *Resp.:* — · *Estado:* libre
 - [ ] **E4** · Informe final: complejidad, explosión al determinizar, decisiones, vulnerabilidades, bombeo — *Pista:* AB · *Depende:* E1 · *Resp.:* — · *Estado:* libre

@@ -4,6 +4,7 @@
 //! cargo run -p bench --release --bin metricas                  # corpus + bombeo
 //! cargo run -p bench --release --bin metricas -- --corpus      # solo el corpus
 //! cargo run -p bench --release --bin metricas -- --bombeo --csv bombeo.csv
+//! cargo run -p bench --release --bin metricas -- --bombeo-fino --csv target/metricas/bombeo.csv   # E1
 //! cargo run -p bench --release --bin metricas -- --repeticiones 21
 //! ```
 //!
@@ -32,6 +33,8 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 struct Args {
     corpus: bool,
     bombeo: bool,
+    /// E1: rejilla densa para las gráficas contra k y n (`graficas`).
+    fino: bool,
     repeticiones: usize,
     csv: Option<PathBuf>,
 }
@@ -40,6 +43,7 @@ fn args() -> Result<Args, String> {
     let mut a = Args {
         corpus: false,
         bombeo: false,
+        fino: false,
         repeticiones: 11,
         csv: None,
     };
@@ -48,6 +52,10 @@ fn args() -> Result<Args, String> {
         match x.as_str() {
             "--corpus" => a.corpus = true,
             "--bombeo" => a.bombeo = true,
+            "--bombeo-fino" => {
+                a.bombeo = true;
+                a.fino = true;
+            }
             "--repeticiones" => {
                 a.repeticiones = it
                     .next()
@@ -186,15 +194,28 @@ fn main() -> std::process::ExitCode {
     }
 
     if a.bombeo {
-        let familias: Vec<Generado> = [1, 10, 100, 255]
+        // E1 (`--bombeo-fino`): k de 1 a 255 (el tope de profundidad es 256) y
+        // n en pasos de ×√10 aprox., para las gráficas de `graficas`.
+        let (ks, ns_enteros, ns_objetos): (Vec<usize>, Vec<usize>, Vec<usize>) = if a.fino {
+            (
+                vec![1, 2, 4, 8, 16, 32, 48, 64, 96, 128, 160, 192, 224, 255],
+                vec![
+                    100, 300, 1_000, 3_000, 10_000, 30_000, 100_000, 300_000, 1_000_000,
+                ],
+                vec![100, 300, 1_000, 3_000, 10_000, 30_000, 100_000],
+            )
+        } else {
+            (
+                vec![1, 10, 100, 255],
+                vec![1_000, 10_000, 100_000, 1_000_000],
+                vec![1_000, 10_000, 100_000],
+            )
+        };
+        let familias: Vec<Generado> = ks
             .into_iter()
             .map(bombeo::anidado)
-            .chain(
-                [1_000, 10_000, 100_000, 1_000_000]
-                    .into_iter()
-                    .map(bombeo::enteros),
-            )
-            .chain([1_000, 10_000, 100_000].into_iter().map(bombeo::objetos))
+            .chain(ns_enteros.into_iter().map(bombeo::enteros))
+            .chain(ns_objetos.into_iter().map(bombeo::objetos))
             .collect();
         for g in &familias {
             let m = match automata(g.esquema.as_bytes()) {
