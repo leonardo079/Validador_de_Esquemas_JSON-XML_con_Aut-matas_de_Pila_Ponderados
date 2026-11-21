@@ -1,0 +1,204 @@
+//! `schemac compile <esquema> --lang <rust|c> --out <dir>` (F5.1, D74): escribe
+//! el validador Rust autocontenido (lo que compila y ejecuta lo prueban
+//! `crates/codegen/tests/rust.rs`); `--lang c` es F5.2; códigos 1 (esquema),
+//! 2 (argumentos, E/S) y la salida reproducible.
+
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+const TESTS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests");
+
+fn schemac(args: &[&OsStr]) -> (i32, String, String) {
+    let out = Command::new(env!("CARGO_BIN_EXE_schemac"))
+        .args(args)
+        .output()
+        .unwrap();
+    (
+        out.status.code().unwrap(),
+        String::from_utf8(out.stdout).unwrap(),
+        String::from_utf8(out.stderr).unwrap(),
+    )
+}
+
+fn ruta(rel: &str) -> PathBuf {
+    Path::new(TESTS_DIR).join(rel)
+}
+
+fn salida(nombre: &str) -> PathBuf {
+    let d = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("compile-{nombre}"));
+    let _ = std::fs::remove_dir_all(&d);
+    d
+}
+
+fn compilar(esquema: &Path, out: &Path) -> (i32, String, String) {
+    schemac(&[
+        "compile".as_ref(),
+        esquema.as_os_str(),
+        "--lang".as_ref(),
+        "rust".as_ref(),
+        "--out".as_ref(),
+        out.as_os_str(),
+    ])
+}
+
+fn leer(d: &Path, nombre: &str) -> String {
+    std::fs::read_to_string(d.join(nombre)).unwrap()
+}
+
+#[test]
+fn json_escribe_el_validador() {
+    let p = ruta("schemas/parse-ok/objeto-cerrado.json");
+    let d = salida("json");
+    let (code, out, err) = compilar(&p, &d);
+    assert_eq!(code, 0, "{err}");
+    assert!(err.is_empty(), "{err}");
+    assert!(out.contains("validador Rust en"), "{out}");
+    for f in [
+        "main.rs",
+        "validador.rs",
+        "tablas.rs",
+        "lexer.rs",
+        "runtime_rs_core.rs",
+    ] {
+        assert!(d.join(f).is_file(), "{f}");
+    }
+    assert!(leer(&d, "validador.rs").contains("pub const FORMATO: &str = \"json\";"));
+    // Reproducible, y las opciones en otro orden dan lo mismo.
+    let d2 = salida("json-2");
+    let (code, _, err) = schemac(&[
+        "compile".as_ref(),
+        "--out".as_ref(),
+        d2.as_os_str(),
+        "--lang".as_ref(),
+        "rust".as_ref(),
+        p.as_os_str(),
+    ]);
+    assert_eq!(code, 0, "{err}");
+    for f in std::fs::read_dir(&d).unwrap() {
+        let n = f.unwrap().file_name();
+        let n = n.to_str().unwrap();
+        assert_eq!(leer(&d, n), leer(&d2, n), "{n}");
+    }
+}
+
+#[test]
+fn xsd_escribe_el_validador() {
+    let p = ruta("schemas/xsd/parse-ok/pedido.xsd");
+    let d = salida("xsd");
+    let (code, _, err) = compilar(&p, &d);
+    assert_eq!(code, 0, "{err}");
+    assert!(leer(&d, "validador.rs").contains("pub const FORMATO: &str = \"xml\";"));
+    assert!(leer(&d, "validador.rs").contains("XmlValidator as Nucleo"));
+}
+
+#[test]
+fn lang_c_aun_no() {
+    let p = ruta("schemas/parse-ok/objeto-cerrado.json");
+    let d = salida("c");
+    let (code, out, err) = schemac(&[
+        "compile".as_ref(),
+        p.as_os_str(),
+        "--lang".as_ref(),
+        "c".as_ref(),
+        "--out".as_ref(),
+        d.as_os_str(),
+    ]);
+    assert_eq!(code, 2);
+    assert!(out.is_empty());
+    assert!(err.contains("F5.2"), "{err}");
+    assert!(!d.exists());
+}
+
+#[test]
+fn argumentos_invalidos_dan_2() {
+    let p = ruta("schemas/parse-ok/objeto-cerrado.json");
+    let d = salida("args");
+    let p = p.as_os_str();
+    let o = d.as_os_str();
+    for args in [
+        vec!["compile".as_ref()],
+        vec!["compile".as_ref(), p, "--out".as_ref(), o],
+        vec!["compile".as_ref(), p, "--lang".as_ref(), "rust".as_ref()],
+        vec![
+            "compile".as_ref(),
+            "--lang".as_ref(),
+            "rust".as_ref(),
+            "--out".as_ref(),
+            o,
+        ],
+        vec![
+            "compile".as_ref(),
+            p,
+            "--lang".as_ref(),
+            "go".as_ref(),
+            "--out".as_ref(),
+            o,
+        ],
+        vec![
+            "compile".as_ref(),
+            p,
+            "--lang".as_ref(),
+            "rust".as_ref(),
+            "--out".as_ref(),
+        ],
+        vec![
+            "compile".as_ref(),
+            p,
+            "--lang".as_ref(),
+            "rust".as_ref(),
+            "--out".as_ref(),
+            o,
+            "--x".as_ref(),
+        ],
+        vec![
+            "compile".as_ref(),
+            p,
+            p,
+            "--lang".as_ref(),
+            "rust".as_ref(),
+            "--out".as_ref(),
+            o,
+        ],
+        vec![
+            "compile".as_ref(),
+            p,
+            "--lang".as_ref(),
+            "rust".as_ref(),
+            "--lang".as_ref(),
+            "rust".as_ref(),
+            "--out".as_ref(),
+            o,
+        ],
+    ] {
+        let (code, out, err) = schemac(&args);
+        assert_eq!(code, 2, "{args:?}: {err}");
+        assert!(out.is_empty(), "{args:?}");
+        assert!(err.contains("uso: schemac"), "{args:?}: {err}");
+    }
+    assert!(!d.exists());
+}
+
+#[test]
+fn esquema_con_errores_da_1_y_no_escribe() {
+    let p = std::env::temp_dir().join(format!("schemac-compile-malo-{}.json", std::process::id()));
+    std::fs::write(&p, r#"{"type": "objeto"}"#).unwrap();
+    let d = salida("malo");
+    let (code, out, err) = compilar(&p, &d);
+    let _ = std::fs::remove_file(&p);
+    assert_eq!(code, 1, "{err}");
+    assert!(out.is_empty());
+    assert!(!err.is_empty());
+    assert!(!d.exists());
+}
+
+#[test]
+fn salida_que_no_es_directorio_da_2() {
+    let p = ruta("schemas/parse-ok/objeto-cerrado.json");
+    let f = Path::new(env!("CARGO_TARGET_TMPDIR")).join("compile-archivo");
+    std::fs::write(&f, "no soy un directorio").unwrap();
+    let (code, out, err) = compilar(&p, &f);
+    assert_eq!(code, 2, "{err}");
+    assert!(out.is_empty());
+    assert!(err.contains("compile-archivo"), "{err}");
+}

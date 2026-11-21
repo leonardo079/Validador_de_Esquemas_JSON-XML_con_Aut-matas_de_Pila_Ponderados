@@ -7,8 +7,23 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+# F5.1 (D74): el emisor Rust lee las tablas de `automaton` y copia las fuentes
+# de `lexer` y `runtime-rs` (`include_str!`, `src/fuentes.rs`); no las enlaza.
 [dependencies]
 automaton.workspace = true
+# Los tipos de `runtime_rs::tables`, para escribir sus literales con una
+# desestructuración exhaustiva (un campo nuevo rompe la compilación aquí).
+runtime-rs.workspace = true
+
+# Las pruebas bajan los esquemas del corpus (frontales, D13), lo leen con
+# `baseline::corpus` (D48) y comparan con `automaton::validate_with`.
+[dev-dependencies]
+schema-parser.workspace = true
+semantic.workspace = true
+xsd.workspace = true
+ir.workspace = true
+baseline.workspace = true
+serde_json = "1.0.154"
 
 [lints]
 workspace = true

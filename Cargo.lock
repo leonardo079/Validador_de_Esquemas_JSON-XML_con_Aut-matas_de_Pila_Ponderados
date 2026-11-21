@@ -494,6 +494,13 @@ name = "codegen"
 version = "0.1.0"
 dependencies = [
  "automaton",
+ "baseline",
+ "ir",
+ "runtime-rs",
+ "schema-parser",
+ "semantic",
+ "serde_json",
+ "xsd",
 ]
 
 [[package]]

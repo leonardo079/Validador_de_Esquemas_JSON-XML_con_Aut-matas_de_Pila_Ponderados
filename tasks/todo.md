@@ -603,9 +603,36 @@ Detalle y decisiones en `tasks/plan.md` («Plan del resto de la Fase 4»). Orden
 - [x] §46 = F4C-S7 (Low; también F5.2): `words.checked_add(1)` en `push` (32 bits).
 - [x] §49 (Info, informe): el lexema de 1 024 bytes da `limit` en `xs:decimal`/`xs:integer` con más cifras y facetas numéricas. — documentado en `runtime.md` §3
 
+## Tarea F5.1: emisor Rust (tablas `static` + el núcleo `no_std`, autocontenido para el sandbox) — HECHA (20 nov, D74)
+
+Criterios propuestos y aprobados por Leonardo el 20 nov (sin `/autodev`, a pedido del usuario; D74).
+
+**Descripción:**
+- `codegen::rust::emit(&Automaton) -> Vec<Archivo>`: archivos planos `[a-z0-9_]+.rs` (sin subdirectorios, como exige el tar del sandbox, D68):
+  - `main.rs`: raíz `std`; lee stdin en bloques de 64 KiB; la memoria es un `static Mutex<[u64; STATE_WORDS]>` (en `.bss`, sin pila ni reservas); escribe una línea JSON en stdout y sale con 0/1/2/3;
+  - `validador.rs`: fachada `no_std` (`STATE_WORDS`, `SV_MAX_DEPTH` con `const assert` contra `Limits::DEFAULT`, `Validador::new(&mut [u64; STATE_WORDS], Mode)` + `feed`/`finish`, `validar`, `validar_por_bloques`, escritor de la línea JSON, código de salida);
+  - `tablas.rs`: todas las tablas de `Tables` como `static` de literales (desestructuradas de forma exhaustiva en el emisor) y la palabra clave de cada regla;
+  - `lexer*.rs`, `runtime_rs*.rs`: las fuentes de `lexer` y `runtime-rs` incrustadas con `include_str!` y reescritas solo en `#![no_std]` (se quita), `mod x;` → `#[path = "<crate>_x.rs"]` y las rutas `crate::`/`lexer::`.
+- Línea de stdout: los campos del bloque `dpda` de `/api/compare` (D70) más `keyword`: `valid`, `violations` (`null` si ∞), `errorKind`, `offset`, `line`, `column`, `rule` (ubicación), `keyword`.
+- Códigos de salida: 0 válido · 1 inválido (`schema`) · 2 malformado (`lexical`/`syntax`) o `limit` · 3 error interno (`Internal`, fallo al leer stdin o escribir stdout). Nunca 100-103 ni 124-127 (D68).
+- `schemac compile <esquema> --lang rust --out <dir>`; `--lang c` da «aún no (F5.2)» con código 2.
+- Fuera: C (F5.2), límites configurables y `sv_limits_t` (F6.2), puntero JSON (F6.1), caché del binario (F7.3-P1, F7.5).
+
+**Criterios de aceptación:**
+- [x] Equivalencia en todo `tests/cases`: un solo `rustc` (debug, con desbordamientos comprobados) compila un banco con las tablas y la fachada de cada esquema del corpus sobre una copia común del runtime; el `{:?}` del `Report` es idéntico al de `automaton::validate_with` en bloques de 1, 7 y 4 096 bytes y en los dos modos. (Un `rustc -O` por esquema costaría minutos; `include!` exigiría un `build.rs` o generados versionados.) — `banco_equivale_al_interprete` (32 esquemas, 78 payloads × 6)
+- [x] El `main.rs` real, compilado con la orden exacta del sandbox (`rustc --edition 2021 -O`) bajo `CARGO_TARGET_TMPDIR`, para un esquema JSON y el pedido XSD: todos sus payloads del corpus por stdin dan la línea JSON y el código de salida esperados; la compilación no emite avisos. — ampliado a **todos** los esquemas del corpus (compilar con `-O` cuesta ≈ 1 s): `main_real_en_todo_el_corpus`, también contra `expected`
+- [x] Códigos de salida y JSON de stdout en un caso de cada tipo (válido 0, inválido 1, malformado 2, límite 2); el 3, por prueba del mapeo. — en `main_real_en_todo_el_corpus` (y el 3 también con stdin ilegible) y `banco_equivale_al_interprete`
+- [x] Salida reproducible: dos emisiones (también reconstruyendo M) dan los mismos bytes. — `salida_reproducible`; en la CLI, `json_escribe_el_validador`
+- [x] Sin reservas, por construcción: `validador.rs`, `tablas.rs` y la copia del runtime compilan como `#![no_std]` sin `alloc` (`rustc --crate-type rlib`); la E/S de `main` queda documentada fuera del camino de validación. — `nucleo_sin_std_ni_alloc` (JSON y XML, con testigo negativo); `docs/fase5/codegen.md` §4
+- [x] Vigía de la copia: los `.rs` de `crates/lexer/src` y `crates/runtime-rs/src` son exactamente los que incrusta `codegen`, y cada `mod` de sus `lib.rs` queda reescrito. — `copia_sincronizada`
+- [x] `schemac compile`: JSON y XSD escriben los archivos; `--lang c`, argumentos inválidos y esquema con errores dan su código. — `crates/cli/tests/compile.rs` (6 pruebas)
+- [x] `docs/fase5/codegen.md`, D74, `docs/fase5/pendientes.md` (con lo que F7.5 debe saber, F7.3-P2); `make lint`, `make test` y `make docs-check` en verde. — 774 pruebas; revisión de seguridad pendiente a E3 (`pendientes.md` §1)
+
+**Verificación:** `cargo test -p codegen -p cli`, `make lint`, `make test`, `make docs-check`.
+
 ## Punto de control PC-E (tras F4.6 + F5.1)
 
-- [ ] Un esquema JSON y el pedido XSD pasan por esquema → M → validador Rust generado, y el corpus pasa.
+- [x] Un esquema JSON y el pedido XSD pasan por esquema → M → validador Rust generado, y el corpus pasa. — **hecho (20 nov, F5.1)**: los 32 esquemas del corpus, con `valid-xml-pedido-01`, por `rustc --edition 2021 -O main.rs`; todo payload da `expected` (`crates/codegen/tests/rust.rs`)
 - [ ] La Fase 4 queda cerrada al terminar F4.5b (sin ningún `Pending`). **Estado (20 nov):** F4.5b hecha; queda `Pending` solo para los literales compuestos de `enum`/`const` (recorte 2, §72), según lo que decidan las dos personas.
 
 # Tarea F7.1: backend axum (pista B, Bayron; plan del Planner del 18 nov, aprobado el 18 nov con U1-U8)
