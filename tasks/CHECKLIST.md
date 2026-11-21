@@ -102,7 +102,7 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 - [x] **E2** · Cargar todos los casos y sus métricas en Atlas — *Pista:* B · *Depende:* F7.2, F6.5 · *Resp.:* Bayron · *Estado:* hecha (21 nov) · D73 · sin rondas (sin agentes) · 78 casos y 173 métricas en Atlas (`cargo run -p atlas -- --metricas <csv>`); doc en `docs/fase7/atlas.md` §6
 - [ ] **E3** · Revisión de seguridad consolidada de las Fases 4-7 (D35) — *Pista:* AB · *Depende:* F6.4, F7.5 · *Resp.:* — · *Estado:* libre
 - [ ] **E4** · Informe final: complejidad, explosión al determinizar, decisiones, vulnerabilidades, bombeo — *Pista:* AB · *Depende:* E1 · *Resp.:* — · *Estado:* libre
-- [ ] **E5** · Cerrar documentación técnica (diagramas finales, DPDA de 2 esquemas, árboles de derivación) — *Pista:* AB · *Depende:* F5.3 · *Resp.:* — · *Estado:* libre
+- [x] **E5** · Cerrar documentación técnica (diagramas finales, DPDA de 2 esquemas, árboles de derivación) — *Pista:* AB · *Depende:* F5.3 · *Resp.:* Leonardo · *Estado:* hecha (21 nov) · 0 rondas (sin `/autodev`; revisión de exactitud con sonnet, 8 hallazgos corregidos) · índice y definición formal en `docs/README.md`, arquitectura en `docs/arquitectura.md`, tercer DPDA (`arbol-recursivo`) y SVG de los árboles de derivación
 - [ ] **E6** · Congelar código — *Pista:* AB · *Depende:* — · *Resp.:* ambos · *Estado:* libre · previsto 19 nov
 - [ ] **E7** · Diapositivas, guion, video de respaldo y dos ensayos de la demo — *Pista:* AB · *Depende:* F7.7 · *Resp.:* ambos · *Estado:* libre
 - [ ] **E8** · WASM (opcional, solo si todo lo demás está cerrado) — *Pista:* A · *Depende:* F5.3 · *Resp.:* — · *Estado:* libre

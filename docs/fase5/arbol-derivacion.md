@@ -62,13 +62,13 @@ en pila y sin árbol del payload).
 
 ## 4. Ejemplos
 
-| Payload | Árbol (DOT) |
-| --- | --- |
-| [ejemplos/pedido.json](ejemplos/pedido.json) | [arbol-pedido.json.dot](arbol-pedido.json.dot) |
-| [ejemplos/pedido.xml](ejemplos/pedido.xml) | [arbol-pedido.xml.dot](arbol-pedido.xml.dot) |
+| Payload | Árbol (DOT) | Dibujo |
+| --- | --- | --- |
+| [ejemplos/pedido.json](ejemplos/pedido.json) | [arbol-pedido.json.dot](arbol-pedido.json.dot) | [arbol-pedido.json.svg](arbol-pedido.json.svg) |
+| [ejemplos/pedido.xml](ejemplos/pedido.xml) | [arbol-pedido.xml.dot](arbol-pedido.xml.dot) | [arbol-pedido.xml.svg](arbol-pedido.xml.svg) |
 
 `make docs-check` comprueba que los `.dot` coinciden con lo que genera el código. Los `.svg` salen de `make docs`
-en una máquina con Graphviz; en la de Bayron no hay `dot`, así que no se versionaron en esta tarea.
+en una máquina con Graphviz; en la de Bayron no hay `dot`, así que F5.5 no los versionó y los generó E5.
 
 En el DOT, los no terminales van en elipse, los terminales en caja con su lexema y ε en gris; `ordering=out`
 mantiene a los hijos en el orden de la derivación.

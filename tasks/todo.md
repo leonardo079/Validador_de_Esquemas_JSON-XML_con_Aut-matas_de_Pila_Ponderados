@@ -674,6 +674,16 @@ Criterios propuestos y aplicados por Claude con la delegación del usuario («to
 - [x] El C, por reproducción del corpus del fuzzer en la diferencial con ASan/UBSan (sin FFI). — `SV_EXTRA_JSON`/`SV_EXTRA_XML` en `diferencial.rs`, `scripts/fuzz.sh`
 - [x] `make fuzz` fuera de `make test`; F6.3-P1 resuelto con la opción a (`corpus.rs`, `docs/fase6/pendientes.md` §28).
 
+## Tarea E5: cerrar la documentación técnica — HECHA (21 nov; parte de la pista A)
+
+- [x] Índice del entregable 1 del enunciado (§5): cada pieza pedida con su documento y cómo se mantiene. — `docs/README.md` §1
+- [x] Definición formal del lenguaje: Σ_b, L_JSON, L_XML, 𝒮, L(S), M_S y el significado de W(w) (0, ∞, k), con límites, clase (c) y choques de hash. — `docs/README.md` §2
+- [x] DPDA de al menos dos esquemas: `objeto-cerrado` y `arbol-recursivo` (JSON, nuevo, con la recursión por `$ref` explicada estado por estado) y el pedido (XSD). — `Makefile` (`AUT_DOT`), `docs/fase4/automata-arbol-recursivo.dot/.svg`, `docs/README.md` §3
+- [x] Arquitectura del compilador, del validador, de los crates (de `cargo metadata`) y de la aplicación. — `docs/arquitectura.md`
+- [x] Árboles de derivación dibujados (F5.5 no versionó los SVG). — `docs/fase5/arbol-pedido.{json,xml}.svg`
+- [x] README de la raíz al día (estructura, uso de `compile`, sin CI ni issues por D32). — `README.md`
+- [x] `make docs-check` en verde; enlaces relativos comprobados; revisión de exactitud (8 hallazgos corregidos, `tasks/contexto/E5 informe.md`).
+
 ## Punto de control PC-E (tras F4.6 + F5.1)
 
 - [x] Un esquema JSON y el pedido XSD pasan por esquema → M → validador Rust generado, y el corpus pasa. — **hecho (20 nov, F5.1)**: los 32 esquemas del corpus, con `valid-xml-pedido-01`, por `rustc --edition 2021 -O main.rs`; todo payload da `expected` (`crates/codegen/tests/rust.rs`)

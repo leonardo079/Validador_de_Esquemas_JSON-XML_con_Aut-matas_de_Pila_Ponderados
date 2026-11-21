@@ -24,8 +24,8 @@ Esquema (JSON Schema / XSD)
         ▼
  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
  │ 1. Léxico    │──▶│ 2. Sintáctico│──▶│ 3. Semántico │──▶│ 4. Autómata  │──▶│ 5. Código    │
- │ AFD streaming│   │ Parser LL(1) │   │ $ref, ciclos,│   │ DPDA         │   │ C / Rust /   │
- │ UTF-8, tokens│   │ → AST        │   │ clasificación│   │ ponderado    │   │ WASM         │
+ │ AFD streaming│   │ Parser LL(1) │   │ $ref, ciclos,│   │ DPDA         │   │ C11 / Rust   │
+ │ UTF-8, tokens│   │ → AST        │   │ clasificación│   │ ponderado    │   │ no_std       │
  └──────────────┘   └──────────────┘   └──────────────┘   └──────────────┘   └──────────────┘
                                                                                      │
                      Payload (bytes) ──▶ validador generado ──▶ conforme / violaciones + JSON Pointer
@@ -37,9 +37,12 @@ Esquema (JSON Schema / XSD)
 | 2. Análisis sintáctico | GLC de JSON, XML y del metalenguaje de esquemas; parser LL(1); árboles de derivación. |
 | 3. Análisis semántico | Validación contra el meta-esquema, resolución de `$ref`/`$defs`, detección de ciclos no productivos, clasificación de palabras clave. |
 | 4. Autómata ponderado | M = (Q, Σ, Γ, δ, q₀, Z₀, F, w) con pesos en el semianillo tropical (ℕ ∪ {∞}, mín, +, ∞, 0); construcción composicional; verificación de determinismo y minimización. |
-| 5. Generación de código | Emisores C y Rust (tablas densas o saltos directos), pila acotada, API C-ABI/FFI, WASM opcional, generador de payloads. |
+| 5. Generación de código | Emisores C y Rust con tablas densas, pila acotada, API C (`sv_init`/`sv_feed`/`sv_finish`), generador de payloads. WASM era opcional y no se hizo. |
 | 6. Validación en tiempo real | Streaming por bloques, errores con JSON Pointer y posición, límites, métricas (MB/s, ciclos/byte, memoria, asignaciones, profundidad). |
 | 7. Aplicación web | API REST + WebSocket, editor de esquemas, visualización del autómata y del árbol de derivación, panel comparativo, sandbox, despliegue en la nube. |
+
+La documentación técnica (definición formal, AFD, DPDA, gramáticas, árboles de derivación) empieza en
+[docs/README.md](docs/README.md); la arquitectura por crates, en [docs/arquitectura.md](docs/arquitectura.md).
 
 ### Clasificación de palabras clave
 
@@ -51,8 +54,6 @@ Esquema (JSON Schema / XSD)
 
 ## Estructura del repositorio
 
-> Estructura prevista; se irá completando durante el desarrollo.
-
 ```
 ├── crates/
 │   ├── lexer/          # Fase 1
@@ -62,26 +63,30 @@ Esquema (JSON Schema / XSD)
 │   ├── xsd/            # Fases 2-3: frontal XSD (lector XML con espacios de nombres, …)
 │   ├── automaton/      # Fase 4
 │   ├── codegen/        # Fase 5
-│   ├── runtime-c/      # Soporte C del validador generado
-│   ├── runtime-rs/     # Soporte Rust no_std del validador generado
-│   ├── bench/          # Fase 6: métricas y línea base DOM
+│   ├── runtime-c/      # Núcleo C11 del validador generado (port de runtime-rs)
+│   ├── runtime-rs/     # Núcleo Rust no_std del validador (intérprete y generado)
+│   ├── baseline/       # Fase 6: líneas base DOM (serde_json + jsonschema, libxml2)
+│   ├── bench/          # Fases 5-6: métricas, benchmarks, generador y mutaciones
+│   ├── derivation/     # Fase 5: árboles de derivación de payloads
+│   ├── atlas/          # Fase 7: carga de casos y métricas en MongoDB Atlas
 │   └── cli/            # Herramienta de línea de comandos `schemac`
-├── server/             # Backend REST + WebSocket
-├── web/                # Frontend
+├── fuzz/               # Fase 6: objetivos de cargo-fuzz (nightly, fuera del workspace)
+├── server/             # Backend REST (axum)
+├── web/                # Frontend (React + Vite)
 ├── sandbox/            # Imagen aislada para compilar/ejecutar código generado
-├── tests/              # Casos de prueba (se cargan en la base NoSQL)
-├── docs/               # Documentación técnica e informe
-└── infra/              # Infraestructura como código y despliegue
+├── tests/              # Casos de prueba (se cargan en MongoDB Atlas)
+├── docs/               # Documentación técnica (índice en docs/README.md)
+└── infra/              # Docker Compose, Caddy y despliegue en EC2
 ```
 
 ## Tecnologías
 
-- **Compilador y validadores:** Rust (compilador), C11 y Rust `no_std` (código generado), WASM (opcional).
-- **Backend:** Rust + axum (REST + WebSocket).
+- **Compilador y validadores:** Rust (compilador), C11 y Rust `no_std` (código generado).
+- **Backend:** Rust + axum (REST).
 - **Frontend:** React + TypeScript + Vite, Monaco Editor, Cytoscape.js, D3.
-- **Base de datos:** NoSQL en la nube (MongoDB Atlas, DynamoDB o Cosmos DB).
-- **Nube:** AWS o Azure.
-- **Documentación:** Markdown, LaTeX y Graphviz.
+- **Base de datos:** MongoDB Atlas.
+- **Nube:** AWS EC2 con Docker Compose y Caddy (despliegue en curso, F7.7).
+- **Documentación:** Markdown, Graphviz y Mermaid.
 
 ## Requisitos
 
@@ -92,8 +97,6 @@ Esquema (JSON Schema / XSD)
 - Graphviz (para generar los diagramas de autómatas)
 
 ## Uso
-
-> Pendiente: se documentará a medida que se implementen las fases.
 
 ```bash
 # Compilar todo el workspace
@@ -110,11 +113,18 @@ cargo run -p cli -- check esquema.json
 cargo run -p cli -- ir esquema.json
 cargo run -p cli -- ir --dot esquema.json | dot -Tsvg > ir.svg
 
-# Compilar un esquema a un validador en C (previsto)
-cargo run -p cli -- compile esquema.json --lang c --out build/
+# Construir el autómata M: resumen de tamaños en JSON, o M completo en DOT
+cargo run -p cli -- automaton esquema.json
+cargo run -p cli -- automaton --dot esquema.json | dot -Tsvg > m.svg
 
-# Levantar la aplicación web en local (previsto)
-docker compose up
+# Compilar un esquema a un validador autocontenido en Rust o en C, con límites opcionales
+cargo run -p cli -- compile esquema.json --lang c --out build/ --limit maxDepth=64
+cc -std=c11 -O2 -Wall -Wextra -o build/validador build/*.c
+build/validador < payload.json      # una línea JSON; código 0 válido, 1 violaciones, 2 malformado o límite
+
+# Levantar la aplicación en local (servidor en 127.0.0.1:8080; la web en web/ con `npm run dev`)
+cargo run -p server --release
+docker compose -f infra/docker-compose.yml up -d   # o todo en contenedores, tras `build`
 ```
 
 ## Desarrollo
@@ -126,15 +136,18 @@ make coverage    # cargo llvm-cov (requiere `cargo install cargo-llvm-cov`)
 make docs        # regenera diagramas DOT/SVG y tablas LL(1) de docs/ (requiere Graphviz)
 make docs-check  # comprueba que los .dot y ll1-*.md versionados están sincronizados
 make doradas     # regenera las IR doradas de tests/ir (tras revisar el cambio)
+make fuzz        # cargo-fuzz, 60 s por objetivo (SEG=600 make fuzz); requiere nightly y cargo-fuzz
+make test-baseline-xml  # línea base XML con libxml2 en Docker
+make test-sandbox       # pruebas del sandbox con contenedores reales
 ```
 
 Códigos de salida de `schemac check` y `schemac ir`: 0 bien (también si el lector cierra la salida antes de tiempo, como `| head`); 1 el esquema tiene errores (los mismos en los dos comandos); 2 no se pudo leer el archivo, no es un archivo regular o pasa de 16 MiB, los argumentos son inválidos, no se pudo escribir la salida, no se pudo crear el hilo de análisis o, solo en `check`, un fallo interno (pánico); 3 error interno del compilador en `schemac ir` (la IR bajada no cumple sus invariantes o un pánico en su hilo, [docs/fase3/bajada.md](docs/fase3/bajada.md) §4).
 
-En Windows sin `make`: `powershell -File scripts/lint.ps1`. La CI (GitHub Actions) ejecuta lint, tests en Linux y Windows, y cobertura en cada PR.
+En Windows sin `make`: `powershell -File scripts/lint.ps1`. No hay CI: toda la verificación es local (D32).
 
 - Subconjunto soportado de JSON Schema y XSD: [docs/00-alcance.md](docs/00-alcance.md)
 - Formato de los casos de prueba: [tests/README.md](tests/README.md)
-- Issues del plan: `python3 scripts/crear_issues.py` muestra un issue por tarea del cronograma (etiquetas `semana-N`); con `--crear` y `GITHUB_TOKEN` los crea, y las tareas ya marcadas quedan cerradas
+- Cómo trabajamos en pareja: [COLABORAR.md](COLABORAR.md); plan y decisiones: [tasks/plan-general.md](tasks/plan-general.md)
 
 ## Casos de prueba
 
@@ -157,7 +170,9 @@ Cada caso guarda esquema, payload, resultado esperado y métricas, y se almacena
 
 ## Estado
 
-🚧 En desarrollo.
+Fases 1-6 cerradas. De la Fase 7 faltan la descarga del código con validación por WebSocket (F7.5) y el
+despliegue en EC2 (F7.7). El avance por tarea está en
+[tasks/CHECKLIST.md](tasks/CHECKLIST.md).
 
 ## Autores
 

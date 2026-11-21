@@ -95,8 +95,9 @@ IR_DOT := arbol-recursivo
 IR_DOT_XSD := pedido
 # AUT_DOT: esquemas de tests/schemas/parse-ok cuyo autómata M (Fase 4,
 # `schemac automaton --dot`) se dibuja en docs/fase4/automata-<nombre>.dot;
-# `objeto-cerrado` es la dorada contada a mano en docs/fase4/automata.md §8.
-AUT_DOT := objeto-cerrado
+# `objeto-cerrado` es la dorada contada a mano en docs/fase4/automata.md §8;
+# `arbol-recursivo` muestra la recursión por `$ref` (E5, docs/README.md §3).
+AUT_DOT := objeto-cerrado arbol-recursivo
 # AUT_DOT_XSD: lo mismo con los XSD de tests/schemas/xsd/parse-ok (F4.1c);
 # `valid-xml-pedido-01` es el esquema del caso del corpus del mismo nombre.
 # `-Gnewrank=true`: sin él, `dot` pierde aristas entre clústeres de ese grafo.
