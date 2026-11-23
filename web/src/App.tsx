@@ -20,12 +20,12 @@ import { paleta, useTemaOscuro } from "./tema";
 type Monaco = Parameters<OnMount>[1];
 
 const VISTAS = [
-  ["editor", "Editor de esquema"],
+  ["editor", "Esquema"],
   ["automata", "Autómata"],
   ["arbol", "Árbol de derivación"],
-  ["comparacion", "Comparación DPDA / línea base"],
+  ["comparacion", "DPDA frente a línea base"],
   ["generado", "Código generado"],
-  ["casos", "Casos de prueba (Atlas)"],
+  ["casos", "Casos de prueba"],
 ] as const;
 type Vista = (typeof VISTAS)[number][0];
 
@@ -41,7 +41,7 @@ function definirTemas(mo: Monaco) {
         "editor.background": p.panel,
         "editorLineNumber.foreground": p.grafito,
         "editorLineNumber.activeForeground": p.tinta,
-        "editor.lineHighlightBackground": oscuro ? "#1f2a36" : "#f2f4f6",
+        "editor.lineHighlightBackground": oscuro ? "#19212b" : "#f6f7f9",
       },
     });
   }
@@ -129,25 +129,19 @@ export function App() {
     <div className="app">
       <header className="cabecera">
         <div>
-          <h1>Validador de esquemas con autómatas de pila</h1>
-          <p>Escribe un JSON Schema (2020-12) o un XSD (1.0) y compílalo a su DPDA ponderado.</p>
+          <h1>Validador de esquemas</h1>
+          <p>JSON Schema 2020-12 y XSD 1.0, compilados a un autómata de pila determinista ponderado.</p>
         </div>
-        {servicios && (
-          <ul className="servicios" aria-label="Estado del servidor">
-            <li className={servicios.database ? "activo" : undefined}>
-              Atlas {servicios.database ? "conectado" : "sin conectar"}
-            </li>
-            <li className={servicios.sandbox ? "activo" : undefined}>
-              Sandbox {servicios.sandbox ? "activo" : "apagado"}
-            </li>
-          </ul>
-        )}
+        <p className="tupla" aria-label="M es la tupla Q, Sigma, Gamma, delta, q cero, Z cero, F">
+          M = (Q, Σ, Γ, δ, q<sub>0</sub>, Z<sub>0</sub>, F)
+        </p>
       </header>
 
       {/* Las vistas como diagrama de estados: la activa lleva el doble círculo. */}
       <nav className="estados" role="tablist" aria-label="Vistas">
-        {VISTAS.map(([id, nombre]) => (
+        {VISTAS.map(([id, nombre], i) => (
           <button key={id} type="button" role="tab" aria-selected={vista === id} onClick={() => setVista(id)}>
+            {i > 0 && <span className="delta" aria-hidden="true" />}
             <span className="q" aria-hidden="true" />
             {nombre}
           </button>
@@ -205,7 +199,7 @@ export function App() {
             options={{
               minimap: { enabled: false },
               fontSize: 14,
-              fontFamily: '"JetBrains Mono", ui-monospace, Consolas, monospace',
+              fontFamily: '"IBM Plex Mono", ui-monospace, Consolas, monospace',
               scrollBeyondLastLine: false,
               tabSize: 2,
               // Al volver a la pestaña del editor, Monaco recalcula su tamaño.
@@ -217,6 +211,22 @@ export function App() {
           <Resultado resultado={resultado} cargando={cargando} alElegirError={irAError} />
         </section>
       </main>
+
+      {/* Barra de estado: lo que el servidor tiene configurado (`/api/health`). */}
+      <footer className="barra-estado" aria-label="Estado del servidor">
+        {servicios ? (
+          <>
+            <span className={servicios.database ? "si" : "no"}>
+              Casos en MongoDB Atlas: {servicios.database ? "conectado" : "sin conectar"}
+            </span>
+            <span className={servicios.sandbox ? "si" : "no"}>
+              Sandbox de código generado: {servicios.sandbox ? "activo" : "apagado"}
+            </span>
+          </>
+        ) : (
+          <span className="no">Servidor sin respuesta</span>
+        )}
+      </footer>
     </div>
   );
 }

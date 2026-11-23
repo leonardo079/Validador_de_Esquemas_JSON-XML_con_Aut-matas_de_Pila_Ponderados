@@ -12,8 +12,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "5.1.0",
     "@fontsource/ibm-plex-sans": "5.1.0",
-    "@fontsource/jetbrains-mono": "5.1.1",
+    "@fontsource/ibm-plex-serif": "5.1.0",
     "@monaco-editor/react": "4.6.0",
     "cytoscape": "3.30.2",
     "cytoscape-dagre": "2.5.0",

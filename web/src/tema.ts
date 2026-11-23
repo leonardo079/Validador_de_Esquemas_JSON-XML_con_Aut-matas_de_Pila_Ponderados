@@ -37,9 +37,9 @@ const TRAZOS_OSCURO = ["#4cbfba", "#5cc98a", "#e0b04a", "#e07aa6", "#8f9bf0", "#
 export function paleta(oscuro: boolean): Paleta {
   return oscuro
     ? {
-        panel: "#19222d",
-        tinta: "#e2e8ef",
-        grafito: "#93a0b0",
+        panel: "#13181f",
+        tinta: "#e3e8ee",
+        grafito: "#95a1b0",
         acento: "#4cbfba",
         ok: "#5cc98a",
         error: "#ff8a73",
@@ -48,11 +48,11 @@ export function paleta(oscuro: boolean): Paleta {
       }
     : {
         panel: "#ffffff",
-        tinta: "#1b2430",
-        grafito: "#5a6575",
+        tinta: "#18202b",
+        grafito: "#5d6877",
         acento: "#0d7377",
         ok: "#2e7d4f",
-        error: "#c2341b",
+        error: "#b8321a",
         grupos: ["#e3f1f1", "#e5f2e9", "#f7efd9", "#f5e4ec", "#e6e8f7", "#dff3f0", "#f7e3df", "#ede6f5"],
         trazos: TRAZOS_CLARO,
       };

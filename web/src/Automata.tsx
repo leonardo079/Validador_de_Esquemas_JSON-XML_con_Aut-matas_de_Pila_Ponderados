@@ -152,7 +152,7 @@ export function Automata({ esquema }: Props) {
             label: "data(label)",
             "text-wrap": "wrap",
             "font-size": 9,
-            "font-family": '"JetBrains Mono", ui-monospace, monospace',
+            "font-family": '"IBM Plex Mono", ui-monospace, monospace',
             color: p.tinta,
             "text-background-color": p.panel,
             "text-background-opacity": 0.92,
