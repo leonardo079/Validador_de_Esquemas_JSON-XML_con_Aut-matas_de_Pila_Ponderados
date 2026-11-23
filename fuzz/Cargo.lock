@@ -63,6 +63,7 @@ name = "baseline"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "dtd",
  "jsonschema",
  "schema-parser",
  "serde",
@@ -131,6 +132,14 @@ name = "data-encoding"
 version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4583a4551df46e2792f82ceeac45e850d2e2d5debba0b91f102385cda5b11f06"
+
+[[package]]
+name = "dtd"
+version = "0.1.0"
+dependencies = [
+ "ir",
+ "lexer",
+]
 
 [[package]]
 name = "email_address"
@@ -745,6 +754,7 @@ version = "0.0.0"
 dependencies = [
  "automaton",
  "baseline",
+ "dtd",
  "ir",
  "libfuzzer-sys",
  "runtime-rs",

@@ -1,0 +1,14 @@
+{
+  "_id": "malformed-xml-dtd-doctype-01",
+  "category": "malformed",
+  "format": "xml",
+  "description": "Aunque el esquema sea una DTD, el payload no puede traer <!DOCTYPE (D8 se mantiene, D86): error léxico en la D.",
+  "phase": 1,
+  "schema": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- Pedido de una tienda (DTD.3): secuencia con `+` y `?`, una elección,\n     texto, elemento vacío, atributo requerido, enumeración con valor por\n     defecto y un `#FIXED`. -->\n<!ELEMENT pedido (cliente, (tarjeta | efectivo), item+, nota?)>\n<!ELEMENT cliente (#PCDATA)>\n<!ELEMENT tarjeta (#PCDATA)>\n<!ELEMENT efectivo EMPTY>\n<!ELEMENT item (#PCDATA)>\n<!ELEMENT nota (#PCDATA)>\n<!ATTLIST pedido id CDATA #REQUIRED\n                 estado (nuevo|pagado|enviado) \"nuevo\">\n<!ATTLIST item sku CDATA #REQUIRED\n               moneda CDATA #FIXED \"COP\">\n",
+  "payload": "<?xml version=\"1.0\"?>\n<!DOCTYPE pedido SYSTEM \"pedido.dtd\">\n<pedido id=\"7\"><cliente>Ana</cliente><efectivo/><item sku=\"A1\">2</item></pedido>",
+  "expected": {
+    "valid": false,
+    "errorKind": "lexical",
+    "offset": 24
+  }
+}

@@ -73,6 +73,9 @@ fn la_linea_base_recorre_el_corpus_xml() {
                     "omitido {}: lo produce el generador `{g}`, aún sin implementar",
                     case.path.display()
                 ),
+                Err(Unavailable::DtdSchema) => {
+                    eprintln!("omitido {}: esquema DTD (D86)", case.path.display())
+                }
                 Err(e) => fallos.push(format!("{}: {e}", case.path.display())),
             }
         }

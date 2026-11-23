@@ -19,6 +19,7 @@ cuatro objetivos y pasa lo encontrado por la prueba diferencial con el C.
 | `validar_xml` | un payload | Con el pedido y un XSD con `sequence`, `choice`, `all`, contadores, atributos con `pattern` y `fixed`: las propiedades de §2. libxml2 no entra (feature y Docker, F6.7b). |
 | `esquema_json` | un JSON Schema | Las Fases 2-4 no entran en pánico ni desbordan la pila (hilo de 8 MiB, D7). Si construye M, M cumple §2 con 10 payloads fijos. |
 | `esquema_xsd` | un XSD | Lo mismo con el frontal XSD. |
+| `esquema_dtd` | una DTD (DTD.5, D86) | Lo mismo con el frontal DTD: ningún texto hace fallar al lexer, al parser, al análisis ni a la bajada, y lo prohibido por seguridad no llega a la IR. Semillas: `tests/schemas/dtd`, las válidas y las rechazadas. Añadido el 23 nov; no se ha corrido aún (necesita nightly y Linux, §3). |
 
 Las semillas (`scripts/fuzz_semillas.py`) son los payloads del corpus y los esquemas de `tests/schemas`. El corpus
 que crece y los fallos van a `fuzz/corpus/` y `fuzz/artifacts/` (no se versionan).

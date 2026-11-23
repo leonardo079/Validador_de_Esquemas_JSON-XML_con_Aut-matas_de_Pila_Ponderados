@@ -1,0 +1,2 @@
+<!ELEMENT a EMPTY>
+<!DOCTYPE a [ <!ELEMENT b EMPTY> ]>

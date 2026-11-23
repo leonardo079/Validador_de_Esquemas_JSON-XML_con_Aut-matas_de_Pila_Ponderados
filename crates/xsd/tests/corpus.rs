@@ -98,6 +98,10 @@ fn casos_xml() -> Vec<Caso> {
                 .unwrap_or_else(|| panic!("{}: `schema` no es una cadena", path.display()))
                 .as_bytes()
                 .to_vec();
+            // Los casos XML con una DTD como esquema (D86) son del frontal DTD.
+            if dtd::formato(&schema) == dtd::Formato::Dtd {
+                continue;
+            }
             v.push(Caso {
                 id: case["_id"].as_str().unwrap().to_owned(),
                 schema,

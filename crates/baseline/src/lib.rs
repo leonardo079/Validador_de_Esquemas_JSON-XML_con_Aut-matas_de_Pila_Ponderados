@@ -269,6 +269,9 @@ pub enum Unavailable {
     CaseLimits,
     /// El esquema del caso no compila en la línea base.
     Compile(CompileError),
+    /// Caso XML cuyo esquema es una DTD (D86): la línea base XML valida con
+    /// XSD (libxml2 con la política de D8, que rechaza `<!DOCTYPE`).
+    DtdSchema,
 }
 
 impl fmt::Display for Unavailable {
@@ -284,6 +287,9 @@ impl fmt::Display for Unavailable {
                 f.write_str("el caso declara `limits`, cuyo formato aún no está fijado")
             }
             Unavailable::Compile(e) => write!(f, "{e}"),
+            Unavailable::DtdSchema => f.write_str(
+                "caso XML con una DTD como esquema: la línea base XML solo valida con XSD",
+            ),
         }
     }
 }

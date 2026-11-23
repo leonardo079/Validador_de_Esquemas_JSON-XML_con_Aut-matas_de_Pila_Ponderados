@@ -1,0 +1,4 @@
+<!ELEMENT a ((b, c) | (b, d))>
+<!ELEMENT b EMPTY>
+<!ELEMENT c EMPTY>
+<!ELEMENT d EMPTY>

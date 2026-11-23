@@ -1084,13 +1084,41 @@ el orquestador, sin agentes (decisión del usuario).
   - la pila en Docker detrás de Caddy compila el pedido DTD y el DPDA valida y rechaza como debe;
   - la web muestra «Formato detectado: DTD» (captura).
 
-**Pendiente para DTD.5:**
-
-- casos DTD en `tests/cases`, con `<!ENTITY` y `SYSTEM` rechazados;
-- una fila en `docs/fase6/mitigaciones.md`;
-- un objetivo de fuzzing `esquema_dtd`;
-- cargar en Atlas;
-- la diferencial DTD frente a XSD **por veredictos** sobre payloads generados (E3).
+**Pendiente para DTD.5:** resuelto en DTD.5 (abajo), salvo Atlas.
+**Revisión de seguridad (D35, opcional):** DTD.4 toca la entrada no confiable del servidor. Si se pide, un
+`security-auditor` sobre `crates/dtd` y `server/src/compilar.rs`.
 
 **Revisión de seguridad (D35, opcional):** DTD.4 toca la entrada no confiable del servidor. Si se pide, un
 `security-auditor` sobre `crates/dtd` y `server/src/compilar.rs`.
+
+## Tarea DTD.5: casos, seguridad, fuzzing y diferencial — HECHA (23 nov), salvo Atlas
+
+- [x] 8 casos DTD en `tests/cases` (94 en total): 2 válidos, 4 inválidos (requerido, enumeración, orden, `EMPTY`) y
+  2 malformados, uno con `<!DOCTYPE` en el payload, que sigue prohibido (D8). Cada `expected` se razonó y se
+  contrastó con el DPDA.
+- [x] Los lectores del corpus eligen el frontal con `dtd::formato`:
+  - `automaton/tests/corpus.rs` y `codegen/tests/comun` (así los casos DTD pasan también por los validadores
+    generados);
+  - `bench` (se borró su copia `es_xsd`);
+  - `xsd/tests/corpus.rs` los salta;
+  - `baseline`: `Unavailable::DtdSchema`.
+
+  Pasan en verde: `lexer`, `automaton`, `xsd` y `baseline/corpus_json`; `atlas` y `server/casos` (el corpus
+  ejecutado desde sus documentos); `derivation`, `bench/generar` y `bench/mutar`; y `codegen` entero en Linux, con
+  la diferencial Rust/C.
+- [x] 14 esquemas DTD rechazados en `tests/schemas/dtd/{parse-error,semantic-error}`, con código, línea y columna
+  en `crates/dtd/tests/corpus.rs`: *billion laughs*, XXE, `<!DOCTYPE`, `%p;`, `<![INCLUDE[`, `ANY`, mixto, `ID`,
+  `NOTATION`, 257 paréntesis y cuatro de la Fase 3.
+- [x] `docs/fase6/mitigaciones.md`: 3 filas (la DTD como esquema; `<!DOCTYPE` en el payload; modelos hostiles).
+- [x] Objetivo `esquema_dtd` (`fuzz/fuzz_targets`, `comun::ir_dtd`, semillas en `scripts/fuzz_semillas.py`,
+  `scripts/fuzz.sh`, `docs/fase6/fuzzing.md`). Compila con `--locked` en Linux; **sin correr**, porque necesita
+  *nightly*.
+- [x] Diferencial por veredictos (E3, `crates/bench/tests/dtd_xsd.rs`): `pedido` y `biblioteca` en DTD y en XSD
+  (`tests/schemas/dtd/xsd-equivalente`). 2 422 documentos generados desde las dos IR, con el mismo veredicto y la
+  misma clase de error.
+- [x] `docs/fase3/dtd.md` §6. `lint OK`.
+- [ ] **Atlas:** cargar los 94 casos (`cargo run -p atlas`) **después** de fusionar con `main` y desplegar. Hacerlo
+  antes rompería el 86/86 de la demo, porque la EC2 ejecuta el servidor de `main`.
+
+**Pendiente para DTD.6:** `00-alcance.md` (pasar §3bis de «propuesto» a hecho), `docs/README.md`,
+`informe-final.md` y `arquitectura.md`.

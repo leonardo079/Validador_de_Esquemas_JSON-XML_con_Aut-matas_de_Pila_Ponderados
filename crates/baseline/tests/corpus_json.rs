@@ -179,8 +179,8 @@ fn sin_libxml2_un_caso_xml_no_esta_disponible() {
     let casos = corpus::casos().unwrap_or_else(|e| panic!("{e}"));
     let xml = casos
         .iter()
-        .find(|c| c.format == Format::Xml)
-        .expect("el corpus no tiene casos XML");
+        .find(|c| c.format == Format::Xml && c.schema_text.starts_with(b"<xs:schema"))
+        .expect("el corpus no tiene casos XSD");
     assert!(xml.schema_text.starts_with(b"<xs:schema"));
     assert_eq!(
         with_stack(|s| run_case(xml, s)),

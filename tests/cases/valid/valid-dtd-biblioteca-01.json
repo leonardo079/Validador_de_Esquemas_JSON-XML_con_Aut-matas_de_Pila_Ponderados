@@ -1,0 +1,13 @@
+{
+  "_id": "valid-dtd-biblioteca-01",
+  "category": "valid",
+  "format": "xml",
+  "description": "DTD recursiva (D86): una sección contiene secciones; varias <!ATTLIST> del mismo elemento se unen.",
+  "phase": 3,
+  "schema": "<!-- Biblioteca (DTD.3): recursión productiva (una sección contiene\n     secciones), grupos anidados con `*`, y varias <!ATTLIST> del mismo\n     elemento que se unen. -->\n<!ELEMENT biblioteca (libro*)>\n<!ELEMENT libro (titulo, autor+, (seccion | anexo)*)>\n<!ELEMENT titulo (#PCDATA)>\n<!ELEMENT autor (#PCDATA)>\n<!ELEMENT seccion (titulo, (parrafo | seccion)*)>\n<!ELEMENT parrafo (#PCDATA)>\n<!ELEMENT anexo EMPTY>\n<!ATTLIST libro isbn CDATA #REQUIRED>\n<!ATTLIST libro idioma (es|en|fr) #IMPLIED>\n<!ATTLIST seccion nivel (1|2|3) \"1\">\n",
+  "payload": "<biblioteca>\n  <libro isbn=\"978-1\" idioma=\"es\">\n    <titulo>Autómatas</titulo>\n    <autor>Ana</autor>\n    <seccion nivel=\"2\">\n      <titulo>Pilas</titulo>\n      <parrafo>Una pila acotada.</parrafo>\n      <seccion><titulo>Marcos</titulo></seccion>\n    </seccion>\n    <anexo/>\n  </libro>\n</biblioteca>",
+  "expected": {
+    "valid": true,
+    "violations": 0
+  }
+}

@@ -96,6 +96,7 @@ name = "automaton"
 version = "0.1.0"
 dependencies = [
  "baseline",
+ "dtd",
  "ir",
  "lexer",
  "proptest",
@@ -189,6 +190,7 @@ name = "baseline"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "dtd",
  "jsonschema",
  "libxml",
  "schema-parser",
@@ -204,6 +206,7 @@ dependencies = [
  "baseline",
  "criterion",
  "dhat",
+ "dtd",
  "ir",
  "runtime-rs",
  "schema-parser",
@@ -508,6 +511,7 @@ version = "0.1.0"
 dependencies = [
  "automaton",
  "baseline",
+ "dtd",
  "ir",
  "lexer",
  "runtime-rs",
@@ -3395,6 +3399,7 @@ dependencies = [
 name = "xsd"
 version = "0.1.0"
 dependencies = [
+ "dtd",
  "ir",
  "lexer",
  "proptest",

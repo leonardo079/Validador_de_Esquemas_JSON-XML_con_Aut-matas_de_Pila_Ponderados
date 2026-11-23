@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- El mismo esquema que ../parse-ok/biblioteca.dtd escrito en XSD, para la
+     diferencial por veredictos de DTD.5 (D86, enmienda E3). -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="biblioteca">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="libro" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="libro">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="titulo"/>
+        <xs:element ref="autor" maxOccurs="unbounded"/>
+        <xs:choice minOccurs="0" maxOccurs="unbounded">
+          <xs:element ref="seccion"/>
+          <xs:element ref="anexo"/>
+        </xs:choice>
+      </xs:sequence>
+      <xs:attribute name="isbn" type="xs:string" use="required"/>
+      <xs:attribute name="idioma">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="es"/>
+            <xs:enumeration value="en"/>
+            <xs:enumeration value="fr"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="titulo" type="xs:string"/>
+  <xs:element name="autor" type="xs:string"/>
+  <xs:element name="seccion">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="titulo"/>
+        <xs:choice minOccurs="0" maxOccurs="unbounded">
+          <xs:element ref="parrafo"/>
+          <xs:element ref="seccion"/>
+        </xs:choice>
+      </xs:sequence>
+      <xs:attribute name="nivel" default="1">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="1"/>
+            <xs:enumeration value="2"/>
+            <xs:enumeration value="3"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="parrafo" type="xs:string"/>
+  <xs:element name="anexo"><xs:complexType/></xs:element>
+</xs:schema>

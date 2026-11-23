@@ -329,6 +329,9 @@ pub fn run_case(case: &Case, stack: &Stack) -> Result<Outcome, Unavailable> {
                 JsonBaseline::compile_text(&case.schema_text).map_err(Unavailable::Compile)?;
             Ok(base.validate(stack, bytes))
         }
+        Format::Xml if dtd::formato(&case.schema_text) == dtd::Formato::Dtd => {
+            Err(Unavailable::DtdSchema)
+        }
         Format::Xml => validar_xml(&case.schema_text, stack, bytes),
     }
 }

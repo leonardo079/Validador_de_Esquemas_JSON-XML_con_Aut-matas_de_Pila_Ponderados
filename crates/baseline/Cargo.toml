@@ -9,6 +9,8 @@ repository.workspace = true
 
 [dependencies]
 schema-parser.workspace = true
+# Solo `dtd::formato`, para reconocer los casos con DTD (D86).
+dtd.workspace = true
 serde = "1.0.229"
 # `float_roundtrip` la impone `jsonschema`; `unbounded_depth` solo añade
 # `disable_recursion_limit()`: la profundidad la acota el visitante propio

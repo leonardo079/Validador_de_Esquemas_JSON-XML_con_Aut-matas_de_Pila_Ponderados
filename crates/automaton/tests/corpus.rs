@@ -175,7 +175,10 @@ fn ir_del_caso(c: &Case) -> VerifiedIr {
     std::thread::Builder::new()
         .stack_size(8 << 20)
         .spawn(move || {
-            if xml {
+            // Un caso XML trae un XSD o una DTD: lo decide `dtd::formato` (D86).
+            if xml && dtd::formato(&texto) == dtd::Formato::Dtd {
+                dtd::compile(&texto).unwrap_or_else(|e| panic!("{e:?}"))
+            } else if xml {
                 let s = xsd::parse(&texto).unwrap_or_else(|e| panic!("{e}"));
                 xsd::lower(&xsd::analyze(&s).unwrap_or_else(|e| panic!("{e:?}"))).unwrap()
             } else {

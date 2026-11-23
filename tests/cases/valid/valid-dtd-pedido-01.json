@@ -1,0 +1,13 @@
+{
+  "_id": "valid-dtd-pedido-01",
+  "category": "valid",
+  "format": "xml",
+  "description": "Pedido válido contra una DTD (D86): declaración, comentario, entidad predefinida, enumeración con su valor por defecto, #FIXED con su valor, elección y elemento opcional presente.",
+  "phase": 3,
+  "schema": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- Pedido de una tienda (DTD.3): secuencia con `+` y `?`, una elección,\n     texto, elemento vacío, atributo requerido, enumeración con valor por\n     defecto y un `#FIXED`. -->\n<!ELEMENT pedido (cliente, (tarjeta | efectivo), item+, nota?)>\n<!ELEMENT cliente (#PCDATA)>\n<!ELEMENT tarjeta (#PCDATA)>\n<!ELEMENT efectivo EMPTY>\n<!ELEMENT item (#PCDATA)>\n<!ELEMENT nota (#PCDATA)>\n<!ATTLIST pedido id CDATA #REQUIRED\n                 estado (nuevo|pagado|enviado) \"nuevo\">\n<!ATTLIST item sku CDATA #REQUIRED\n               moneda CDATA #FIXED \"COP\">\n",
+  "payload": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- pedido de prueba -->\n<pedido id=\"7\" estado=\"pagado\">\n  <cliente>Ñandú &amp; Cía</cliente>\n  <tarjeta>4242</tarjeta>\n  <item sku=\"A1\" moneda=\"COP\">2</item>\n  <item sku=\"B2\">1</item>\n  <nota>entregar antes de las 5</nota>\n</pedido>",
+  "expected": {
+    "valid": true,
+    "violations": 0
+  }
+}

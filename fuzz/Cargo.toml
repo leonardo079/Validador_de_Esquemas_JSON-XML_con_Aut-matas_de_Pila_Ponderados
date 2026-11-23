@@ -19,6 +19,7 @@ runtime-rs = { path = "../crates/runtime-rs" }
 schema-parser = { path = "../crates/schema-parser" }
 semantic = { path = "../crates/semantic" }
 xsd = { path = "../crates/xsd" }
+dtd = { path = "../crates/dtd" }
 
 [workspace]
 members = ["."]
@@ -50,6 +51,13 @@ bench = false
 [[bin]]
 name = "esquema_xsd"
 path = "fuzz_targets/esquema_xsd.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "esquema_dtd"
+path = "fuzz_targets/esquema_dtd.rs"
 test = false
 doc = false
 bench = false

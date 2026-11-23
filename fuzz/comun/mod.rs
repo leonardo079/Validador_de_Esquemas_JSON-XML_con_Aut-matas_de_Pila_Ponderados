@@ -35,6 +35,11 @@ pub fn ir_xsd(texto: &[u8]) -> Option<VerifiedIr> {
     xsd::lower(&a).ok()
 }
 
+/// La IR de una DTD (D86), o `None` si no pasa las Fases 1-3.
+pub fn ir_dtd(texto: &[u8]) -> Option<VerifiedIr> {
+    dtd::compile(texto).ok()
+}
+
 /// M de un esquema que debe compilar (los fijos de los objetivos).
 pub fn m(ir: Option<VerifiedIr>) -> Automaton {
     build(&ir.expect("el esquema fijo no compila")).expect("el esquema fijo no construye M")

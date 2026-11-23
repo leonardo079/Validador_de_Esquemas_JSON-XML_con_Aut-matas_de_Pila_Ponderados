@@ -40,6 +40,9 @@ def main() -> None:
         guardar(salida / "esquema_json", e.read_bytes())
     for e in sorted((RAIZ / "tests" / "schemas" / "xsd").rglob("*.xsd")):
         guardar(salida / "esquema_xsd", e.read_bytes())
+    # DTD.5 (D86): las DTD válidas y las rechazadas, como semillas de esquema_dtd.
+    for e in sorted((RAIZ / "tests" / "schemas" / "dtd").rglob("*.dtd")):
+        guardar(salida / "esquema_dtd", e.read_bytes())
 
 
 if __name__ == "__main__":

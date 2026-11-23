@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- El mismo esquema que ../parse-ok/pedido.dtd escrito en XSD, para la
+     diferencial por veredictos de DTD.5 (D86, enmienda E3). Cada
+     <!ELEMENT> es un xs:element global (en DTD cualquiera puede ser la raíz);
+     (#PCDATA) es xs:string; EMPTY, un tipo complejo vacío; CDATA, xs:string. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="pedido">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element ref="cliente"/>
+        <xs:choice>
+          <xs:element ref="tarjeta"/>
+          <xs:element ref="efectivo"/>
+        </xs:choice>
+        <xs:element ref="item" maxOccurs="unbounded"/>
+        <xs:element ref="nota" minOccurs="0"/>
+      </xs:sequence>
+      <xs:attribute name="id" type="xs:string" use="required"/>
+      <xs:attribute name="estado" default="nuevo">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="nuevo"/>
+            <xs:enumeration value="pagado"/>
+            <xs:enumeration value="enviado"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="cliente" type="xs:string"/>
+  <xs:element name="tarjeta" type="xs:string"/>
+  <xs:element name="efectivo"><xs:complexType/></xs:element>
+  <xs:element name="item">
+    <xs:complexType>
+      <xs:simpleContent>
+        <xs:extension base="xs:string">
+          <xs:attribute name="sku" type="xs:string" use="required"/>
+          <xs:attribute name="moneda" type="xs:string" fixed="COP"/>
+        </xs:extension>
+      </xs:simpleContent>
+    </xs:complexType>
+  </xs:element>
+  <xs:element name="nota" type="xs:string"/>
+</xs:schema>

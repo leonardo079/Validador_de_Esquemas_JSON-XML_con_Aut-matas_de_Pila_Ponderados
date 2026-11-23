@@ -174,8 +174,60 @@ XSD; el servidor quita ese prefijo y devuelve `code`, `line` y `column`. Los có
 - de extremo a extremo en Docker, detrás de Caddy: `POST /api/schemas` y `/api/compare` con el pedido (el DPDA
   acepta el válido y rechaza el que no tiene `id`), y la web muestra «Formato detectado: DTD».
 
-## 6. Lo que falta (DTD.5-DTD.6)
+## 6. Casos, seguridad y diferencial (DTD.5)
 
-- **DTD.5:** casos en `tests/cases`, mitigaciones, fuzzing, Atlas y la diferencial DTD frente a XSD **por
-  veredictos** sobre payloads generados (E3).
-- **DTD.6:** documentación final.
+**Casos del corpus** (`tests/cases`, `format: "xml"` con una DTD como `schema`):
+
+| Caso | Qué muestra | `expected` |
+| --- | --- | --- |
+| `valid-dtd-pedido-01` | Declaración, comentario, `&amp;`, enumeración, `#FIXED` con su valor, elección, opcional presente | válido |
+| `valid-dtd-biblioteca-01` | Recursión `seccion` → `seccion`; `<!ATTLIST>` unidas | válido |
+| `invalid-dtd-requerido-01` | Falta el `#REQUIRED` `id` | `schema`, `/pedido`, byte 0 |
+| `invalid-dtd-enumeracion-01` | `estado="perdido"` fuera de la enumeración | `schema`, `/pedido`, byte 22 |
+| `invalid-dtd-orden-01` | Hijos en otro orden que el modelo | `schema`, `/pedido/efectivo`, byte 18, 3 violaciones |
+| `invalid-dtd-vacio-01` | Texto en un elemento `EMPTY` | `schema`, `/pedido/efectivo`, byte 53 |
+| `malformed-xml-dtd-doctype-01` | El payload trae `<!DOCTYPE`: D8 sigue valiendo aunque el esquema sea una DTD | `lexical`, en la `D` (byte 24) |
+| `malformed-xml-dtd-01` | Etiqueta de cierre que no corresponde | `syntax`, byte 27 |
+
+Cada `expected` se razonó primero y se contrastó después con el informe del DPDA.
+
+**Los lectores del corpus** que daban por hecho que un caso XML trae un XSD eligen ahora el frontal con
+`dtd::formato`, la misma regla que la CLI y el servidor:
+
+- las pruebas de corpus de `automaton` y de `codegen`. Así los casos DTD pasan también por la diferencial
+  intérprete/Rust/C de los validadores generados;
+- `bench` (`bajar`, que tenía su propia copia de la regla antigua, `es_xsd`, ya borrada);
+- el corpus de `xsd`, que salta los casos DTD;
+- `baseline`: un caso con DTD es `Unavailable::DtdSchema`, porque libxml2 valida con XSD.
+
+**Esquemas DTD rechazados** (`tests/schemas/dtd/parse-error` y `semantic-error`). Cada uno lleva su código, línea
+y columna en `crates/dtd/tests/corpus.rs`, y ningún archivo queda sin expectativa:
+
+- de seguridad: `billion-laughs`, `entidad` (XXE), `doctype`, `parametro`, `condicional`;
+- de alcance: `any`, `mixto`, `id`, `notation`;
+- el límite `profundidad` (257 paréntesis);
+- de la Fase 3: `sin-elementos`, `no-determinista`, `sin-declarar`, `varios`.
+
+**Seguridad:** tres filas nuevas en [../fase6/mitigaciones.md](../fase6/mitigaciones.md):
+
+- la DTD como esquema: entidades, XXE, `%` y secciones condicionales;
+- `<!DOCTYPE` en el payload;
+- modelos hostiles.
+
+El objetivo de fuzzing `esquema_dtd` ([../fase6/fuzzing.md](../fase6/fuzzing.md)) se siembra con
+`tests/schemas/dtd`. Compila con `--locked`, pero no se ha corrido todavía: necesita *nightly* y Linux.
+
+**Diferencial por veredictos** (enmienda E3; `crates/bench/tests/dtd_xsd.rs`). Para `pedido` y `biblioteca`, la DTD
+y el mismo esquema escrito en XSD (`tests/schemas/dtd/xsd-equivalente/`). Desde las **dos** IR se generan
+documentos válidos (`generar_xml_valido`), saboteados (`generar_xml_invalido`) y malformados (`malformar`, las 5
+malformaciones). Los dos autómatas dan el mismo veredicto y la misma clase de error (`clase_dpda`) en los
+**2 422 documentos**: 480 válidos, 132 inválidos y 1 810 malformados.
+
+**Atlas: todavía no.** La EC2 ejecuta los casos de Atlas con el servidor de `main`, que no entiende DTD. Cargarlos
+ahora rompería el «86 de 86» de la demo. Se cargan (`cargo run -p atlas`) **después** de fusionar la rama `DTD` en
+`main` y desplegar, en el mismo paso.
+
+## 7. Lo que falta (DTD.6)
+
+- Documentación final: `00-alcance.md`, `docs/README.md`, `informe-final.md` y `arquitectura.md`.
+- Tras fusionar con `main`: desplegar y cargar Atlas con los 94 casos.

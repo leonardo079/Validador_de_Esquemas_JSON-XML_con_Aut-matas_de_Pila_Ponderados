@@ -11,6 +11,7 @@ repository.workspace = true
 schema-parser.workspace = true
 semantic.workspace = true
 xsd.workspace = true
+dtd.workspace = true
 ir.workspace = true
 automaton.workspace = true
 runtime-rs.workspace = true

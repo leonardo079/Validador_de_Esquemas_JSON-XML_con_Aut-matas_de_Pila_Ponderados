@@ -43,7 +43,8 @@ fn en_hilo<T: Send + 'static>(
         .unwrap_or_else(|_| Err("pánico al compilar el esquema".into()))
 }
 
-/// Compila un esquema (JSON Schema o XSD, detectado por contenido, D22) a su
+/// Compila un esquema (JSON Schema, XSD o DTD, detectado por contenido con
+/// `dtd::formato`, D22 y D86) a su
 /// autómata M. El error es el texto que daría `schemac`.
 pub fn automata(esquema: &[u8]) -> Result<Automaton, String> {
     let esquema = esquema.to_vec();
@@ -61,15 +62,25 @@ pub fn ir_y_automata(esquema: &[u8]) -> Result<(VerifiedIr, Automaton), String> 
 }
 
 fn bajar(esquema: &[u8]) -> Result<VerifiedIr, String> {
-    Ok(if es_xsd(esquema) {
-        let s = xsd::parse(esquema).map_err(|e| e.to_string())?;
-        let a = xsd::analyze(&s).map_err(|e| primero(&e))?;
-        xsd::lower(&a).map_err(|e| e.to_string())?
-    } else {
-        let s = schema_parser::parse(esquema).map_err(|e| e.to_string())?;
-        // `lower` exige la tabla de `analyze` (`docs/fase3/pendientes.md` §13).
-        let t = semantic::analyze(&s).map_err(|e| primero(&e))?;
-        semantic::lower(&t).map_err(|e| e.to_string())?
+    // El formato lo decide `dtd::formato`, la misma regla que `schemac` y el
+    // servidor (D22 enmendada por D86, E2).
+    Ok(match dtd::formato(esquema) {
+        dtd::Formato::Xsd => {
+            let s = xsd::parse(esquema).map_err(|e| e.to_string())?;
+            let a = xsd::analyze(&s).map_err(|e| primero(&e))?;
+            xsd::lower(&a).map_err(|e| e.to_string())?
+        }
+        dtd::Formato::Dtd => {
+            let d = dtd::parse(esquema).map_err(|e| e.to_string())?;
+            let a = dtd::analyze(&d).map_err(|e| primero(&e))?;
+            dtd::lower(&a).map_err(|e| e.to_string())?
+        }
+        dtd::Formato::Json => {
+            let s = schema_parser::parse(esquema).map_err(|e| e.to_string())?;
+            // `lower` exige la tabla de `analyze` (`docs/fase3/pendientes.md` §13).
+            let t = semantic::analyze(&s).map_err(|e| primero(&e))?;
+            semantic::lower(&t).map_err(|e| e.to_string())?
+        }
     })
 }
 
@@ -79,14 +90,6 @@ fn primero<E: std::fmt::Display>(errores: &[E]) -> String {
         Some(e) => e.to_string(),
         None => "esquema no válido".into(),
     }
-}
-
-/// D22: tras un BOM y espacios, `<` es XSD.
-fn es_xsd(b: &[u8]) -> bool {
-    let b = b.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(b);
-    b.iter()
-        .find(|c| !matches!(c, b' ' | b'\t' | b'\r' | b'\n'))
-        == Some(&b'<')
 }
 
 /// Anidamiento máximo de `payload` (contenedores JSON o elementos XML), en

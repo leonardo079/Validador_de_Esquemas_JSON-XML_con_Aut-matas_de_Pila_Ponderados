@@ -1,0 +1,16 @@
+{
+  "_id": "invalid-dtd-enumeracion-01",
+  "category": "invalid",
+  "format": "xml",
+  "description": "El atributo enumerado `estado` con un valor fuera de (nuevo|pagado|enviado) (DTD, D86).",
+  "phase": 3,
+  "schema": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- Pedido de una tienda (DTD.3): secuencia con `+` y `?`, una elección,\n     texto, elemento vacío, atributo requerido, enumeración con valor por\n     defecto y un `#FIXED`. -->\n<!ELEMENT pedido (cliente, (tarjeta | efectivo), item+, nota?)>\n<!ELEMENT cliente (#PCDATA)>\n<!ELEMENT tarjeta (#PCDATA)>\n<!ELEMENT efectivo EMPTY>\n<!ELEMENT item (#PCDATA)>\n<!ELEMENT nota (#PCDATA)>\n<!ATTLIST pedido id CDATA #REQUIRED\n                 estado (nuevo|pagado|enviado) \"nuevo\">\n<!ATTLIST item sku CDATA #REQUIRED\n               moneda CDATA #FIXED \"COP\">\n",
+  "payload": "<pedido id=\"7\" estado=\"perdido\">\n  <cliente>Ana</cliente>\n  <efectivo/>\n  <item sku=\"A1\">2</item>\n</pedido>",
+  "expected": {
+    "valid": false,
+    "errorKind": "schema",
+    "violations": 1,
+    "pointer": "/pedido",
+    "offset": 22
+  }
+}
