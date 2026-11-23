@@ -768,3 +768,61 @@ async fn sin_hilo_da_503_y_libera_el_permiso() {
         assert_eq!(json(&cuerpo)["error"], "no-thread");
     }
 }
+
+/// D86 (DTD.4): una DTD válida → 200 con `format: "xml"` (la API no cambia),
+/// su IR (la dorada de `tests/ir/dtd`) y su autómata construido.
+#[tokio::test]
+async fn dtd_valida_da_200_con_automata() {
+    let esquema = std::fs::read(repo("schemas/dtd/parse-ok/pedido.dtd")).unwrap();
+    let dorada = std::fs::read_to_string(repo("ir/dtd/pedido.json")).unwrap();
+    let (estado, cuerpo) = pedir(&router(Config::default()), post(esquema)).await;
+    assert_eq!(estado, StatusCode::OK, "{cuerpo}");
+    assert!(cuerpo.ends_with(&format!("\"ir\":{dorada}}}")), "{cuerpo}");
+    let v = json(&cuerpo);
+    assert_eq!(v["format"], "xml");
+    assert_eq!(
+        v["summary"],
+        "esquema válido (subconjunto de DTD); 6 elementos, 4 atributos"
+    );
+    assert_eq!(v["automaton"]["status"], "ok", "{cuerpo}");
+}
+
+/// Los errores de una DTD salen con su `code`, línea y columna, sin el
+/// prefijo «línea L, columna C: » en el mensaje: una entidad (prohibida,
+/// error léxico en su `<`) y todos los de la Fase 3.
+#[tokio::test]
+async fn dtd_invalida_da_422_con_sus_codigos() {
+    let (estado, cuerpo) = pedir(
+        &router(Config::default()),
+        post("<!ELEMENT a (#PCDATA)>\n<!ENTITY x SYSTEM 'file:///etc/passwd'>"),
+    )
+    .await;
+    assert_eq!(estado, StatusCode::UNPROCESSABLE_ENTITY, "{cuerpo}");
+    let v = json(&cuerpo);
+    assert_eq!(v["format"], "xml");
+    let e = &v["errors"][0];
+    assert_eq!(
+        (e["code"].as_str(), e["line"].as_u64(), e["column"].as_u64()),
+        (Some("lexical"), Some(2), Some(1))
+    );
+    assert!(
+        e["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("<!ENTITY está prohibido"),
+        "{e}"
+    );
+
+    let esquema = std::fs::read(repo("schemas/dtd/semantic-error/varios.dtd")).unwrap();
+    let (estado, cuerpo) = pedir(&router(Config::default()), post(esquema)).await;
+    assert_eq!(estado, StatusCode::UNPROCESSABLE_ENTITY, "{cuerpo}");
+    let v = json(&cuerpo);
+    assert_eq!(v["total"], 3);
+    let codigos: Vec<&str> = v["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(codigos, ["content-model", "duplicate-name", "value"]);
+}

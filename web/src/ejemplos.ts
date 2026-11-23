@@ -60,4 +60,18 @@ export const EJEMPLOS: { nombre: string; texto: string }[] = [
 }
 `,
   },
+  {
+    nombre: "DTD: pedido",
+    texto: `<!-- DTD externa (D86): la raíz puede ser cualquier elemento declarado. -->
+<!ELEMENT pedido (cliente, (tarjeta | efectivo), item+, nota?)>
+<!ELEMENT cliente (#PCDATA)>
+<!ELEMENT tarjeta (#PCDATA)>
+<!ELEMENT efectivo EMPTY>
+<!ELEMENT item (#PCDATA)>
+<!ELEMENT nota (#PCDATA)>
+<!ATTLIST pedido id CDATA #REQUIRED
+                 estado (nuevo|pagado|enviado) "nuevo">
+<!ATTLIST item sku CDATA #REQUIRED>
+`,
+  },
 ];

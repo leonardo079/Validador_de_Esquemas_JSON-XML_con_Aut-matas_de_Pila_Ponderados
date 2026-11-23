@@ -28,31 +28,30 @@ const MAX_DETALLE: usize = 8;
 pub enum Formato {
     Json,
     Xsd,
+    /// DTD externa (D86).
+    Dtd,
 }
 
 impl Formato {
     /// El valor de `format` en las respuestas (el de la IR: `"json"` o
-    /// `"xml"`).
+    /// `"xml"`). Una DTD es `"xml"`, como un XSD: la API no cambia (D86, E2).
     pub fn nombre(self) -> &'static str {
         match self {
             Formato::Json => "json",
-            Formato::Xsd => "xml",
+            Formato::Xsd | Formato::Dtd => "xml",
         }
     }
 }
 
-/// D22, copia literal de `formato` de `crates/cli/src/main.rs` (U2; la
-/// prueba `formato_por_el_primer_byte_significativo` repite su tabla): si el
-/// primer byte significativo (tras un BOM UTF-8 y los cuatro espacios de XML
-/// y JSON) es `<`, XSD; si no, también sin ninguno, JSON. El BOM no se quita.
+/// D22 enmendada por D86 (E1, E2): la regla vive en **una sola** función,
+/// `dtd::formato`, la misma que usa `schemac` (antes era una copia literal de
+/// la de la CLI). Tras un BOM, espacios, una `<?xml …?>` y comentarios,
+/// `<!DOCTYPE` es XSD, otro `<!` es DTD, otro `<` es XSD y lo demás, JSON.
 pub fn formato(bytes: &[u8]) -> Formato {
-    let sin_bom = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
-    match sin_bom
-        .iter()
-        .find(|b| !matches!(b, b' ' | b'\t' | b'\n' | b'\r'))
-    {
-        Some(b'<') => Formato::Xsd,
-        _ => Formato::Json,
+    match dtd::formato(bytes) {
+        dtd::Formato::Json => Formato::Json,
+        dtd::Formato::Xsd => Formato::Xsd,
+        dtd::Formato::Dtd => Formato::Dtd,
     }
 }
 
@@ -121,6 +120,12 @@ impl ConPosicion for semantic::SemanticError {
 }
 
 impl ConPosicion for xsd::XsdError {
+    fn posicion(&self) -> (&'static str, u32, u32) {
+        (self.code(), self.line(), self.column())
+    }
+}
+
+impl ConPosicion for dtd::DtdError {
     fn posicion(&self) -> (&'static str, u32, u32) {
         (self.code(), self.line(), self.column())
     }
@@ -243,6 +248,16 @@ pub fn ir_de(bytes: &[u8]) -> Result<(Formato, String, VerifiedIr), Compilado> {
             );
             (resumen, xsd::lower(&a).map_err(|e| interno(&e))?)
         }
+        Formato::Dtd => {
+            let d = dtd::parse(bytes).map_err(|e| errores(f, std::slice::from_ref(&e)))?;
+            let a = dtd::analyze(&d).map_err(|e| errores(f, &e))?;
+            let resumen = format!(
+                "esquema válido (subconjunto de DTD); {} elementos, {} atributos",
+                d.elements.len(),
+                a.attributes.iter().map(Vec::len).sum::<usize>()
+            );
+            (resumen, dtd::lower(&a).map_err(|e| interno(&e))?)
+        }
     };
     Ok((f, resumen, ir))
 }
@@ -271,8 +286,9 @@ mod tests {
     use super::*;
     use ir::{Constraint, Format, Ir, Node, NodeId, Origin, Pos, Rule, Sort, Span, Step};
 
-    /// D22, con la misma tabla que `formato_por_el_primer_byte_significativo`
-    /// de `crates/cli/src/main.rs` (U2: el servidor copia `formato`).
+    /// D22 enmendada por D86: el servidor delega en `dtd::formato`, la misma
+    /// función que `schemac` (la tabla común completa la prueba
+    /// `crates/dtd/tests/formato.rs`).
     #[test]
     fn formato_por_el_primer_byte_significativo() {
         for (bytes, esperado) in [
@@ -291,6 +307,11 @@ mod tests {
             // Otros espacios de Unicode no cuentan.
             (b"\x0c<x/>", Formato::Json),
             (b"\xEF\xBB<x/>", Formato::Json),
+            (b"<!ELEMENT a EMPTY>", Formato::Dtd),
+            (
+                b"<?xml version='1.0'?><!DOCTYPE x><xs:schema/>",
+                Formato::Xsd,
+            ),
         ] {
             assert_eq!(formato(bytes), esperado, "{bytes:?}");
         }
@@ -349,10 +370,11 @@ mod tests {
 
     /// CR-S1: hasta que exista el crate `pipeline` (U2,
     /// `docs/fase7/pendientes.md` §6), la paridad con `schemac` se vigila
-    /// sobre el **código fuente** de `crates/cli`: el cuerpo de `formato` es
-    /// el mismo línea a línea (sin la sangría) y las cadenas de los dos
-    /// resúmenes son las mismas. Si alguien cambia una copia y no la otra,
-    /// falla aquí. De los dos fuentes solo se mira la parte anterior a las
+    /// sobre el **código fuente** de `crates/cli`. Desde D86 (E2) la
+    /// detección de formato ya no es una copia: los dos llaman a
+    /// `dtd::formato`, y la prueba comprueba que ninguno tenga su propia
+    /// regla. Las cadenas de los resúmenes siguen siendo copias y tienen que
+    /// coincidir. De los dos fuentes solo se mira la parte anterior a las
     /// pruebas. El de `crates/cli` se lee al correr la prueba, no con
     /// `include_str!` (CR2-S1): si se mueve, falla esta prueba y no la
     /// compilación de todas las de `server`.
@@ -371,15 +393,21 @@ mod tests {
         }
         let cli = antes_de_las_pruebas(&cli);
         let servidor = antes_de_las_pruebas(include_str!("compilar.rs"));
-        fn cuerpo<'a>(fuente: &'a str, firma: &str) -> Vec<&'a str> {
-            let mut lineas = fuente.lines().skip_while(|l| !l.contains(firma));
-            assert!(lineas.next().is_some(), "no está {firma}");
-            lineas.take_while(|l| *l != "}").map(str::trim).collect()
+        // Una sola regla de formato (D86, E2): la de `dtd::formato`.
+        assert!(
+            cli.contains("use dtd::{formato, Formato};"),
+            "schemac no usa dtd::formato"
+        );
+        assert!(
+            servidor.contains("match dtd::formato(bytes) {"),
+            "el servidor no usa dtd::formato"
+        );
+        for (quien, fuente) in [("schemac", cli), ("servidor", servidor)] {
+            assert!(
+                !fuente.contains("strip_prefix(b\"\\xEF\\xBB\\xBF\")"),
+                "{quien} vuelve a tener su propia detección de formato"
+            );
         }
-        let firma = "fn formato(bytes: &[u8]) -> Formato {";
-        let en_cli = cuerpo(cli, firma);
-        assert!(en_cli.len() >= 5, "{en_cli:?}");
-        assert_eq!(cuerpo(servidor, firma), en_cli);
         fn resumenes(fuente: &str) -> Vec<&str> {
             fuente
                 .lines()
@@ -391,7 +419,8 @@ mod tests {
                 .collect()
         }
         let en_cli = resumenes(cli);
-        assert_eq!(en_cli.len(), 3, "{en_cli:?}");
+        // JSON (dos líneas), XSD y DTD.
+        assert_eq!(en_cli.len(), 4, "{en_cli:?}");
         assert_eq!(resumenes(servidor), en_cli);
     }
 

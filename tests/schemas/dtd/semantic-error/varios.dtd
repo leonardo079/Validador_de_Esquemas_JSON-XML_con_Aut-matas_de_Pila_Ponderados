@@ -1,0 +1,5 @@
+<!ELEMENT pedido (cliente, nota?, nota)>
+<!ELEMENT cliente (#PCDATA)>
+<!ELEMENT nota (#PCDATA)>
+<!ELEMENT cliente EMPTY>
+<!ATTLIST pedido estado (nuevo|pagado) "otro">

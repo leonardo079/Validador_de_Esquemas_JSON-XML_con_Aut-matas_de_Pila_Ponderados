@@ -16,6 +16,7 @@ repository.workspace = true
 schema-parser.workspace = true
 semantic.workspace = true
 xsd.workspace = true
+dtd.workspace = true
 ir.workspace = true
 automaton.workspace = true
 # F7.6 (D70): el árbol de derivación (F5.5) y la línea base DOM (D48) para

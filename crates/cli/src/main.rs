@@ -35,10 +35,11 @@ comandos:
   dot <utf8|json|xml|dtd> escribe el AFD indicado en formato DOT (Graphviz)
   version                muestra la versión
 
-el formato del esquema sale de su contenido, no de su nombre: si su primer
-carácter significativo (tras un BOM y espacios) es «<», es XSD (subconjunto
-de XSD 1.0); si no, JSON Schema (subconjunto de 2020-12). Debe ser un
-archivo regular de como mucho 16 MiB.
+el formato del esquema sale de su contenido, no de su nombre: tras un BOM,
+espacios, una declaración <?xml …?> y comentarios, «<!» (salvo <!DOCTYPE) es
+una DTD (subconjunto de XML 1.0 §3), otro «<» es XSD (subconjunto de XSD
+1.0) y lo demás, JSON Schema (subconjunto de 2020-12). Debe ser un archivo
+regular de como mucho 16 MiB.
 
 códigos de salida: 0 bien (también si el lector de la salida la cierra
 antes de tiempo); 1 el esquema tiene errores; 2 no se pudo leer el archivo,
@@ -131,29 +132,13 @@ fn avisar(err: &mut dyn Write, linea: &str) {
     let _ = writeln!(err, "{linea}");
 }
 
-/// Formato del esquema, detectado por su contenido (D22).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Formato {
-    Json,
-    Xsd,
-}
-
-/// D22: si el primer byte significativo (tras un BOM UTF-8 y los espacios
-/// de XML y de JSON, que son los mismos cuatro) es `<`, el esquema es XSD;
-/// si no (también si no hay ninguno), JSON. El BOM no se quita de la
-/// entrada: los dos lexers lo saltan (y en JSON un prefijo incompleto de
-/// BOM es `UnexpectedByte` en el offset 0, D10). Mira solo el principio:
-/// O(espacios iniciales).
-fn formato(bytes: &[u8]) -> Formato {
-    let sin_bom = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
-    match sin_bom
-        .iter()
-        .find(|b| !matches!(b, b' ' | b'\t' | b'\n' | b'\r'))
-    {
-        Some(b'<') => Formato::Xsd,
-        _ => Formato::Json,
-    }
-}
+/// Formato del esquema, detectado por su contenido: D22 enmendada por D86
+/// (E1, E2). La regla está en una sola función, `dtd::formato`, que también
+/// usa el servidor: tras un BOM, espacios, una `<?xml …?>` y comentarios,
+/// `<!DOCTYPE` es XSD, otro `<!` es DTD, otro `<` es XSD y lo demás, JSON.
+/// El BOM no se quita de la entrada: los lexers lo saltan (y en JSON un
+/// prefijo incompleto de BOM es `UnexpectedByte` en el offset 0, D10).
+use dtd::{formato, Formato};
 
 /// Lee el esquema y ejecuta `f` sobre sus bytes en un hilo con pila
 /// explícita (D7). `Err` es el código de salida: 2 si no se pudo leer o
@@ -323,6 +308,7 @@ fn analizar(bytes: &[u8]) -> Result<String, Vec<String>> {
     match formato(bytes) {
         Formato::Json => analizar_json(bytes),
         Formato::Xsd => analizar_xsd(bytes),
+        Formato::Dtd => analizar_dtd(bytes),
     }
 }
 
@@ -352,6 +338,20 @@ fn analizar_xsd(bytes: &[u8]) -> Result<String, Vec<String>> {
         Ok(a) => Ok(format!(
             "esquema válido (subconjunto de XSD 1.0); {} tipos complejos",
             a.type_count()
+        )),
+        Err(errores) => Err(errores.iter().map(ToString::to_string).collect()),
+    }
+}
+
+/// DTD (D86): número de elementos y de atributos; el error de las Fases 1-2
+/// o todos los de la Fase 3 (`dtd::analyze`, `docs/fase3/dtd.md` §1).
+fn analizar_dtd(bytes: &[u8]) -> Result<String, Vec<String>> {
+    let d = dtd::parse(bytes).map_err(|e| vec![e.to_string()])?;
+    match dtd::analyze(&d) {
+        Ok(a) => Ok(format!(
+            "esquema válido (subconjunto de DTD); {} elementos, {} atributos",
+            d.elements.len(),
+            a.attributes.iter().map(Vec::len).sum::<usize>()
         )),
         Err(errores) => Err(errores.iter().map(ToString::to_string).collect()),
     }
@@ -448,6 +448,12 @@ fn bajar(bytes: &[u8]) -> Result<VerifiedIr, Fallo> {
                 .map_err(|e| Fallo::Esquema(e.iter().map(ToString::to_string).collect()))?;
             xsd::lower(&analysis).map_err(Fallo::Interno)
         }
+        Formato::Dtd => dtd::compile(bytes).map_err(|e| match e {
+            dtd::Compiled::Schema(es) => {
+                Fallo::Esquema(es.iter().map(ToString::to_string).collect())
+            }
+            dtd::Compiled::Internal(i) => Fallo::Interno(i),
+        }),
     }
 }
 
@@ -871,6 +877,16 @@ mod tests {
             // Otros espacios de Unicode no cuentan.
             (b"\x0c<x/>", Formato::Json),
             (b"\xEF\xBB<x/>", Formato::Json),
+            // D86: `<!` es DTD salvo `<!DOCTYPE`, también tras `<?xml?>` y comentarios.
+            (b"<!ELEMENT a EMPTY>", Formato::Dtd),
+            (
+                b"\xEF\xBB\xBF<?xml version='1.0'?><!-- c --><!ELEMENT a EMPTY>",
+                Formato::Dtd,
+            ),
+            (
+                b"<?xml version='1.0'?><!DOCTYPE x><xs:schema/>",
+                Formato::Xsd,
+            ),
         ] {
             assert_eq!(formato(bytes), esperado, "{bytes:?}");
         }

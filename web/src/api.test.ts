@@ -107,12 +107,13 @@ describe("compilar", () => {
   });
 });
 
-describe("formatoProbable (D22)", () => {
+describe("formatoProbable (D22, D86)", () => {
   it.each([
     ["{}", "json"],
-    ["  \n<xs:schema/>", "xml"],
-    ["﻿<x/>", "xml"],
+    ["  \n<xs:schema/>", "xsd"],
+    ["﻿<x/>", "xsd"],
     ["[1]", "json"],
     ["", "json"],
+    ["<!ELEMENT a EMPTY>", "dtd"],
   ])("%j → %s", (t, f) => expect(formatoProbable(t)).toBe(f));
 });

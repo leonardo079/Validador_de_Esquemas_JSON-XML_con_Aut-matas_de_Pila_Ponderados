@@ -15,11 +15,13 @@
 
 pub mod ast;
 mod check;
+mod formato;
 pub mod lexer;
 mod lower;
 pub mod parser;
 
 pub use check::{analyze, Analysis, Flat, FlatKind, MAX_PARTICLES};
+pub use formato::{formato, Formato};
 pub use lower::lower;
 pub use parser::{parse, DtdError, ErrorKind, MAX_DEPTH};
 

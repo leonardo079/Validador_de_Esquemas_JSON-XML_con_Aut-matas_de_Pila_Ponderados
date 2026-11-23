@@ -127,9 +127,55 @@ error interno fijo, nunca una IR inválida.
     - texto en un elemento `EMPTY`;
     - atributos y elementos no declarados.
 
-## 5. Lo que falta (DTD.4-DTD.6)
+## 5. Integración (DTD.4)
 
-- **DTD.4:** que `schemac` y el servidor detecten la DTD por su contenido con `dtd::formato` (enmienda E1/E2) y
-  llamen a `dtd::compile`, y la web.
+**Detección de formato** (D22 enmendada por D86, E1-E2). Una sola regla en Rust, `dtd::formato(&[u8]) -> Formato
+{ Json, Xsd, Dtd }` (`crates/dtd/src/formato.rs`). Tras un BOM (uno, al principio), espacios, una `<?xml …?>`
+inicial y comentarios:
+
+- `<!DOCTYPE`, en cualquier caja, es XSD: el frontal XSD lo sigue rechazando con su error de siempre, y
+  `tests/schemas/xsd/parse-error/doctype.xsd` da el mismo mensaje en la línea 2;
+- otro `<!` es DTD;
+- otro `<` es XSD;
+- lo demás, o nada, es JSON.
+
+Una `<?xml` o un comentario sin cerrar es XSD. El coste es O(prólogo).
+
+**Quién la usa:**
+
+- **`schemac`** la usa directamente (`check`, `ir`, `automaton`, `compile`; `check` resume «esquema válido
+  (subconjunto de DTD); N elementos, M atributos»).
+- **El servidor** la usa en `compilar::formato` y añade la variante `Formato::Dtd` a su enum, cuyo `format` en la
+  API es `"xml"`: la API no cambia.
+- La prueba `misma_tuberia_que_schemac` del servidor, que antes vigilaba que su copia de `formato` fuera igual a la
+  de `schemac`, ahora vigila que ninguno de los dos tenga su propia regla.
+
+**La web** tiene su copia en TypeScript (`formatoProbable`, que devuelve `"json" | "xsd" | "dtd"`), solo para la
+etiqueta «Formato detectado», el resaltado y el título del resultado. La API dice `"xml"` para XSD y para DTD, así
+que la web usa su detección del texto compilado.
+
+La copia ya no usa `trimStart()`, que en JavaScript también quita el BOM y `\f` y daba resultados distintos de Rust
+(`" ﻿<x/>"`). Las dos se prueban con **la misma tabla**, `tests/schemas/formato.json`: 29 casos, entre ellos
+la tabla de E1. La leen `crates/dtd/tests/formato.rs` y `web/src/formato.test.ts`, y `infra/Dockerfile.web` la
+copia para que `tsc` la encuentre al construir la imagen.
+
+La web también trae el ejemplo «DTD: pedido» y acepta archivos `.dtd`.
+
+**Errores en la CLI y en la API.** `DtdError` se escribe «línea L, columna C: mensaje», como los de JSON Schema y
+XSD; el servidor quita ese prefijo y devuelve `code`, `line` y `column`. Los códigos son los de §1: `lexical`,
+`syntax`, `unsupported`, `limit`, `duplicate-name`, `unresolved`, `content-model`, `value` y `empty-schema`.
+
+**Verificación:**
+
+- `crates/cli/tests/check.rs`, `dtd_por_su_contenido`: válida, `<!ENTITY` y tres errores de la Fase 3 con su línea
+  y columna;
+- `server/tests/api.rs`: una DTD válida da 200 con su IR dorada y su autómata; las inválidas dan 422 con
+  `lexical`, `content-model`, `duplicate-name` y `value`;
+- de extremo a extremo en Docker, detrás de Caddy: `POST /api/schemas` y `/api/compare` con el pedido (el DPDA
+  acepta el válido y rechaza el que no tiene `id`), y la web muestra «Formato detectado: DTD».
+
+## 6. Lo que falta (DTD.5-DTD.6)
+
 - **DTD.5:** casos en `tests/cases`, mitigaciones, fuzzing, Atlas y la diferencial DTD frente a XSD **por
   veredictos** sobre payloads generados (E3).
+- **DTD.6:** documentación final.

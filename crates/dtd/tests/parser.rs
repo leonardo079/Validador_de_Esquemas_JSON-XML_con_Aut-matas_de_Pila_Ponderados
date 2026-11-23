@@ -297,7 +297,7 @@ fn errores_sintacticos_con_su_posicion() {
     let e = parse(b"<!ELEMENT a (b, c | d)>").unwrap_err();
     assert!(e.message.contains("mezclar"), "{e}");
     let e = parse(b"<!ELEMENT a b>").unwrap_err();
-    assert_eq!(e.to_string(), "1:13: se esperaba EMPTY, ANY o «(» tras el nombre del elemento, pero se encontró el nombre «b»");
+    assert_eq!(e.to_string(), "línea 1, columna 13: se esperaba EMPTY, ANY o «(» tras el nombre del elemento, pero se encontró el nombre «b»");
 }
 
 // ----------------------------------------------------------- profundidad ---

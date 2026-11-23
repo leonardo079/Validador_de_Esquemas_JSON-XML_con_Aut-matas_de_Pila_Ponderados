@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import { compilar, formatoProbable, type ErrorEsquema, type Resultado as R } from "./api";
+import { compilar, formatoProbable, NOMBRE_FORMATO, type ErrorEsquema, type Formato, type Resultado as R } from "./api";
 import { EJEMPLOS } from "./ejemplos";
 import { Resultado } from "./Resultado";
 import { Automata } from "./Automata";
@@ -58,6 +58,7 @@ export function App() {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const formato = formatoProbable(texto);
+  const [formatoCompilado, setFormatoCompilado] = useState<Formato | undefined>(undefined);
   const [servicios, setServicios] = useState<{ database: boolean; sandbox: boolean } | null>(null);
   const oscuro = useTemaOscuro();
 
@@ -106,7 +107,10 @@ export function App() {
 
   const alCompilar = useCallback(async () => {
     setCargando(true);
-    const r = await compilar(editorRef.current?.getValue() ?? texto);
+    const fuente = editorRef.current?.getValue() ?? texto;
+    const r = await compilar(fuente);
+    // La API dice "xml" para XSD y DTD (D86): la etiqueta sale de la detección.
+    setFormatoCompilado(formatoProbable(fuente));
     setResultado(r);
     setCargando(false);
   }, [texto]);
@@ -130,7 +134,7 @@ export function App() {
       <header className="cabecera">
         <div>
           <h1>Validador de esquemas</h1>
-          <p>JSON Schema 2020-12 y XSD 1.0, compilados a un autómata de pila determinista ponderado.</p>
+          <p>JSON Schema 2020-12, XSD 1.0 y DTD, compilados a un autómata de pila determinista ponderado.</p>
         </div>
         <p className="tupla" aria-label="M es la tupla Q, Sigma, Gamma, delta, q cero, Z cero, F">
           M = (Q, Σ, Γ, δ, q<sub>0</sub>, Z<sub>0</sub>, F)
@@ -178,9 +182,9 @@ export function App() {
         </label>
         <label className="archivo">
           Abrir archivo…
-          <input type="file" accept=".json,.xsd,.xml" onChange={(ev) => alCargarArchivo(ev.target.files?.[0])} />
+          <input type="file" accept=".json,.xsd,.dtd,.xml" onChange={(ev) => alCargarArchivo(ev.target.files?.[0])} />
         </label>
-        <span className="tenue">Formato detectado: {formato === "xml" ? "XSD" : "JSON Schema"}</span>
+        <span className="tenue">Formato detectado: {NOMBRE_FORMATO[formato]}</span>
         <button id="compilar" type="button" className="principal" onClick={alCompilar} disabled={cargando}>
           {cargando ? "Compilando…" : "Compilar (Ctrl+Enter)"}
         </button>
@@ -190,7 +194,7 @@ export function App() {
         <section className="editor" aria-label="Editor del esquema">
           <Editor
             height="100%"
-            language={formato}
+            language={formato === "json" ? "json" : "xml"}
             value={texto}
             onChange={(v) => setTexto(v ?? "")}
             beforeMount={definirTemas}
@@ -208,7 +212,7 @@ export function App() {
           />
         </section>
         <section className="resultado" aria-live="polite">
-          <Resultado resultado={resultado} cargando={cargando} alElegirError={irAError} />
+          <Resultado resultado={resultado} cargando={cargando} alElegirError={irAError} formato={formatoCompilado} />
         </section>
       </main>
 

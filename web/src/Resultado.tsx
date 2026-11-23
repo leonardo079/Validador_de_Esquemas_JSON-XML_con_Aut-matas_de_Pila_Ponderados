@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ErrorEsquema, Resultado as R } from "./api";
+import { NOMBRE_FORMATO, type ErrorEsquema, type Formato, type Resultado as R } from "./api";
 
 // Panel de resultados. Todo se pinta como texto: React escapa los valores, y no
 // se usa `dangerouslySetInnerHTML` en ninguna parte (la IR y los mensajes traen
@@ -10,6 +10,16 @@ interface Props {
   cargando: boolean;
   /** Mueve el cursor del editor al error elegido. */
   alElegirError?: (e: ErrorEsquema) => void;
+  /**
+   * Formato del esquema compilado. La API dice `"xml"` para XSD y para DTD
+   * (D86, E2), así que la web lo distingue con su propia detección.
+   */
+  formato?: Formato;
+}
+
+/** Etiqueta del formato: la detectada, o la de la API si no se pasó. */
+function etiqueta(format: string, formato?: Formato): string {
+  return NOMBRE_FORMATO[formato ?? (format === "xml" ? "xsd" : "json")];
 }
 
 const ETIQUETAS: Record<string, string> = {
@@ -23,7 +33,7 @@ const ETIQUETAS: Record<string, string> = {
   deferred: "Verificaciones diferidas",
 };
 
-export function Resultado({ resultado, cargando, alElegirError }: Props) {
+export function Resultado({ resultado, cargando, alElegirError, formato }: Props) {
   const [verIr, setVerIr] = useState(false);
 
   if (cargando) return <p className="estado">Compilando…</p>;
@@ -50,7 +60,7 @@ export function Resultado({ resultado, cargando, alElegirError }: Props) {
     return (
       <div className="caja error">
         <h2>
-          Esquema no válido ({resultado.format === "xml" ? "XSD" : "JSON Schema"}):{" "}
+          Esquema no válido ({etiqueta(resultado.format, formato)}):{" "}
           {resultado.total} {resultado.total === 1 ? "error" : "errores"}
         </h2>
         {resultado.truncated && (
@@ -73,7 +83,7 @@ export function Resultado({ resultado, cargando, alElegirError }: Props) {
   const a = resultado.automaton;
   return (
     <div className="caja ok">
-      <h2>Esquema válido ({resultado.format === "xml" ? "XSD" : "JSON Schema"})</h2>
+      <h2>Esquema válido ({etiqueta(resultado.format, formato)})</h2>
       <p>{resultado.summary}</p>
       <p className="tenue id">
         id <code>{resultado.id}</code>

@@ -1057,9 +1057,40 @@ el orquestador, sin agentes (decisión del usuario).
 - [x] `docs/fase3/dtd.md`. `lint OK`; 45 pruebas de `dtd`; `xsd`, `automaton` y `cli` en verde (5 suites
   bloqueadas por Smart App Control en debug, verdes en `--release`).
 
-**Pendiente para DTD.4:**
+**Pendiente para DTD.4:** resuelto en DTD.4 (abajo).
 
-- `dtd::formato(&[u8]) -> Formato { Json, Xsd, Dtd }` con la regla de E1;
-- usarla en `schemac` (`check`, `ir`, `automaton`, `compile`) y en el servidor, llamando a `dtd::compile`;
-- la copia en TypeScript de la web y la tabla común `tests/schemas/formato.json`;
-- el ejemplo DTD en la web.
+## Tarea DTD.4: detección de formato común, CLI, servidor y web — HECHA (23 nov)
+
+- [x] `dtd::formato(&[u8]) -> Formato { Json, Xsd, Dtd }` (`crates/dtd/src/formato.rs`) con la regla de E1. Es
+  la **única** en Rust: la CLI la importa y el servidor delega en ella. Se borró la copia literal del servidor.
+- [x] `schemac`: `check` (resumen «subconjunto de DTD; N elementos, M atributos»), `ir`, `automaton` y `compile`
+  aceptan DTD por su contenido (`dtd::compile`). El texto de ayuda explica la regla nueva.
+- [x] Servidor: `Formato::Dtd` con `format: "xml"` (la API no cambia), la rama DTD en `compilar` y
+  `ConPosicion for DtdError`. `DtdError` se escribe «línea L, columna C: …», como los demás frontales.
+  `misma_tuberia_que_schemac` vigila ahora que ninguno tenga su propia regla de formato.
+- [x] Web: `formatoProbable` devuelve `"json" | "xsd" | "dtd"`, sin `trimStart` (que también quitaba el BOM y
+  `\f`); etiqueta, resaltado y título del resultado con «DTD»; ejemplo «DTD: pedido»; `.dtd` en el selector de
+  archivos.
+- [x] Tabla común `tests/schemas/formato.json` (29 casos, con la de E1), leída por `crates/dtd/tests/formato.rs` y
+  `web/src/formato.test.ts`. `infra/Dockerfile.web` la copia para que `tsc` la encuentre al construir.
+- [x] Pruebas nuevas:
+  - CLI: `dtd_por_su_contenido`, con `tests/schemas/dtd/{parse-error/entidad,semantic-error/varios}.dtd`;
+  - servidor: `dtd_valida_da_200_con_automata` y `dtd_invalida_da_422_con_sus_codigos`;
+  - web: 29 filas de la tabla, 70 pruebas en total.
+- [x] Verificación:
+  - `lint OK`;
+  - `dtd`, `cli` y `server` en verde. Smart App Control bloqueó varios binarios en Windows; se ejecutaron en
+    `--release` y, `cli/automaton`, en un contenedor Linux, donde `dtd` y `cli` pasan enteros;
+  - la pila en Docker detrás de Caddy compila el pedido DTD y el DPDA valida y rechaza como debe;
+  - la web muestra «Formato detectado: DTD» (captura).
+
+**Pendiente para DTD.5:**
+
+- casos DTD en `tests/cases`, con `<!ENTITY` y `SYSTEM` rechazados;
+- una fila en `docs/fase6/mitigaciones.md`;
+- un objetivo de fuzzing `esquema_dtd`;
+- cargar en Atlas;
+- la diferencial DTD frente a XSD **por veredictos** sobre payloads generados (E3).
+
+**Revisión de seguridad (D35, opcional):** DTD.4 toca la entrada no confiable del servidor. Si se pide, un
+`security-auditor` sobre `crates/dtd` y `server/src/compilar.rs`.

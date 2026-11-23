@@ -2514,6 +2514,7 @@ dependencies = [
  "baseline",
  "codegen",
  "derivation",
+ "dtd",
  "http-body",
  "http-body-util",
  "ir",

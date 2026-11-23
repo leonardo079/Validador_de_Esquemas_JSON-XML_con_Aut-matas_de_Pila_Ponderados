@@ -1,0 +1,3 @@
+<!-- XXE clásico: prohibido (D86, §3bis.3). -->
+<!ENTITY xxe SYSTEM "file:///etc/passwd">
+<!ELEMENT a (#PCDATA)>

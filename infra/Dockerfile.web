@@ -6,6 +6,9 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY web/ ./
+# D86 (E2): la tabla común de detección de formato, que importa la prueba
+# `src/formato.test.ts` (y por eso la comprueba `tsc` en `npm run build`).
+COPY tests/schemas/formato.json /tests/schemas/formato.json
 RUN npm run build
 
 FROM caddy:2.8.4-alpine

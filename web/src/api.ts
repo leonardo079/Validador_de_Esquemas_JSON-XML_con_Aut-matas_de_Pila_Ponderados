@@ -192,8 +192,35 @@ export async function compilar(esquema: string, fetchImpl: typeof fetch = fetch)
   }
 }
 
-/** Mismo criterio que el servidor (D22): primer byte significativo `<` → XSD. */
-export function formatoProbable(esquema: string): "json" | "xml" {
-  const s = esquema.replace(/^﻿/, "").trimStart();
-  return s.startsWith("<") ? "xml" : "json";
+/** Formato de un esquema, para la etiqueta «Formato detectado» y el resaltado. */
+export type Formato = "json" | "xsd" | "dtd";
+
+/** Nombre del formato para el usuario. */
+export const NOMBRE_FORMATO: Record<Formato, string> = { json: "JSON Schema", xsd: "XSD", dtd: "DTD" };
+
+/** Los cuatro espacios de XML y JSON. No `trimStart`, que quita también el BOM y `\f`. */
+const espacios = (s: string) => s.replace(/^[ \t\n\r]*/, "");
+
+/**
+ * Copia en TypeScript de `dtd::formato` (D22 enmendada por D86, E1-E2): la
+ * única regla está en Rust y esta copia se prueba con la misma tabla
+ * (`tests/schemas/formato.json`, `formato.test.ts`). Tras un BOM (uno, al
+ * principio), espacios, una `<?xml …?>` y comentarios: `<!DOCTYPE` es XSD,
+ * otro `<!` es DTD, otro `<` es XSD y lo demás, JSON.
+ */
+export function formatoProbable(esquema: string): Formato {
+  let s = espacios(esquema.startsWith("﻿") ? esquema.slice(1) : esquema);
+  if (!s.startsWith("<")) return "json";
+  if (/^<\?xml[ \t\n\r?]/.test(s)) {
+    const i = s.indexOf("?>");
+    if (i < 0) return "xsd";
+    s = espacios(s.slice(i + 2));
+  }
+  while (s.startsWith("<!--")) {
+    const i = s.indexOf("-->", 4);
+    if (i < 0) return "xsd";
+    s = espacios(s.slice(i + 3));
+  }
+  if (/^<!doctype/i.test(s)) return "xsd";
+  return s.startsWith("<!") ? "dtd" : "xsd";
 }

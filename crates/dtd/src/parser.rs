@@ -72,9 +72,28 @@ pub struct DtdError {
     pub message: String,
 }
 
+impl DtdError {
+    /// Código estable de la clase (`ErrorKind::code`).
+    pub fn code(&self) -> &'static str {
+        self.kind.code()
+    }
+    pub fn line(&self) -> u32 {
+        self.at.line
+    }
+    pub fn column(&self) -> u32 {
+        self.at.column
+    }
+}
+
+/// Con el mismo prefijo que los errores de JSON Schema y XSD («línea L,
+/// columna C: »), que el servidor quita del mensaje.
 impl fmt::Display for DtdError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}: {}", self.at.line, self.at.column, self.message)
+        write!(
+            f,
+            "línea {}, columna {}: {}",
+            self.at.line, self.at.column, self.message
+        )
     }
 }
 

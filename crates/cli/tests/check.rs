@@ -221,3 +221,42 @@ fn profundidad_maxima_xsd() {
         res[1].2
     );
 }
+
+/// D86 (DTD.4): `schemac check` reconoce una DTD por su contenido. Una
+/// válida da su resumen; una entidad es error léxico en su `<`; los errores
+/// de la Fase 3 salen todos, en orden, con línea y columna.
+#[test]
+fn dtd_por_su_contenido() {
+    let (code, out, _) = schemac(&Path::new(TESTS_DIR).join("dtd/parse-ok/pedido.dtd"));
+    assert_eq!(code, 0);
+    assert!(
+        out.contains("esquema válido (subconjunto de DTD); 6 elementos, 4 atributos"),
+        "{out}"
+    );
+
+    let (code, out, err) = schemac(&Path::new(TESTS_DIR).join("dtd/parse-error/entidad.dtd"));
+    assert_eq!(code, 1);
+    assert!(out.is_empty(), "{out}");
+    assert!(
+        err.contains("entidad.dtd: línea 2, columna 1: <!ENTITY está prohibido"),
+        "{err}"
+    );
+
+    let (code, _, err) = schemac(&Path::new(TESTS_DIR).join("dtd/semantic-error/varios.dtd"));
+    assert_eq!(code, 1);
+    assert_eq!(err.lines().count(), 3, "{err}");
+    let lineas: Vec<&str> = err.lines().collect();
+    assert!(
+        lineas[0]
+            .contains("línea 1, columna 35: el modelo de contenido de «pedido» no es determinista"),
+        "{err}"
+    );
+    assert!(
+        lineas[1].contains("línea 4, columna 11: el elemento «cliente» ya se declaró en 2:11"),
+        "{err}"
+    );
+    assert!(
+        lineas[2].contains("línea 5, columna 40: «otro» no es uno de los valores de «estado»"),
+        "{err}"
+    );
+}
