@@ -7,10 +7,10 @@
 >
 > Redactada el 22 nov 2026 en la rama `DTD`. Abajo, el texto original de la propuesta.
 >
-> **Enmiendas a D86 pendientes del visto bueno de Bayron:** §10, de la revisión de Leonardo del commit `27b7a2b`
-> (DTD.0). Tocan `docs/00-alcance.md` §3bis y D86, que son interfaces compartidas, así que solo están propuestas:
-> no se ha cambiado ni el alcance ni el plan. Bloquean DTD.1 los puntos E1 y E4 (el lexer y la detección dependen de
-> ellos).
+> **Enmiendas a D86 (§10): aprobadas por Bayron el 22 nov y aplicadas.** E1 y E2 en `docs/00-alcance.md` §3bis
+> (detección) y en D86; E3 en la línea DTD.5 de `tasks/CHECKLIST.md`; E4 en §3bis.3 y D86; E5 en D86 y en
+> `infra/desplegar.ps1`, que ahora termina si la rama local no es `main` (y en la EC2 hace `git switch main`). El
+> registro: DTD.1-DTD.6 pasan a «Pista: B (excepción, D86)».
 
 ## 1. Qué se propone, en una frase
 

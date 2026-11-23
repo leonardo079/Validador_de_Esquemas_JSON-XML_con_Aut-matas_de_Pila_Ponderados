@@ -20,6 +20,15 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+
+# D86 (enmienda E5): solo se despliega desde `main`. Las imágenes se
+# construyen con el árbol local, así que desplegar desde otra rama (p. ej.
+# `DTD`, a medias) llevaría ese trabajo a la URL pública.
+$rama = (git -C $repo rev-parse --abbrev-ref HEAD).Trim()
+if ($rama -ne 'main') {
+    Write-Host "Solo se despliega desde main (D86, E5); la rama actual es '$rama'. Ejecuta 'git switch main' y vuelve a intentarlo."
+    exit 1
+}
 $compose = Join-Path $repo 'infra/docker-compose.yml'
 $dominio = ($Ip -replace '\.', '-') + '.sslip.io'
 $destino = "$Usuario@$Ip"
@@ -57,7 +66,7 @@ if ($Sandbox) {
         'export DOCKER_GID=$(getent group docker | cut -d: -f3); '
 }
 $remoto = "set -e; docker load -i /tmp/validador-imagenes.tar && rm /tmp/validador-imagenes.tar; " +
-    "cd ~/validador && git pull --ff-only; " + $previo +
+    "cd ~/validador && git switch -q main && git pull --ff-only; " + $previo +
     "DOMINIO=$dominio docker compose $archivos up -d --no-build; " +
     "docker compose $archivos ps"
 ssh @ssh $destino $remoto

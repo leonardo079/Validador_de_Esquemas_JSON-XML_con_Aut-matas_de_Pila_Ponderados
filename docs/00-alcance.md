@@ -168,9 +168,21 @@ Las comprobaciones de los tipos simples que siguen a XSD 1.0 al pie de la letra 
 
 Una DTD **externa**, dada como archivo de esquema aparte (como un `.xsd`), se analiza con un frontal propio
 (`crates/dtd`, AST propio, D3) y baja a la **misma IR** que JSON Schema y XSD, con `Format::Xml` sin
-`targetNamespace`. No hay campos nuevos en la IR ni en el JSON v2 (D17). El formato se detecta por contenido (D22
-enmendada por D86): tras el BOM, los espacios, una `<?xml …?>` inicial y los comentarios, un esquema que empieza por
-`<!` es DTD.
+`targetNamespace`. No hay campos nuevos en la IR ni en el JSON v2 (D17).
+
+El formato se detecta por contenido (D22 enmendada por D86, enmienda E1). Tras el BOM, los espacios, una
+`<?xml …?>` inicial y los comentarios `<!-- … -->`:
+
+- `<!DOCTYPE` (en cualquier caja) es **XSD**, para que el frontal XSD lo rechace como hoy (D8);
+- cualquier otro `<!` es **DTD**;
+- otro `<` es XSD;
+- lo demás, o nada, es JSON.
+
+Si la `<?xml` o un comentario no se cierran, es XSD y el error lo da el lexer XML en su posición. El coste es
+O(prólogo), sin recursión ni reservas. Lo hace una sola función en Rust, `dtd::formato`, que usan `schemac` y el
+servidor; la web tiene su copia en TypeScript, solo para la etiqueta «Formato detectado», y las dos se prueban con la
+misma tabla de casos (`tests/schemas/formato.json`; enmienda E2). El campo `format` de la API sigue siendo el de la
+IR: `"xml"` para XSD y para DTD.
 
 Como no hay `<!DOCTYPE` en el payload, no hay raíz declarada: el documento puede tener como raíz **cualquier
 elemento declarado**, igual que con los elementos globales de XSD. Toda `<!ELEMENT>` es global.
@@ -197,10 +209,18 @@ y `<!NOTATION>`, `NMTOKEN`/`NMTOKENS` (primera versión), y nombres con `:`.
 
 ### 3bis.3 Prohibido por seguridad (el espíritu de D8)
 
-`<!ENTITY …>` generales y de parámetro, cualquier referencia `%nombre;` o `&nombre;` que no sea de las cinco
-predefinidas o de carácter, identificadores externos (`SYSTEM`, `PUBLIC`), secciones condicionales
-`<![INCLUDE[`/`<![IGNORE[` y `<!DOCTYPE` dentro del archivo DTD. Son errores léxicos. Nada abre archivos ni red y
-nada se expande: la IR sigue siendo lineal en el tamaño del esquema.
+Son errores léxicos, en el `<!` de la declaración o en el `%`/`&` de la referencia (enmienda E4):
+
+- `<!ENTITY …>`, tanto generales como de parámetro;
+- `<!DOCTYPE` dentro del archivo DTD;
+- las secciones condicionales `<![INCLUDE[`/`<![IGNORE[`;
+- una referencia de parámetro `%nombre;` fuera de un literal (dentro de un valor entre comillas, `%` es un carácter
+  más, como en el `AttValue` de XML);
+- dentro de un literal, `&nombre;` que no sea una de las cinco predefinidas ni una referencia de carácter.
+
+Los identificadores externos (`SYSTEM`, `PUBLIC`) solo pueden ir dentro de esas declaraciones (o de `<!NOTATION`,
+§3bis.2), así que quedan excluidos sin prohibir las palabras: `SYSTEM` y `PUBLIC` son nombres válidos de elemento y
+de atributo. Nada abre archivos ni red y nada se expande: la IR sigue siendo lineal en el tamaño del esquema.
 
 ### 3bis.4 Desviaciones de XML 1.0 (todas rechazan de más)
 
