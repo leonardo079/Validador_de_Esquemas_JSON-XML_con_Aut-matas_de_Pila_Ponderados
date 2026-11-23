@@ -56,6 +56,7 @@ La carga hace *upsert* por `_id`, así que es idempotente. El 20 nov:
 | Primera | 78 casos nuevos: 22 valid, 30 invalid, 16 malformed, 8 non-dpda y 2 extreme |
 | Segunda | 78 sin cambios |
 | Tras corregir `source` | 78 actualizados |
+| 22 nov, con los XML de F5.4b | 8 nuevos, 2 actualizados y 76 sin cambios: 86 en Atlas; 86/86 pasan desde la URL pública |
 
 Crea un índice por `category`.
 

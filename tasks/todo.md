@@ -697,7 +697,7 @@ JSON/XML)»; casos «recursivos en JSON y XML»).
 - [x] Pruebas (`crates/bench/tests/generar_xml.rs`): el DPDA acepta todo válido generado, los inválidos nunca salen malformados y se rechazan, cada malformación da su clase, determinismo y recursión. Con `--features libxml2` en Docker: libxml2 da el mismo veredicto en más de 500 documentos.
 - [x] Binario `generar_xml --escribir`: 6 casos (válido, inválido y malformado del pedido y del árbol) con solo los campos que comparten el DPDA y libxml2.
 - [x] `make test` (856), `make lint`, `make docs-check` y `make test-baseline-xml` (en Linux, por primera vez) en verde.
-- [ ] Recargar Atlas con los 86 casos (`cargo run -p atlas`, con `MONGODB_URI`).
+- [x] Recargar Atlas con los 86 casos (`cargo run -p atlas`, con `MONGODB_URI`). — Bayron, 22 nov: 8 nuevos, 2 actualizados, 76 sin cambios; y tras `f3c324b`, los 2 `invalid-mut-xml-*` actualizados. 86/86 pasan desde la URL pública.
 
 ## Tarea E7: diapositivas, guion, video y ensayos — EN CURSO (21 nov; los dos)
 
@@ -884,9 +884,10 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
   - El tope usa `request_buffers` y rechaza por `Content-Length` antes de leer, porque la prueba local encontró 502 con 1,5 MB y una conexión colgada con 3 MB.
 - [x] Probado en local tras Caddy: health, web y SPA, compilar, comparar, cabeceras, y 413 en milisegundos con y sin `chunked`.
 - [x] `infra/ec2-preparar.sh` (Docker, swap y clon) e `infra/desplegar.ps1` (construir aquí, `docker save`/`scp`/`docker load`, `up`, comprobar HTTPS); guía en `docs/fase7/despliegue.md`.
-- [ ] **21 nov:** crear la EC2 y la Elastic IP, ejecutar `ec2-preparar.sh` y `desplegar.ps1`, y comprobar la URL pública.
+- [x] **22 nov:** EC2 `t3.micro` (Ubuntu 24.04, us-east-1) con Elastic IP 54.157.96.49, IP añadida en Atlas, `ec2-preparar.sh` y `desplegar.ps1` (dos veces: la segunda con la corrección de §19 de E3).
+- [x] Comprobado en **https://54-157-96-49.sslip.io**: web 200 con CSP, HSTS, `nosniff` y `X-Frame-Options`; `http://` → 308; `/api/health` con `database: true`; `/api/tests/run` 86/86 (tras recargar Atlas); `/api/automaton`; `/api/code` (ZIP de 136 KB); `/ws/validate` por bloques a través de Caddy; `/api/validate` 503 `no-sandbox` (esperado).
 
-**Estado (20 nov):** preparado. Falta el despliegue real del sábado.
+**Estado (22 nov):** hecha.
 
 # Tarea F7.2: casos de prueba en MongoDB Atlas (pista B, Bayron; 20 nov, D72)
 

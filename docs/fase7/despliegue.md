@@ -63,6 +63,18 @@ Let's Encrypt valide el dominio.
    Caddy pide el certificado solo; `sslip.io` resuelve el nombre a la IP sin comprar dominio.
 6. **URL pública:** `https://3-4-5-6.sslip.io`. Para actualizar tras nuevos commits, repetir el paso 5.
 
+**Desplegado el 22 nov en https://54-157-96-49.sslip.io** (Elastic IP 54.157.96.49). El tar de las dos imágenes
+pesa 55 MB, y el certificado salió en el primer intento. Comprobado desde fuera:
+
+| Prueba | Resultado |
+| --- | --- |
+| Web | 200 con CSP, HSTS, `nosniff` y `X-Frame-Options`; `http://` → 308 a `https://` |
+| `GET /api/health` | `{"database":true,"sandbox":false,"status":"ok"}` |
+| `POST /api/tests/run` | 86 casos de Atlas, 86 pasan |
+| `POST /api/automaton`, `POST /api/code` | 200; el ZIP en C ocupa 136 KB |
+| `WS /ws/validate` | `ready`, dos `progress` y el `report` con el error en `/1`, a través de Caddy |
+| `POST /api/validate` | 503 `no-sandbox`, a propósito (§3) |
+
 Si algo falla, en la EC2:
 
 ```sh
@@ -92,8 +104,9 @@ docker compose -f infra/docker-compose.yml logs --tail 50 server
 
 - el límite de conexiones por IP (Caddy no lo trae sin un plugin; lo acota el semáforo del servidor);
 - `cargo audit`;
-- montar el socket de Docker para el sandbox (F7.3). Ningún endpoint lo usa hasta F7.5; cuando lo haga, se añade
-  el volumen `/var/run/docker.sock` a `server`, con el riesgo de `sandbox.md` §5.
+- montar el socket de Docker para el sandbox (F7.3). Desde F7.5 lo usa `POST /api/validate`, pero en producción no
+  se monta: el acceso a `docker.sock` equivale a root en la EC2 (`sandbox.md` §5). Esa ruta responde 503
+  `no-sandbox`, y la comparación del código generado con el intérprete se enseña en local (`SANDBOX=docker`).
 
 ## 4. Costo
 
