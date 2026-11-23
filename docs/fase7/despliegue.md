@@ -73,7 +73,36 @@ pesa 55 MB, y el certificado salió en el primer intento. Comprobado desde fuera
 | `POST /api/tests/run` | 86 casos de Atlas, 86 pasan |
 | `POST /api/automaton`, `POST /api/code` | 200; el ZIP en C ocupa 136 KB |
 | `WS /ws/validate` | `ready`, dos `progress` y el `report` con el error en `/1`, a través de Caddy |
-| `POST /api/validate` | 503 `no-sandbox`, a propósito (§3) |
+| `POST /api/validate` | 503 `no-sandbox` en el primer despliegue; con `-Sandbox` (D85, §2.1), el código compilado en el sandbox |
+
+### 2.1 Con el sandbox del código generado (D85)
+
+Para que `POST /api/validate` compile y ejecute el código generado en la EC2, la instancia pasa a `t3.small`
+(2 GiB; con 1 GiB, 600 MiB del servidor más 512 MiB del sandbox no caben). En la consola: Stop → Actions →
+Instance settings → Change instance type → `t3.small` → Start. La Elastic IP y el certificado se conservan.
+
+```powershell
+powershell -NoProfile -File infra/desplegar.ps1 -Ip 54.157.96.49 -Llave $HOME\.ssh\validador-ec2.pem -Sandbox
+```
+
+Con `-Sandbox`, el script:
+
+- construye `validador-sandbox:1` en la EC2 (`docker build sandbox`; la base de Rust se descarga allí);
+- toma el GID del grupo `docker` de la EC2 (`DOCKER_GID`);
+- levanta los servicios con `infra/docker-compose.sandbox.yml` encima del Compose base. Ese archivo monta
+  `/var/run/docker.sock` en `server`, le añade el grupo, pone `SANDBOX=docker` y un tmpfs en `/tmp` para la
+  configuración del cliente.
+
+La imagen del servidor lleva el cliente estático de Docker 27.5.1 (`COPY --from=docker:27.5.1-cli`). Cada trabajo es
+un contenedor hermano con las restricciones de `sandbox.md`: sin red, usuario 10001, solo lectura, 512 MiB,
+un núcleo, 64 procesos, entrada por tar y sin montajes. El semáforo de un trabajo a la vez es el de D83.
+
+Probado en local el 22 nov con el servidor en su contenedor, como en la EC2. `/api/health` dio `sandbox: true`. Para
+un objeto válido y otro con 3 violaciones, C (4-6 s) y Rust (2-6 s) dieron `status: ok` y `agree: true`, y no
+quedaron contenedores sueltos.
+
+Para bajar los servicios con el sandbox puesto basta el Compose base (`docker compose -f infra/docker-compose.yml
+down`). Con los dos archivos, Compose exige `DOCKER_GID`.
 
 Si algo falla, en la EC2:
 
@@ -104,9 +133,12 @@ docker compose -f infra/docker-compose.yml logs --tail 50 server
 
 - el límite de conexiones por IP (Caddy no lo trae sin un plugin; lo acota el semáforo del servidor);
 - `cargo audit`;
-- montar el socket de Docker para el sandbox (F7.3). Desde F7.5 lo usa `POST /api/validate`, pero en producción no
-  se monta: el acceso a `docker.sock` equivale a root en la EC2 (`sandbox.md` §5). Esa ruta responde 503
-  `no-sandbox`, y la comparación del código generado con el intérprete se enseña en local (`SANDBOX=docker`).
+- aislar el socket de Docker. Con `-Sandbox` (D85, §2.1), `server` tiene `docker.sock`, y eso equivale a root en
+  la EC2 (`sandbox.md` §5). **Riesgo aceptado** para la demo: el servidor solo ejecuta `docker run` con argumentos
+  fijos (`server::sandbox::argumentos`; el usuario solo elige `c` o `rust`, los nombres de archivo los valida
+  `comprobar`), y la EC2 no guarda nada más que el `.env`. Lo correcto a largo plazo sería un proxy del socket que
+  solo permita crear contenedores con esa imagen, o rootless Docker. Sin `-Sandbox`, el socket no se monta y
+  `/api/validate` responde 503 `no-sandbox`.
 
 ## 4. Costo
 

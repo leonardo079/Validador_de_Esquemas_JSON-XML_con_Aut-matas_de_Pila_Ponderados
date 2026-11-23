@@ -1,0 +1,28 @@
+# Sandbox del código generado en el despliegue (D85; `docs/fase7/despliegue.md`
+# §3, `docs/fase7/sandbox.md` §5). Se suma al Compose base:
+#
+#   DOCKER_GID=$(getent group docker | cut -d: -f3) \
+#     docker compose -f infra/docker-compose.yml -f infra/docker-compose.sandbox.yml up -d
+#
+# `infra/desplegar.ps1 -Sandbox` lo hace solo (y construye `validador-sandbox:1`
+# en la EC2). El servidor lanza un contenedor hermano por trabajo, sin red, sin
+# root, con memoria/CPU/procesos acotados y la entrada por tar (sin montajes).
+#
+# RIESGO ACEPTADO: quien controla el socket de Docker controla la máquina. Si
+# alguien tomara el proceso del servidor, sería root en la EC2. Lo mitiga que
+# el servidor no ejecuta nada que no sea `docker run` con argumentos fijos
+# (`server::sandbox::argumentos`) y que en la EC2 no hay nada más que proteger.
+
+services:
+  server:
+    environment:
+      SANDBOX: docker
+      SANDBOX_IMAGE: validador-sandbox:1
+      # El cliente de Docker guarda su configuración aquí (el resto es de solo lectura).
+      DOCKER_CONFIG: /tmp/.docker
+    group_add:
+      - "${DOCKER_GID:?falta DOCKER_GID (getent group docker | cut -d: -f3)}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    tmpfs:
+      - /tmp:size=16m,mode=1777

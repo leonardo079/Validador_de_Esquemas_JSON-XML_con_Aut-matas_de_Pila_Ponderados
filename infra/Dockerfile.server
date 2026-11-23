@@ -20,6 +20,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM debian:trixie-slim
 RUN useradd --uid 10002 --no-create-home --shell /usr/sbin/nologin servidor
 COPY --from=compilar /usr/local/bin/server /usr/local/bin/server
+# D85: el cliente de Docker (binario estático) para el sandbox de F7.3. Solo
+# se usa si Compose monta el socket (`docker-compose.sandbox.yml`); sin él,
+# `SANDBOX` no está puesto y `/api/validate` responde 503.
+COPY --from=docker:27.5.1-cli /usr/local/bin/docker /usr/local/bin/docker
 USER 10002:10002
 ENV SERVER_ADDR=0.0.0.0:8080
 EXPOSE 8080

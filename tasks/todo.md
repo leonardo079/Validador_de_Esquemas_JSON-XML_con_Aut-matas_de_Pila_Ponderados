@@ -886,8 +886,10 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [x] `infra/ec2-preparar.sh` (Docker, swap y clon) e `infra/desplegar.ps1` (construir aquí, `docker save`/`scp`/`docker load`, `up`, comprobar HTTPS); guía en `docs/fase7/despliegue.md`.
 - [x] **22 nov:** EC2 `t3.micro` (Ubuntu 24.04, us-east-1) con Elastic IP 54.157.96.49, IP añadida en Atlas, `ec2-preparar.sh` y `desplegar.ps1` (dos veces: la segunda con la corrección de §19 de E3).
 - [x] Comprobado en **https://54-157-96-49.sslip.io**: web 200 con CSP, HSTS, `nosniff` y `X-Frame-Options`; `http://` → 308; `/api/health` con `database: true`; `/api/tests/run` 86/86 (tras recargar Atlas); `/api/automaton`; `/api/code` (ZIP de 136 KB); `/ws/validate` por bloques a través de Caddy; `/api/validate` 503 `no-sandbox` (esperado).
+- [x] **Sandbox en la EC2 (D85, a pedido del usuario):** cliente de Docker en la imagen del servidor, `infra/docker-compose.sandbox.yml` (socket, `DOCKER_GID`, `SANDBOX=docker`, tmpfs) y `desplegar.ps1 -Sandbox` (construye `validador-sandbox:1` en la EC2). Probado en local con el servidor en contenedor: C y Rust con `agree: true` en un válido y un inválido; sin contenedores sueltos.
+- [ ] EC2 a `t3.small`, desplegar con `-Sandbox` y comprobar `/api/validate` en la URL pública.
 
-**Estado (22 nov):** hecha.
+**Estado (22 nov):** hecha; falta desplegar el sandbox (D85).
 
 # Tarea F7.2: casos de prueba en MongoDB Atlas (pista B, Bayron; 20 nov, D72)
 

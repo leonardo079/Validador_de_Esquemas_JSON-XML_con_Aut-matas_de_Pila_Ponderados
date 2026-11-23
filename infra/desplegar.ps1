@@ -7,10 +7,15 @@
 # 3. Actualiza el repo en la EC2 (Compose y Caddyfile) y levanta los servicios
 #    con DOMINIO=<ip-con-guiones>.sslip.io (Caddy saca el certificado solo).
 # 4. Comprueba https://<dominio>/api/health.
+#
+# Con -Sandbox (D85) construye además `validador-sandbox:1` EN la EC2 (la base
+# de Rust se descarga allí, más rápido que subirla) y levanta el servidor con
+# `docker-compose.sandbox.yml`: socket de Docker y `SANDBOX=docker`.
 param(
     [Parameter(Mandatory = $true)][string]$Ip,
     [Parameter(Mandatory = $true)][string]$Llave,
-    [string]$Usuario = 'ubuntu'
+    [string]$Usuario = 'ubuntu',
+    [switch]$Sandbox
 )
 $ErrorActionPreference = 'Stop'
 
@@ -44,10 +49,17 @@ if (Test-Path $env_local) {
     Write-Host "Sin .env: el servidor arranca sin MongoDB (/api/tests responde 503)."
 }
 
+$archivos = '-f infra/docker-compose.yml'
+$previo = ''
+if ($Sandbox) {
+    $archivos += ' -f infra/docker-compose.sandbox.yml'
+    $previo = 'docker build -q -t validador-sandbox:1 sandbox; ' +
+        'export DOCKER_GID=$(getent group docker | cut -d: -f3); '
+}
 $remoto = "set -e; docker load -i /tmp/validador-imagenes.tar && rm /tmp/validador-imagenes.tar; " +
-    "cd ~/validador && git pull --ff-only; " +
-    "DOMINIO=$dominio docker compose -f infra/docker-compose.yml up -d --no-build; " +
-    "docker compose -f infra/docker-compose.yml ps"
+    "cd ~/validador && git pull --ff-only; " + $previo +
+    "DOMINIO=$dominio docker compose $archivos up -d --no-build; " +
+    "docker compose $archivos ps"
 ssh @ssh $destino $remoto
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
