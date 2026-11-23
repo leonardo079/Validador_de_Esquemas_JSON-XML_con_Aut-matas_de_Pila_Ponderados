@@ -1,11 +1,11 @@
 # Propuesta: DTD como tercer lenguaje de esquema
 
-> **Estado: propuesta, sin aplicar.** Toca `docs/00-alcance.md` y la detección de formato de D22 (CLI, servidor y
-> web), que son interfaces compartidas: necesita el visto bueno de las dos personas (D42) antes de que entre una
-> línea de código. Número de decisión provisional **D86**: antes de registrarla, `git pull` y tomar el siguiente
-> libre (COLABORAR.md).
+> **Estado: aprobada (D86, 22 nov).** Visto bueno de Bayron el 22 nov, con las recomendaciones de §9: detección por
+> contenido en una sola función, raíz = cualquier elemento declarado y `NMTOKEN`/`NMTOKENS` fuera de la primera
+> versión. Alcance registrado en `docs/00-alcance.md` §3bis; tareas DTD.0-DTD.6 en `tasks/CHECKLIST.md`, todas de
+> Bayron, en la rama `DTD` (`main` no se toca hasta cerrar).
 >
-> Redactada el 22 nov 2026 en la rama `DTD`.
+> Redactada el 22 nov 2026 en la rama `DTD`. Abajo, el texto original de la propuesta.
 
 ## 1. Qué se propone, en una frase
 

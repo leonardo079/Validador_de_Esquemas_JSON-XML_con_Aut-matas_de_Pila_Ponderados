@@ -107,3 +107,15 @@ Pista: **A** = compilador (Fases 4-5) · **B** = plataforma (Fases 6-7, cuentas,
 - [ ] **E6** · Congelar código — *Pista:* AB · *Depende:* — · *Resp.:* ambos · *Estado:* libre · previsto 19 nov
 - [ ] **E7** · Diapositivas, guion, video de respaldo y dos ensayos de la demo — *Pista:* AB · *Depende:* F7.7 · *Resp.:* ambos · *Estado:* en curso (21 nov) · diapositivas (18, en claude.ai) y guion `docs/presentacion/guion.md` hechos por Leonardo; faltan la URL pública (F7.7), el video de respaldo y los dos ensayos
 - [ ] **E8** · WASM (opcional, solo si todo lo demás está cerrado) — *Pista:* A · *Depende:* F5.3 · *Resp.:* — · *Estado:* libre
+
+## DTD como tercer lenguaje de esquema (rama `DTD`, D86; `main` no se toca hasta cerrar)
+
+Propuesta de Leonardo en `tasks/propuesta-dtd.md`. Todas las tareas las lleva Bayron; Leonardo revisa.
+
+- [x] **DTD.0** · Registrar D86 y la sección §3bis de `docs/00-alcance.md` con el visto bueno de los dos — *Pista:* AB · *Depende:* — · *Resp.:* Bayron · *Estado:* hecha (22 nov) · D86 · sin código
+- [ ] **DTD.1** · Lexer DTD (AFD, tabla, `.dot`, pruebas por bloques de 1/7/4096 y oráculo) y gramática LL(1) — *Pista:* A · *Depende:* DTD.0 · *Resp.:* Bayron · *Estado:* libre · revisión: code-reviewer
+- [ ] **DTD.2** · Parser LL(1), AST y rechazo de lo que está fuera del subconjunto con categoría y motivo — *Pista:* A · *Depende:* DTD.1 · *Resp.:* Bayron · *Estado:* libre · revisión: code-reviewer
+- [ ] **DTD.3** · Análisis, determinismo y bajada a la IR verificada; doradas de IR para 2-3 esquemas — *Pista:* A · *Depende:* DTD.2 · *Resp.:* Bayron · *Estado:* libre · revisión: code-reviewer
+- [ ] **DTD.4** · Detección de formato común (D22 enmendada) en `schemac`, servidor y web; ejemplo DTD en la web — *Pista:* B · *Depende:* DTD.3 · *Resp.:* Bayron · *Estado:* libre · revisión: code-reviewer + security-auditor
+- [ ] **DTD.5** · Casos en `tests/cases`, fila en `docs/fase6/mitigaciones.md`, objetivo de fuzzing `esquema_dtd`, carga en Atlas y diferencial DTD frente a XSD sobre la misma IR — *Pista:* AB · *Depende:* DTD.4 · *Resp.:* Bayron · *Estado:* libre · revisión: security-auditor
+- [ ] **DTD.6** · Documentación final: `00-alcance.md`, `docs/README.md`, `informe-final.md` y `arquitectura.md` — *Pista:* AB · *Depende:* DTD.5 · *Resp.:* Bayron · *Estado:* libre

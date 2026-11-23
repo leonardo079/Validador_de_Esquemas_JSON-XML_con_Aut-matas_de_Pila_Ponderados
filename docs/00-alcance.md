@@ -1,4 +1,4 @@
-# Alcance: subconjunto soportado de JSON Schema y XSD
+# Alcance: subconjunto soportado de JSON Schema, XSD y DTD
 
 > Versión inicial (T0.6). Se refina en la Fase 3 (T3.5, T3.10) y se consolida en la documentación técnica (T9.1).
 
@@ -27,7 +27,7 @@ El compilador aplica estas clases con una sola tabla en el código, comprobada c
 ### 1.2 XML
 
 - XML 1.0 bien formado, **solo UTF-8**; un BOM inicial se ignora. Se acepta la declaración `<?xml version="1.0" encoding="UTF-8"?>` únicamente al inicio del documento; un `encoding` distinto de UTF-8 es error. Lo verifica el parser XML (la posición es una propiedad sintáctica): el lexer le entrega el nombre y el contenido de cada instrucción de procesamiento.
-- **Prohibido:** `<!DOCTYPE>`, DTD interna o externa, entidades generales o de parámetro declaradas por el usuario (mitigación de XXE y *billion laughs*). Un `<!DOCTYPE` es error léxico.
+- **Prohibido:** `<!DOCTYPE>`, DTD interna o externa, entidades generales o de parámetro declaradas por el usuario (mitigación de XXE y *billion laughs*). Un `<!DOCTYPE` es error léxico. La prohibición se refiere al **payload**: una DTD se puede dar como **esquema** aparte, igual que un XSD (§3bis, D86), y el documento que se valida contra ella tampoco lleva `<!DOCTYPE`.
 - Se aceptan las cinco entidades predefinidas (`&lt; &gt; &amp; &quot; &apos;`) y referencias de carácter `&#N;` / `&#xN;`.
 - Se aceptan comentarios, secciones CDATA e instrucciones de procesamiento con nombre (`<?nombre …?>`); el validador ignora su contenido. `<??>` sin nombre es error léxico.
 - Espacios de nombres: un único `targetNamespace` (o ninguno). Las declaraciones `xmlns` se aceptan; los elementos se comparan por nombre local dentro de ese espacio de nombres.
@@ -164,6 +164,54 @@ Las comprobaciones de los tipos simples que siguen a XSD 1.0 al pie de la letra 
 
 ---
 
+## 3bis. DTD (subconjunto de XML 1.0 §3; D86)
+
+Una DTD **externa**, dada como archivo de esquema aparte (como un `.xsd`), se analiza con un frontal propio
+(`crates/dtd`, AST propio, D3) y baja a la **misma IR** que JSON Schema y XSD, con `Format::Xml` sin
+`targetNamespace`. No hay campos nuevos en la IR ni en el JSON v2 (D17). El formato se detecta por contenido (D22
+enmendada por D86): tras el BOM, los espacios, una `<?xml …?>` inicial y los comentarios, un esquema que empieza por
+`<!` es DTD.
+
+Como no hay `<!DOCTYPE` en el payload, no hay raíz declarada: el documento puede tener como raíz **cualquier
+elemento declarado**, igual que con los elementos globales de XSD. Toda `<!ELEMENT>` es global.
+
+### 3bis.1 Construcciones soportadas
+
+| Construcción | Soporte | Cat. |
+|---|---|---|
+| `<!ELEMENT n EMPTY>` | Sin hijos ni texto. | (a) |
+| `<!ELEMENT n (#PCDATA)>` | Solo texto (`xs:string`). | (a) |
+| `<!ELEMENT n (modelo)>` | Hijos con `,` `\|` y los sufijos `?` `*` `+`, anidables. Tiene que ser determinista (XML 1.0, apéndice E); si no lo es, se rechaza con la posición de las dos partículas en conflicto. | (a) |
+| `<!ATTLIST n a CDATA …>` | Texto libre. | (a) |
+| `<!ATTLIST n a (v1\|v2\|…) …>` | Enumeración. | (a) |
+| `#REQUIRED` / `#IMPLIED` | Requerido (máscara de bits) / opcional. | (b) |
+| `"valor"` / `#FIXED "valor"` | Valor por defecto (el validador no lo inserta) / valor fijo. El valor se comprueba contra la enumeración al compilar. | (a) |
+| Varias `<!ATTLIST>` del mismo elemento | Se unen. | — |
+| Comentarios, instrucciones de procesamiento y una declaración `<?xml … encoding="UTF-8"?>` al inicio | Se aceptan y se ignoran. | — |
+
+### 3bis.2 Fuera de alcance (error con posición y motivo)
+
+`ANY` (equivale a `xs:any` con contenido mixto), contenido mixto `(#PCDATA|a|b)*` (§1.2), atributos `ID`,
+`IDREF`, `IDREFS` (unicidad y referencias globales, como `xs:key`/`xs:keyref`), `ENTITY`, `ENTITIES`, `NOTATION`
+y `<!NOTATION>`, `NMTOKEN`/`NMTOKENS` (primera versión), y nombres con `:`.
+
+### 3bis.3 Prohibido por seguridad (el espíritu de D8)
+
+`<!ENTITY …>` generales y de parámetro, cualquier referencia `%nombre;` o `&nombre;` que no sea de las cinco
+predefinidas o de carácter, identificadores externos (`SYSTEM`, `PUBLIC`), secciones condicionales
+`<![INCLUDE[`/`<![IGNORE[` y `<!DOCTYPE` dentro del archivo DTD. Son errores léxicos. Nada abre archivos ni red y
+nada se expande: la IR sigue siendo lineal en el tamaño del esquema.
+
+### 3bis.4 Desviaciones de XML 1.0 (todas rechazan de más)
+
+1. Un nombre usado en un modelo de contenido o en una `<!ATTLIST>` sin su `<!ELEMENT>` es error `unresolved` (en
+   XML es una advertencia).
+2. Un atributo declarado dos veces para el mismo elemento es error (en XML gana la primera declaración).
+3. Los valores de un atributo enumerado se comparan **sin** la normalización de XML §3.3.3 (quitar y colapsar
+   espacios), porque `whiteSpace` está fuera de alcance en la IR: `a=" x "` se rechaza aunque XML lo acepta.
+
+---
+
 ## 4. Límites por defecto
 
 Todos son configurables en tiempo de compilación o en `sv_limits_t` (T5.2, T6.4). Superar un límite es un error controlado, distinto de un error de esquema.
@@ -178,7 +226,8 @@ Todos son configurables en tiempo de compilación o en `sv_limits_t` (T5.2, T6.4
 | Elementos para `uniqueItems` | 4 096 |
 | Estados en la determinización acotada (T3.7) | 4 096 |
 | Posiciones de un `pattern` tras expandir `{m,n}` / grupos anidados | 4 096 / 256 (F4-U16) |
-| Partículas por modelo de contenido XSD (partícula = elemento o grupo, la raíz incluida; D26) | 4 096. Pasarlo es un error `limit` en la partícula 4 097 |
+| Partículas por modelo de contenido XSD (partícula = elemento o grupo, la raíz incluida; D26) | 4 096. Pasarlo es un error `limit` en la partícula 4 097. Lo mismo en los modelos de una DTD (§3bis) |
+| Paréntesis anidados en un modelo de contenido DTD | 256, como la profundidad de anidamiento (D7) |
 | Referencias de entidad/carácter XML por documento | 100 000 |
 | Tiempo máximo de validación | sin límite en la librería; 10 s en la aplicación web |
 | Subida máxima del servidor (cuerpo de cada petición de la aplicación web) | 1 MiB (1 048 576 bytes, `MAX_SCHEMA_BYTES`). Pasarla es 413 `too-large` ([fase7/servidor.md](fase7/servidor.md) §3; D82) |
