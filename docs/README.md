@@ -14,9 +14,9 @@ bombeo) está en [informe-final.md](informe-final.md), y el guion de la presenta
 | --- | --- | --- |
 | Definición formal del subconjunto soportado | [00-alcance.md](00-alcance.md) (lista blanca, clase (a)/(b)/(c), límites) y [fase3/clasificacion.md](fase3/clasificacion.md) | la tabla de clases la compara una prueba con el código |
 | Definición formal del lenguaje y del autómata | §2 de este archivo; [fase4/automata.md](fase4/automata.md) §1-§5 (M, Σ, Γ, δ, pesos) | — |
-| AFD del tokenizador (UTF-8, números, cadenas con escapes, literales, etiquetas) | [fase1/lexico.md](fase1/lexico.md); diagramas [afd-utf8](fase1/afd-utf8.svg), [afd-json](fase1/afd-json.svg), [afd-xml](fase1/afd-xml.svg) | `.dot` generado por `schemac dot`; `make docs-check` |
+| AFD del tokenizador (UTF-8, números, cadenas con escapes, literales, etiquetas, declaraciones DTD) | [fase1/lexico.md](fase1/lexico.md), [fase1/lexico-dtd.md](fase1/lexico-dtd.md); diagramas [afd-utf8](fase1/afd-utf8.svg), [afd-json](fase1/afd-json.svg), [afd-xml](fase1/afd-xml.svg), [afd-dtd](fase1/afd-dtd.svg) | `.dot` generado por `schemac dot`; `make docs-check` |
 | Gramáticas regulares | [fase1/lexico.md](fase1/lexico.md) §2-§4 (UTF-8, número, cadena, tokens XML, lineales por la derecha) | — |
-| Gramáticas libres de contexto con tabla LL(1) | [fase2/gramatica-json.md](fase2/gramatica-json.md), [gramatica-xml.md](fase2/gramatica-xml.md), [gramatica-esquema.md](fase2/gramatica-esquema.md) (metalenguaje), [gramatica-xsd.md](fase2/gramatica-xsd.md); tablas [ll1-json](fase2/ll1-json.md), [ll1-xml](fase2/ll1-xml.md), [ll1-esquema](fase2/ll1-esquema.md), [ll1-xsd](fase2/ll1-xsd.md) | tablas generadas por `scripts/ll1.py`; `make docs-check` |
+| Gramáticas libres de contexto con tabla LL(1) | [fase2/gramatica-json.md](fase2/gramatica-json.md), [gramatica-xml.md](fase2/gramatica-xml.md), [gramatica-esquema.md](fase2/gramatica-esquema.md) (metalenguaje), [gramatica-xsd.md](fase2/gramatica-xsd.md), [gramatica-dtd.md](fase2/gramatica-dtd.md); tablas [ll1-json](fase2/ll1-json.md), [ll1-xml](fase2/ll1-xml.md), [ll1-esquema](fase2/ll1-esquema.md), [ll1-xsd](fase2/ll1-xsd.md), [ll1-dtd](fase2/ll1-dtd.md) | tablas generadas por `scripts/ll1.py`; `make docs-check` |
 | DPDA de al menos dos esquemas | §3: [objeto-cerrado](fase4/automata-objeto-cerrado.svg), [arbol-recursivo](fase4/automata-arbol-recursivo.svg) (JSON) y [pedido](fase4/automata-valid-xml-pedido-01.svg) (XSD) | `.dot` generado por `schemac automaton --dot`; `make docs-check` |
 | Arquitectura del compilador | [arquitectura.md](arquitectura.md) | dependencias tomadas de `cargo metadata` |
 | Árboles de derivación de payloads de ejemplo | [fase5/arbol-derivacion.md](fase5/arbol-derivacion.md); [pedido.json](fase5/arbol-pedido.json.svg), [pedido.xml](fase5/arbol-pedido.xml.svg) | `.dot` generado por `arbol --dot`; `make docs-check` |
@@ -33,18 +33,23 @@ parte léxica es regular; la sintáctica es libre de contexto y no regular (los 
 restricción de claves no es libre de contexto. Se comprueba con la máscara de bits de las claves declaradas y, para
 las demás, con una tabla hash acotada (§4 de [fase4/runtime.md](fase4/runtime.md)).
 
-**Lenguaje de los payloads XML.** L_XML ⊂ Σ_b\* son los documentos XML 1.0 bien formados en UTF-8 sin DTD
-(alcance §1.2). Sobre un alfabeto de nombres arbitrario, el emparejamiento de etiquetas no es libre de contexto
+**Lenguaje de los payloads XML.** L_XML ⊂ Σ_b\* son los documentos XML 1.0 bien formados en UTF-8 sin DTD interna
+ni `<!DOCTYPE` (alcance §1.2): una DTD solo se admite como **esquema** aparte (𝒮_D, abajo). Sobre un alfabeto de nombres arbitrario, el emparejamiento de etiquetas no es libre de contexto
 ([fase2/gramatica-xml.md](fase2/gramatica-xml.md) §3, con la demostración por bombeo). Lo es porque el esquema fija un
 conjunto finito de nombres (§4 del mismo archivo).
 
 **Esquemas.** 𝒮_J son los JSON Schema 2020-12 que usan solo la lista blanca de [00-alcance.md](00-alcance.md) §2 y
 pasan la Fase 3: el meta-esquema, la resolución de `$ref` y la ausencia de ciclos que no consumen entrada. 𝒮_X es
-lo mismo con el subconjunto de XSD 1.0 de §3. Para S ∈ 𝒮_J,
+lo mismo con el subconjunto de XSD 1.0 de §3, y 𝒮_D con el subconjunto de DTD externas de §3bis (D86): sin
+entidades, con modelos de contenido deterministas (XML 1.0, apéndice E) y sin `ANY`, contenido mixto, `ID`/`IDREF`
+ni `NOTATION`. Para S ∈ 𝒮_J,
 
   L(S) = { w ∈ L_JSON : la instancia que denota w satisface S según 2020-12 }
 
-y, para S ∈ 𝒮_X, lo mismo sobre L_XML con la validación de XSD 1.0, con las desviaciones de alcance §3.4.
+y, para S ∈ 𝒮_X, lo mismo sobre L_XML con la validación de XSD 1.0, con las desviaciones de alcance §3.4. Para
+S ∈ 𝒮_D, lo mismo con la validez de XML 1.0 respecto de S, con dos precisiones: la raíz puede ser **cualquier**
+elemento declarado (no hay `<!DOCTYPE` que la nombre) y las desviaciones de §3bis.4, que solo rechazan de más. Las
+tres familias bajan a la misma IR, así que el autómata de abajo es el mismo para todas.
 
 **El autómata.** El compilador construye, para cada S, un autómata de pila ponderado determinista
 
@@ -106,6 +111,7 @@ AFD o verificación diferida. Están en [00-alcance.md](00-alcance.md) (columna 
 | [afd-utf8](fase1/afd-utf8.svg) | RFC 3629: rechaza *overlongs*, sustitutos y > U+10FFFF por la forma del autómata |
 | [afd-json](fase1/afd-json.svg) | Tokenizador JSON completo: literales `true`/`false`/`null`, números (gramática de §3 de `lexico.md`), cadenas con escapes y `\u` con pares sustitutos (transiciones punteadas: dependen de un registro) |
 | [afd-xml](fase1/afd-xml.svg) | Tokens XML: etiquetas de apertura y cierre, atributos, referencias, comentarios, CDATA, instrucciones de procesamiento y referencias de entidad o de carácter. De `<!` solo salen `-` y `[`: un `<!DOCTYPE` va al error (D8) |
+| [afd-dtd](fase1/afd-dtd.svg) | Declaraciones de una DTD externa (D86): `<!ELEMENT`, `<!ATTLIST`, nombres, `#PCDATA`…, modelos de contenido, literales con referencias. `<!ENTITY`, `<!DOCTYPE`, `<![` y `%` fuera de un literal van al error ([lexico-dtd.md](fase1/lexico-dtd.md) §5) |
 
 ### DPDA (Fase 4)
 
@@ -145,6 +151,7 @@ Se dibujan con `schemac automaton --dot <esquema>`:
 | XML bien formado | [gramatica-xml.md](fase2/gramatica-xml.md), con la prueba de que el emparejamiento de nombres no es libre de contexto y cómo lo resuelve el esquema | [ll1-xml](fase2/ll1-xml.md) |
 | Metalenguaje de esquemas | [gramatica-esquema.md](fase2/gramatica-esquema.md) (JSON Schema como lenguaje sobre los tokens JSON) | [ll1-esquema](fase2/ll1-esquema.md) |
 | XSD | [gramatica-xsd.md](fase2/gramatica-xsd.md) y el lector con espacios de nombres ([lector-xsd.md](fase2/lector-xsd.md)) | [ll1-xsd](fase2/ll1-xsd.md) |
+| DTD | [gramatica-dtd.md](fase2/gramatica-dtd.md): palabras clave contextuales, `choice` y `seq` factorizados, parser iterativo | [ll1-dtd](fase2/ll1-dtd.md) |
 
 El parser del esquema es el descendente LL(1) de esas tablas. El AST solo existe al compilar: el validador generado
 no construye árbol (Fase 5).
@@ -160,15 +167,15 @@ La aplicación web dibuja el de cualquier payload (`POST /api/derivation`, [fase
 
 | Fase | Documentos |
 | --- | --- |
-| 1. Léxico | [lexico.md](fase1/lexico.md) |
-| 2. Sintáctico | [gramatica-json.md](fase2/gramatica-json.md), [gramatica-xml.md](fase2/gramatica-xml.md), [gramatica-esquema.md](fase2/gramatica-esquema.md), [gramatica-xsd.md](fase2/gramatica-xsd.md), [lector-xsd.md](fase2/lector-xsd.md) |
-| 3. Semántico | [meta-esquema.md](fase3/meta-esquema.md), [referencias.md](fase3/referencias.md), [ciclos.md](fase3/ciclos.md), [ir.md](fase3/ir.md), [bajada.md](fase3/bajada.md), [clasificacion.md](fase3/clasificacion.md), [xsd.md](fase3/xsd.md), [numeros-xsd.md](fase3/numeros-xsd.md); IR dibujada: [arbol-recursivo](fase3/ir-arbol-recursivo.svg), [pedido](fase3/ir-pedido.svg) |
+| 1. Léxico | [lexico.md](fase1/lexico.md), [lexico-dtd.md](fase1/lexico-dtd.md) |
+| 2. Sintáctico | [gramatica-json.md](fase2/gramatica-json.md), [gramatica-xml.md](fase2/gramatica-xml.md), [gramatica-esquema.md](fase2/gramatica-esquema.md), [gramatica-xsd.md](fase2/gramatica-xsd.md), [lector-xsd.md](fase2/lector-xsd.md), [gramatica-dtd.md](fase2/gramatica-dtd.md) |
+| 3. Semántico | [meta-esquema.md](fase3/meta-esquema.md), [referencias.md](fase3/referencias.md), [ciclos.md](fase3/ciclos.md), [ir.md](fase3/ir.md), [bajada.md](fase3/bajada.md), [clasificacion.md](fase3/clasificacion.md), [xsd.md](fase3/xsd.md), [numeros-xsd.md](fase3/numeros-xsd.md), [dtd.md](fase3/dtd.md); IR dibujada: [arbol-recursivo](fase3/ir-arbol-recursivo.svg), [pedido](fase3/ir-pedido.svg) (XSD), [pedido](fase3/ir-dtd-pedido.svg) (DTD) |
 | 4. Autómata | [automata.md](fase4/automata.md), [runtime.md](fase4/runtime.md), [pattern.md](fase4/pattern.md) |
 | 5. Código | [codegen.md](fase5/codegen.md) (Rust), [codegen-c.md](fase5/codegen-c.md) (C), [generador.md](fase5/generador.md), [arbol-derivacion.md](fase5/arbol-derivacion.md) |
 | 6. Tiempo real | [puntero.md](fase6/puntero.md), [limites.md](fase6/limites.md), [mitigaciones.md](fase6/mitigaciones.md), [fuzzing.md](fase6/fuzzing.md), [mutaciones.md](fase6/mutaciones.md), [linea-base.md](fase6/linea-base.md), [metricas.md](fase6/metricas.md), [bombeo.md](fase6/bombeo.md) (gráficas en [graficas/](fase6/graficas/datos.md)) |
 | 7. Aplicación | [servidor.md](fase7/servidor.md), [vistas.md](fase7/vistas.md), [sandbox.md](fase7/sandbox.md), [codigo.md](fase7/codigo.md), [atlas.md](fase7/atlas.md), [despliegue.md](fase7/despliegue.md) |
 
-Las decisiones (D1-D79) están en [`tasks/plan-general.md`](../tasks/plan-general.md), «Registro de decisiones». Lo
+Las decisiones (D1-D86) están en [`tasks/plan-general.md`](../tasks/plan-general.md), «Registro de decisiones». Lo
 cerrado de cada revisión está en `docs/faseN/historial.md`.
 
 ## 7. Regenerar y comprobar

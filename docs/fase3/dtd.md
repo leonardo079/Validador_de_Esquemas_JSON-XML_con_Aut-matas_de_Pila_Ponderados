@@ -227,7 +227,14 @@ malformaciones). Los dos autómatas dan el mismo veredicto y la misma clase de e
 ahora rompería el «86 de 86» de la demo. Se cargan (`cargo run -p atlas`) **después** de fusionar la rama `DTD` en
 `main` y desplegar, en el mismo paso.
 
-## 7. Lo que falta (DTD.6)
+## 7. Documentación final (DTD.6) y lo que falta
 
-- Documentación final: `00-alcance.md`, `docs/README.md`, `informe-final.md` y `arquitectura.md`.
-- Tras fusionar con `main`: desplegar y cargar Atlas con los 94 casos.
+La DTD está en la entrada de la documentación técnica ([../README.md](../README.md)): mapa, definición formal (𝒮_D),
+AFD, gramáticas e índice. También en [../arquitectura.md](../arquitectura.md) (tercera rama del frontal y crate
+`dtd`) y en [../informe-final.md](../informe-final.md) §8. La IR del pedido DTD se dibuja en
+[ir-dtd-pedido.svg](ir-dtd-pedido.svg), desde el `.dot` que comprueba `make docs-check`.
+
+Falta, fuera del código:
+
+- fusionar la rama `DTD` con `main`, desplegar y cargar Atlas con los 94 casos, en ese orden;
+- correr el fuzzing `esquema_dtd` (*nightly*).

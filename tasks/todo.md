@@ -1120,5 +1120,38 @@ el orquestador, sin agentes (decisión del usuario).
 - [ ] **Atlas:** cargar los 94 casos (`cargo run -p atlas`) **después** de fusionar con `main` y desplegar. Hacerlo
   antes rompería el 86/86 de la demo, porque la EC2 ejecuta el servidor de `main`.
 
-**Pendiente para DTD.6:** `00-alcance.md` (pasar §3bis de «propuesto» a hecho), `docs/README.md`,
-`informe-final.md` y `arquitectura.md`.
+**Pendiente para DTD.6:** resuelto en DTD.6 (abajo).
+
+## Tarea DTD.6: documentación final — HECHA (23 nov)
+
+- [x] `docs/README.md`:
+  - el mapa del entregable, con el AFD DTD, la gramática y la tabla LL(1);
+  - la definición formal: 𝒮_D, L(S) para una DTD (raíz = cualquier elemento declarado, desviaciones de §3bis.4) y
+    L_XML sin `<!DOCTYPE`;
+  - la fila `afd-dtd`, la gramática DTD y el índice por fase;
+  - las decisiones D1-D86.
+- [x] `docs/arquitectura.md`:
+  - la tercera rama del frontal en el diagrama de compilación;
+  - `dtd` en la tabla de fases, en el grafo de crates y en la tabla de papeles;
+  - la detección con `dtd::formato`;
+  - el sandbox en la EC2, encendido desde D85 (estaba desactualizado).
+- [x] `docs/informe-final.md`:
+  - §8 nuevo, «DTD como tercer lenguaje de esquema»;
+  - en el resumen: 94 casos, pruebas y cinco objetivos de fuzzing;
+  - la decisión del tercer frontal, la fila de XXE y la verificación (21 casos XML: 13 con XSD y 8 con DTD; el
+    texto anterior decía 15);
+  - el sandbox en la EC2 (D85) y D1-D86;
+  - las conclusiones.
+- [x] La regla de formato nueva en `docs/fase3/bajada.md`, `docs/fase7/servidor.md` y `docs/fase7/vistas.md`.
+- [x] La IR del pedido DTD dibujada, `docs/fase3/ir-dtd-pedido.dot/.svg` (`IR_DOT_DTD` en `make docs` y
+  `make docs-check`). Comprobado a mano, sin `make`: los `.dot` de las Fases 1, 3, 4 y 5 coinciden con los que da el
+  código.
+- [x] `docs/00-alcance.md` §3bis ya estaba completo desde DTD.0 y las enmiendas.
+
+**D86 completa en la rama `DTD`.** Falta, en este orden:
+
+1. visto bueno de Leonardo para fusionar `DTD` con `main`;
+2. desplegar con `-Sandbox`;
+3. cargar Atlas con los 94 casos (`cargo run -p atlas`).
+
+Opcional: un `security-auditor` sobre lo de la DTD y correr `esquema_dtd` (*nightly*).

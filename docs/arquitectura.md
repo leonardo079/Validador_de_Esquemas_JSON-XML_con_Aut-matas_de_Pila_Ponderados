@@ -1,6 +1,6 @@
 # Arquitectura del compilador
 
-`schemac` traduce un esquema (JSON Schema o XSD) a un autómata de pila ponderado M (Fase 4) y emite un validador
+`schemac` traduce un esquema (JSON Schema, XSD o DTD) a un autómata de pila ponderado M (Fase 4) y emite un validador
 nativo en Rust o C (Fase 5). Hay dos tiempos:
 
 - **Compilación:** el esquema pasa por las cinco primeras fases.
@@ -14,13 +14,16 @@ Los diagramas son Mermaid, para que GitHub los dibuje. Las flechas entre crates 
 
 ```mermaid
 flowchart LR
-  E[/"esquema<br/>(bytes)"/] --> F{"¿JSON Schema o XSD?<br/>(primer carácter significativo)"}
+  E[/"esquema<br/>(bytes)"/] --> F{"¿JSON Schema, XSD o DTD?<br/>(dtd::formato, D22 y D86)"}
   F -- JSON --> SP["schema-parser<br/>lexer JSON + LL(1)<br/>→ AST"]
   F -- XSD --> XP["xsd::parse<br/>lector XML con espacios<br/>de nombres + LL(1) → AST"]
+  F -- DTD --> DP["dtd::parse<br/>lexer DTD + LL(1)<br/>iterativo → AST"]
   SP --> SE["semantic::analyze<br/>meta-esquema, $ref/$defs,<br/>ciclos no productivos"]
   XP --> XA["xsd::analyze<br/>nombres, tipos,<br/>modelos de contenido"]
   SE --> LO["lower → ir::VerifiedIr<br/>invariantes I1-I14,<br/>clase (a)/(b)/(c)"]
   XA --> LO
+  DP --> DA["dtd::analyze<br/>símbolos, determinismo<br/>(Glushkov)"]
+  DA --> LO
   LO --> AU["automaton::build<br/>M = (Q, Σ, Γ, δ, q₀, Z₀, F, w)<br/>tablas densas, Hopcroft"]
   AU --> CG["codegen<br/>rust.rs / c.rs"]
   AU --> IN["intérprete<br/>automaton::validate"]
@@ -30,14 +33,16 @@ flowchart LR
 
 | Fase | Crate | Entrada → salida | Documento |
 | --- | --- | --- | --- |
-| 1. Léxico | `lexer` | bytes → tokens (AFD de Mealy `no_std`, sin `alloc`; UTF-8, JSON, XML) | [fase1/lexico.md](fase1/lexico.md) |
-| 2. Sintáctico | `schema-parser`, `xsd` (lector y parser) | tokens → AST del esquema (LL(1) descendente recursivo, profundidad ≤ 256, en un hilo con pila propia, D7) | [fase2/](fase2/) |
-| 3. Semántico | `semantic`, `xsd` (análisis), `ir` | AST → `VerifiedIr`: `$ref` resuelto, ciclos rechazados, cada regla con su clase y estrategia | [fase3/ir.md](fase3/ir.md), [clasificacion.md](fase3/clasificacion.md) |
+| 1. Léxico | `lexer`, `dtd` (lexer DTD) | bytes → tokens (AFD de Mealy; los de UTF-8, JSON y XML son `no_std` sin `alloc`; el de DTD solo se usa al compilar) | [fase1/lexico.md](fase1/lexico.md) |
+| 2. Sintáctico | `schema-parser`, `xsd` (lector y parser), `dtd` (parser) | tokens → AST del esquema (LL(1) descendente, profundidad ≤ 256, recursivo en un hilo con pila propia o iterativo con pila explícita, D7) | [fase2/](fase2/) |
+| 3. Semántico | `semantic`, `xsd` (análisis), `dtd` (análisis y bajada), `ir` | AST → `VerifiedIr`: `$ref` resuelto, ciclos rechazados, cada regla con su clase y estrategia | [fase3/ir.md](fase3/ir.md), [clasificacion.md](fase3/clasificacion.md) |
 | 4. Autómata | `automaton` | `VerifiedIr` → `Automaton` (las tablas de M y su resumen) | [fase4/automata.md](fase4/automata.md) |
 | 5. Código | `codegen` | `Automaton` → archivos Rust o C autocontenidos | [fase5/codegen.md](fase5/codegen.md), [codegen-c.md](fase5/codegen-c.md) |
 
-El formato se decide por el contenido del esquema, no por su extensión. Las dos ramas se juntan en la IR: desde
-`ir::VerifiedIr`, JSON Schema y XSD siguen el mismo camino (D13). La IR es la interfaz entre los frontales y el
+El formato se decide por el contenido del esquema, no por su extensión, con una sola función, `dtd::formato`, que usan
+`schemac`, el servidor y `bench` (D22 enmendada por D86). Las tres ramas se juntan en la IR: desde `ir::VerifiedIr`,
+JSON Schema, XSD y DTD siguen el mismo camino (D13). La DTD baja con la misma forma que un XSD sin espacio de nombres
+y sin campos nuevos ([fase3/dtd.md](fase3/dtd.md)). La IR es la interfaz entre los frontales y el
 constructor, y `schemac ir` la escribe en JSON estable (v2, D17).
 
 ## 2. Validación: el validador generado
@@ -83,7 +88,10 @@ flowchart BT
   sem --> sp
   xsd["xsd"] --> ir
   xsd --> lexer
+  dtd["dtd"] --> ir
+  dtd --> lexer
   bl["baseline"] --> sp
+  bl --> dtd
   aut["automaton"] --> ir
   aut --> lexer
   aut --> rt
@@ -94,14 +102,17 @@ flowchart BT
   cli --> aut
   cli --> sem
   cli --> xsd
+  cli --> dtd
   bench["bench"] --> aut
   bench --> bl
   bench --> sem
   bench --> xsd
+  bench --> dtd
   atlas["atlas"] --> bl
   srv["server"] --> aut
   srv --> sem
   srv --> xsd
+  srv --> dtd
   srv --> bl
   srv --> der
   srv --> atlas
@@ -110,7 +121,7 @@ flowchart BT
 El diagrama omite las aristas que ya se siguen por otro camino. Por ejemplo, `cli` también depende directamente de
 `ir`, `lexer` y `schema-parser`; `bench`, de `ir`, `schema-parser` y `runtime-rs`; y `server`, de `ir` y
 `schema-parser` (lista completa:
-`cargo metadata --no-deps`). `automaton` no depende de ningún frontal: `semantic`, `schema-parser`, `xsd` y
+`cargo metadata --no-deps`). `automaton` no depende de ningún frontal: `semantic`, `schema-parser`, `xsd`, `dtd` y
 `baseline` solo entran en sus pruebas (F4-B1, D13).
 
 | Crate | Papel |
@@ -119,6 +130,7 @@ El diagrama omite las aristas que ya se siguen por otro camino. Por ejemplo, `cl
 | `schema-parser` | parser LL(1) de JSON Schema y AST |
 | `semantic` | meta-esquema, `$ref`, ciclos y bajada a la IR |
 | `xsd` | frontal XSD: lector, parser, análisis y bajada |
+| `dtd` | frontal DTD (D86): lexer, parser iterativo, análisis con determinismo y bajada; `dtd::formato`, la regla única de detección |
 | `ir` | IR común, verificación (`VerifiedIr`), clasificación, expresiones regulares (`ir::regex`) |
 | `automaton` | construcción de M, minimización, exportación (resumen y DOT), intérprete |
 | `runtime-rs` | núcleo del validador (`no_std`), límites, reporte, puntero, semianillo |
@@ -150,9 +162,9 @@ Endpoints: `GET /api/health`, `POST /api/schemas`, `/api/automaton`, `/api/deriv
 compila y ejecuta en el sandbox y lo compara con el intérprete) y `WS /ws/validate` (validación por bloques con el
 núcleo `runtime-rs`). Están documentados en [fase7/servidor.md](fase7/servidor.md), [vistas.md](fase7/vistas.md),
 [atlas.md](fase7/atlas.md) y [codigo.md](fase7/codigo.md). `POST /api/validate` usa el sandbox
-([fase7/sandbox.md](fase7/sandbox.md)) solo si el servidor arranca con `SANDBOX=docker`. En la EC2 queda apagado
-(503), así que la validación con el código generado se enseña en local ([fase7/codigo.md](fase7/codigo.md) §5). El
-despliegue está en [fase7/despliegue.md](fase7/despliegue.md).
+([fase7/sandbox.md](fase7/sandbox.md)) solo si el servidor arranca con `SANDBOX=docker`. En la EC2 está encendido desde
+D85 (`t3.small`, `desplegar.ps1 -Sandbox`, con el riesgo del socket de Docker aceptado). El despliegue está en
+[fase7/despliegue.md](fase7/despliegue.md).
 
 ## 5. Interfaces compartidas
 

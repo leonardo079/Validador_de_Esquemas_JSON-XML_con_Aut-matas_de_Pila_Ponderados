@@ -25,8 +25,11 @@ IR la vigilan las doradas compartidas ([pendientes.md](pendientes.md) §6).
 ## 1. Qué hace una compilación
 
 El cuerpo de la petición es el esquema, en crudo. No hace falta `Content-Type` y no se
-usa: el formato sale del contenido (D22). Si el primer byte significativo (tras un BOM
-UTF-8 y los espacios `\t\n\r `) es `<`, el esquema es XSD; si no, JSON Schema. Un cuerpo
+usa: el formato sale del contenido (D22, enmendada por D86). Tras un BOM UTF-8, los
+espacios `\t\n\r `, una `<?xml …?>` inicial y los comentarios: `<!` es una DTD (salvo
+`<!DOCTYPE`, que es XSD), otro `<` es XSD y lo demás, JSON Schema. La regla es
+`dtd::formato` ([../fase3/dtd.md](../fase3/dtd.md) §5), y una DTD responde con
+`format: "xml"`, como un XSD: la API no cambia. Un cuerpo
 vacío o que no es UTF-8 se trata como JSON y da su error léxico o del parser (422), nunca
 un 400.
 

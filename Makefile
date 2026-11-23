@@ -94,6 +94,9 @@ coverage:
 # lo mismo con los XSD de tests/schemas/xsd/parse-ok (tarea 5.4).
 IR_DOT := arbol-recursivo
 IR_DOT_XSD := pedido
+# IR_DOT_DTD: DTD de tests/schemas/dtd/parse-ok cuya IR se dibuja en
+# docs/fase3/ir-dtd-<nombre>.dot (DTD.6, D86).
+IR_DOT_DTD := pedido
 # AUT_DOT: esquemas de tests/schemas/parse-ok cuyo autómata M (Fase 4,
 # `schemac automaton --dot`) se dibuja en docs/fase4/automata-<nombre>.dot;
 # `objeto-cerrado` es la dorada contada a mano en docs/fase4/automata.md §8;
@@ -118,6 +121,10 @@ docs:
 	for e in $(IR_DOT_XSD); do \
 		cargo run -q -p cli -- ir --dot tests/schemas/xsd/parse-ok/$$e.xsd > docs/fase3/ir-$$e.dot && \
 		dot -Tsvg docs/fase3/ir-$$e.dot -o docs/fase3/ir-$$e.svg; \
+	done
+	for e in $(IR_DOT_DTD); do \
+		cargo run -q -p cli -- ir --dot tests/schemas/dtd/parse-ok/$$e.dtd > docs/fase3/ir-dtd-$$e.dot && \
+		dot -Tsvg docs/fase3/ir-dtd-$$e.dot -o docs/fase3/ir-dtd-$$e.svg; \
 	done
 	for e in $(AUT_DOT); do \
 		cargo run -q -p cli -- automaton --dot tests/schemas/parse-ok/$$e.json > docs/fase4/automata-$$e.dot && \
@@ -164,6 +171,10 @@ docs-check:
 	for e in $(IR_DOT_XSD); do \
 		cargo run -q -p cli -- ir --dot tests/schemas/xsd/parse-ok/$$e.xsd > $(DOCS_TMP)/ir-$$e.dot || exit 1; \
 		diff -u docs/fase3/ir-$$e.dot $(DOCS_TMP)/ir-$$e.dot || fallo=1; \
+	done; \
+	for e in $(IR_DOT_DTD); do \
+		cargo run -q -p cli -- ir --dot tests/schemas/dtd/parse-ok/$$e.dtd > $(DOCS_TMP)/ir-dtd-$$e.dot || exit 1; \
+		diff -u docs/fase3/ir-dtd-$$e.dot $(DOCS_TMP)/ir-dtd-$$e.dot || fallo=1; \
 	done; \
 	for e in $(AUT_DOT); do \
 		cargo run -q -p cli -- automaton --dot tests/schemas/parse-ok/$$e.json > $(DOCS_TMP)/automata-$$e.dot || exit 1; \

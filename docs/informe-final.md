@@ -13,7 +13,8 @@ remite a ella.
 ## 0. Resumen
 
 `schemac` compila un esquema a un autómata de pila determinista ponderado M_S y emite un validador autocontenido
-en Rust (`no_std`) o C11. Acepta JSON Schema (subconjunto de 2020-12) o XSD (subconjunto de 1.0). El validador lee
+en Rust (`no_std`) o C11. Acepta JSON Schema (subconjunto de 2020-12), XSD (subconjunto de 1.0) o, desde D86, una DTD externa (subconjunto de
+XML 1.0 §3, §8). El validador lee
 el payload en streaming, en bloques de cualquier tamaño, sin construir árbol y sin reservar memoria. Da un reporte
 con el número de violaciones (el peso en el semianillo tropical), la clase del primer error, su posición (offset,
 línea, columna y JSON Pointer o ruta XML) y la regla incumplida.
@@ -25,8 +26,8 @@ línea, columna y JSON Pointer o ruta XML) y la regla incumplida.
 | Memoria | 72-78 KiB fijos, una sola reserva, para cualquier n (la línea base DOM: 64,4 MiB con 10⁵ objetos) | §1.3 |
 | Tamaño de M | de 13 estados y 43 transiciones a 216 y 10 054 (XSD del pedido) | §2.1 |
 | Explosión al determinizar | acotada: `limit` antes de crear el estado 4 097 o de pasar 2²⁰ entradas | §2.2 |
-| Corrección | 86 casos del corpus; intérprete = Rust generado = C generado (con ASan/UBSan); veredicto = línea base | §6 |
-| Pruebas | 856 en `make test`, 7 del lema de bombeo, fuzzing con cuatro objetivos | §5, §6 |
+| Corrección | 94 casos del corpus (8 con DTD); intérprete = Rust generado = C generado (con ASan/UBSan); veredicto = línea base | §6 |
+| Pruebas | 856 en `make test` antes de la DTD, más 56 del frontal DTD y su integración; 7 del lema de bombeo; fuzzing con cinco objetivos | §5, §6 |
 
 ## 1. Análisis de complejidad
 
@@ -171,7 +172,7 @@ pánico ni desbordar la pila a las Fases 2-4.
 
 ## 3. Decisiones de diseño
 
-El registro completo (D1-D80) está en [`tasks/plan-general.md`](../tasks/plan-general.md). Las que dan forma al
+El registro completo (D1-D86) está en [`tasks/plan-general.md`](../tasks/plan-general.md). Las que dan forma al
 resultado:
 
 | Tema | Decisión | Por qué |
@@ -180,6 +181,7 @@ resultado:
 | Σ | Eventos del lexer, no bytes: el lexer va delante como transductor (F4-U1) | Separa lo regular (tokens, UTF-8, escapes) de lo libre de contexto, y |Σ| sale pequeño (14 eventos, la clase «otro» y una por carácter usado) |
 | Registros | Acotados y saturados: máscara de claves, contadores, lexema ≤ 1 024 (automata.md §1) | Así el control es finito y M es un autómata de pila en sentido estricto. Los números se comparan sobre el lexema decimal exacto, nunca como `f64` |
 | Una IR para los dos lenguajes | JSON Schema y XSD bajan a `ir::VerifiedIr`; `automaton` no conoce los frontales (D3, D13) | Una sola construcción de M para los dos |
+| Un tercer frontal sin tocar la IR | La DTD externa baja a la misma IR con la forma de XSD, sin campos nuevos; el formato lo decide una sola función, `dtd::formato` (D86, §8) | Demuestra que la IR común admite otro lenguaje de esquema sin cambiar las Fases 4-7 |
 | Clase (c) | `pattern` → AFD dentro de M (D61-D62); combinadores → salidas por rama y puertas (D63); `uniqueItems` → verificación diferida por hash canónico (D64) | Todo en una pasada y con memoria fija. Lo que no es libre de contexto (`uniqueItems`) se decide al cerrar el arreglo |
 | XML | En la teoría, Γ incluye el nombre del elemento, porque el esquema fija un alfabeto finito de nombres (gramatica-xml.md §4). En la implementación, el marco guarda el hash del QName de apertura y lo compara con el de cierre (runtime.md §4). Glushkov con contadores; UPA conservadora (D25, D57) | El emparejamiento de etiquetas no es libre de contexto sobre nombres arbitrarios; con N finito, sí |
 | Un solo ejecutor | El intérprete y el código generado comparten el núcleo `no_std` (D51, D74). El C es un port función por función (D75) | La prueba diferencial puede exigir igualdad exacta de reportes |
@@ -299,9 +301,9 @@ Detalle y pruebas en [fase6/mitigaciones.md](fase6/mitigaciones.md).
 | --- | --- | --- |
 | **ReDoS en `pattern`** (`^(a+)+$` con `aaaa…!`) | `pattern` es un AFD mínimo dentro de M: un paso de δ por carácter, sin vuelta atrás. Las retrorreferencias, el *lookaround* y los cuantificadores perezosos se rechazan en la Fase 3, porque no son regulares o no tienen sentido en un AFD | Los cinco patrones clásicos dan ≤ 40 estados y validan 10⁵ `a` en una pasada (`pattern_como_afd`) |
 | **Desbordamiento de pila por anidamiento** | El validador no usa la pila nativa: la pila de M es un arreglo fijo, y pasar `maxDepth` (256) es `limit`. Los parsers del compilador son iterativos o corren en un hilo con `stack_size` (D7) | 10⁵ niveles con `$ref` y 2²⁰ `[` dan `limit` (`ref_ciclico`); `extreme-depth-01` |
-| **XXE y expansión de entidades** (billion laughs, entidades de parámetro) | No hay DTD: el lexer rechaza `<!DOCTYPE` antes de leer ninguna declaración (D8). Solo existen las 5 entidades predefinidas. `maxXmlRefs` acota las referencias de carácter. Nada abre archivos ni red | `dtd_y_entidades`, `malformed-xml-billion-laughs-01`; un XSD con DOCTYPE tampoco se lee |
+| **XXE y expansión de entidades** (billion laughs, entidades de parámetro) | No hay DTD: el lexer rechaza `<!DOCTYPE` antes de leer ninguna declaración (D8). Una DTD solo entra como **esquema** aparte (D86), y su lexer rechaza `<!ENTITY`, `<!DOCTYPE`, `<![` y `%nombre;`. Solo existen las 5 entidades predefinidas. `maxXmlRefs` acota las referencias de carácter. Nada abre archivos ni red | `dtd_y_entidades`, `malformed-xml-billion-laughs-01`, `malformed-xml-dtd-doctype-01`; un XSD con DOCTYPE tampoco se lee; `tests/schemas/dtd/parse-error/{billion-laughs,entidad,parametro,condicional}.dtd` |
 | **`$ref` cíclicos** | Los ciclos que no consumen entrada se rechazan en la Fase 3, aunque sean inalcanzables (D12). Los productivos son un marco recursivo de M acotado por `maxDepth` | `ref_ciclico`, `tests/schemas/semantic-error/ciclo-*` |
-| **Ejecución de código generado** | Sandbox Docker (D68): sin red, sin root, sistema de archivos de solo lectura, límites de memoria, CPU y procesos, tiempo doble con `docker kill`, entrada por tar y órdenes fijas. Lo que se emite son tablas y cadenas escapadas. La revisión de que ningún esquema pueda inyectar código en lo emitido es parte de E3. `POST /api/validate` (F7.5, D81) compila y ejecuta lo emitido solo dentro del sandbox, y solo si el servidor arranca con `SANDBOX=docker`; en la EC2 queda apagado ([fase7/codigo.md](fase7/codigo.md) §5) | `scripts/test-sandbox.ps1` (8 pruebas con contenedores reales) |
+| **Ejecución de código generado** | Sandbox Docker (D68): sin red, sin root, sistema de archivos de solo lectura, límites de memoria, CPU y procesos, tiempo doble con `docker kill`, entrada por tar y órdenes fijas. Lo que se emite son tablas y cadenas escapadas. La revisión de que ningún esquema pueda inyectar código en lo emitido es parte de E3. `POST /api/validate` (F7.5, D81) compila y ejecuta lo emitido solo dentro del sandbox, y solo si el servidor arranca con `SANDBOX=docker`; en la EC2 está encendido desde D85, con el riesgo del socket de Docker aceptado ([fase7/despliegue.md](fase7/despliegue.md) §2.1, §3) | `scripts/test-sandbox.ps1` (8 pruebas con contenedores reales) |
 
 ### 6.2 Las que encontraron las revisiones de seguridad
 
@@ -353,9 +355,9 @@ es E3 (§6.3). Lo que se encontró y cómo se cerró:
 
 ## 7. Verificación
 
-- **Corpus** ([`tests/README.md`](../tests/README.md)): 86 casos con esquema, payload y resultado esperado: 25
-  válidos, 33 inválidos, 18 malformados, 8 fuera del DPDA puro y 2 extremos. De ellos, 15 son XML, con un árbol
-  recursivo. El intérprete da exactamente lo esperado.
+- **Corpus** ([`tests/README.md`](../tests/README.md)): 94 casos con esquema, payload y resultado esperado: 27
+  válidos, 37 inválidos, 20 malformados, 8 fuera del DPDA puro y 2 extremos. De ellos, 21 son XML (13 con XSD y 8 con
+  DTD), con árboles recursivos. El intérprete da exactamente lo esperado.
   - **Línea base JSON:** el veredicto coincide en todos los casos JSON; la clase del error difiere en uno
     (`extreme-big-number-01`).
   - **Línea base XML (libxml2, en Docker):** coincide en todos los XML.
@@ -368,7 +370,8 @@ es E3 (§6.3). Lo que se encontró y cómo se cerró:
   y en lo que encuentra el fuzzer, con bloques de 1, 7 y 4 096 y los dos modos.
 - **Propiedades (proptest):** las leyes del semianillo, el puntero del primer número negativo, `anyOf: [S]` ≡ S, el
   AFD de `pattern` igual a `Regex::matches`, y `uniqueItems` frente a un oráculo.
-- **Fuzzing** ([fase6/fuzzing.md](fase6/fuzzing.md)): cuatro objetivos con cargo-fuzz (payloads JSON contra la
+- **Fuzzing** ([fase6/fuzzing.md](fase6/fuzzing.md)): cuatro objetivos corridos, más `esquema_dtd` (D86), que compila
+  pero aún no se ha corrido con cargo-fuzz (payloads JSON contra la
   línea base, payloads XML, esquemas JSON y XSD). Sin fallos en la corrida de humo ni en la de 10 minutos por
   objetivo del 21 nov. En esta última fueron 55 669, 132 773, 226 223 y 221 592 ejecuciones, y quedaron corpus de
   1 060, 724, 2 412 y 2 345 entradas. Los payloads del corpus (hasta 1 000 por formato) se reprodujeron después en
@@ -381,9 +384,37 @@ es E3 (§6.3). Lo que se encontró y cómo se cerró:
 - **Toda la verificación es local** (D32): `make lint` (rustfmt, clippy `-D warnings`, clang-format,
   `unsafe-check`), `make test` (856 pruebas) y `make docs-check`.
 
-## 8. Conclusiones
+## 8. DTD como tercer lenguaje de esquema (D86)
 
-El subconjunto de JSON Schema y XSD del alcance se reconoce con un autómata de pila determinista ponderado:
+Añadido después de la entrega principal, en la rama `DTD`, a partir de una propuesta de Leonardo con sus enmiendas
+E1-E5 (`tasks/propuesta-dtd.md`). El enunciado no lo exige. Lo que aporta es la prueba de que la IR común admite un
+tercer frontal **sin tocar** las Fases 4-7: el autómata, el código generado, el servidor y la web reciben la misma
+IR.
+
+| Fase | Pieza | Resultado | Documento |
+| --- | --- | --- | --- |
+| 1 | Lexer DTD (`crates/dtd/src/lexer.rs`) | AFD de tabla en streaming, 26 estados y 28 clases. `<!ENTITY`, `<!DOCTYPE`, `<![`, `%p;` y entidades no predefinidas son errores léxicos. Un oráculo sin tabla coincide en 20 000 entradas al azar | [fase1/lexico-dtd.md](fase1/lexico-dtd.md) |
+| 2 | Gramática y parser | LL(1) sin conflictos, con palabras clave contextuales. Parser iterativo con pila explícita y tope de 256 paréntesis: un millón de `(` no desborda una pila de 256 KiB. AST propio (D3) | [fase2/gramatica-dtd.md](fase2/gramatica-dtd.md) |
+| 3 | Análisis y bajada | Tabla de símbolos, todos los errores en orden. **Determinismo por Glushkov** (XML 1.0, apéndice E), que coincide con la UPA de XSD en 3 000 modelos al azar. Bajada con la forma de XSD y sin campos nuevos | [fase3/dtd.md](fase3/dtd.md) |
+| 4-7 | Integración | `dtd::formato`, una sola regla de detección para la CLI, el servidor y `bench`; la web tiene su copia probada con la misma tabla. La API no cambia (`format: "xml"`). El extremo a extremo con el autómata, los validadores generados en Rust y C y la pila en Docker validan como manda la DTD | [fase3/dtd.md](fase3/dtd.md) §5 |
+
+**Corrección.** Para dos esquemas escritos en DTD y en XSD, se generan documentos válidos, saboteados y malformados
+desde las dos IR. En los **2 422 documentos**, los dos autómatas dan el mismo veredicto y la misma clase de error:
+es la diferencial por veredictos de la enmienda E3. Los 8 casos DTD del corpus pasan también por la diferencial
+intérprete = Rust = C.
+
+**Seguridad.** D8 no cambia para los payloads: un documento con `<!DOCTYPE` sigue siendo malformado aunque el
+esquema sea una DTD (`malformed-xml-dtd-doctype-01`). En la DTD no hay entidades, así que no hay XXE ni
+*billion laughs*, y nada abre archivos ni red ([fase6/mitigaciones.md](fase6/mitigaciones.md)).
+
+**Lo que falta:**
+
+- correr el objetivo de fuzzing `esquema_dtd`, que necesita *nightly*;
+- después de fusionar la rama con `main`, desplegar y cargar en Atlas los 94 casos.
+
+## 9. Conclusiones
+
+El subconjunto de JSON Schema, XSD y DTD del alcance se reconoce con un autómata de pila determinista ponderado:
 - las restricciones (a) son transiciones;
 - las (b) son registros acotados en el marco;
 - las (c) son AFD dentro de M, salidas por rama combinadas al cerrar, o verificación diferida.

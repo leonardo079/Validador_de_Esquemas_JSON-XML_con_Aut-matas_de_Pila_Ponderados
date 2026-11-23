@@ -22,7 +22,7 @@ el visto bueno el 20 nov (D42, D70).** Los tres pasan por el mismo camino que `P
 
 | Endpoint | Cuerpo | 200 | Errores |
 | --- | --- | --- | --- |
-| `POST /api/automaton` | El esquema crudo (JSON Schema o XSD, D22) | `{format, states, transitions, start, groups, truncated, nodes, edges}` | 422 `schema` (como `/api/schemas`); 422 `automaton` con `status` `pending` o `limit` |
+| `POST /api/automaton` | El esquema crudo (JSON Schema, XSD o DTD; D22, D86) | `{format, states, transitions, start, groups, truncated, nodes, edges}` | 422 `schema` (como `/api/schemas`); 422 `automaton` con `status` `pending` o `limit` |
 | `POST /api/derivation` | El payload crudo (JSON o XML) | El árbol de F5.5: `{name, kind, start, end, lexeme?, pointer?, children?}` | 422 `derivation` con `kind` (`lexical`, `syntax`, `too-many-nodes`, `too-deep`), `offset` y `message` |
 | `POST /api/compare` | `{"schema": "…", "payload": "…"}` (JSON con dos cadenas) | `{format, payloadBytes, dpda, baseline, agree}` | 400 `request` (cuerpo que no es ese JSON); 422 como `/api/automaton` |
 

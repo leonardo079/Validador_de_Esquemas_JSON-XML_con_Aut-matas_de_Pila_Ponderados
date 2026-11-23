@@ -1,0 +1,35 @@
+digraph ir {
+  rankdir=LR;
+  label="IR (xml): 9 nodos, 19 aristas; clases: 7 (a), 2 (b), 0 (c)\n(continuas: consumen entrada; discontinuas: misma instancia)";
+  labelloc=t;
+  node [shape=box, fontname="Helvetica"];
+  edge [fontname="Helvetica", fontsize=10];
+  n0 [label="0 (raíz) [element]\ncontent\n(a) transición", peripheries=2];
+  n1 [label="1 element/pedido [element]\ncontent, attributes\n(b) transición, registro o contador"];
+  n2 [label="2 element/cliente [element]\nsimpleContent\n(a) transición"];
+  n3 [label="3 element/tarjeta [element]\nsimpleContent\n(a) transición"];
+  n4 [label="4 element/efectivo [element]\n(a)"];
+  n5 [label="5 element/item [element]\nsimpleContent, attributes\n(b) transición, registro o contador"];
+  n6 [label="6 element/nota [element]\nsimpleContent\n(a) transición"];
+  n7 [label="7 builtin/string [text]\nlexical\n(a) transición"];
+  n8 [label="8 attribute/estado [text]\nlexical, enum\n(a) transición"];
+  n0 -> n1 [label="<pedido>"];
+  n0 -> n2 [label="<cliente>"];
+  n0 -> n3 [label="<tarjeta>"];
+  n0 -> n4 [label="<efectivo>"];
+  n0 -> n5 [label="<item>"];
+  n0 -> n6 [label="<nota>"];
+  n1 -> n2 [label="<cliente>"];
+  n1 -> n3 [label="<tarjeta>"];
+  n1 -> n4 [label="<efectivo>"];
+  n1 -> n5 [label="<item>"];
+  n1 -> n6 [label="<nota>"];
+  n1 -> n7 [label="@id"];
+  n1 -> n8 [label="@estado"];
+  n2 -> n7 [label="simpleContent"];
+  n3 -> n7 [label="simpleContent"];
+  n5 -> n7 [label="simpleContent"];
+  n5 -> n7 [label="@sku"];
+  n5 -> n7 [label="@moneda"];
+  n6 -> n7 [label="simpleContent"];
+}
