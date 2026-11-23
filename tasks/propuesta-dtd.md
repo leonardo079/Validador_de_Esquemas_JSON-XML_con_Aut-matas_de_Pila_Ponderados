@@ -6,6 +6,11 @@
 > Bayron, en la rama `DTD` (`main` no se toca hasta cerrar).
 >
 > Redactada el 22 nov 2026 en la rama `DTD`. Abajo, el texto original de la propuesta.
+>
+> **Enmiendas a D86 pendientes del visto bueno de Bayron:** §10, de la revisión de Leonardo del commit `27b7a2b`
+> (DTD.0). Tocan `docs/00-alcance.md` §3bis y D86, que son interfaces compartidas, así que solo están propuestas:
+> no se ha cambiado ni el alcance ni el plan. Bloquean DTD.1 los puntos E1 y E4 (el lexer y la detección dependen de
+> ellos).
 
 ## 1. Qué se propone, en una frase
 
@@ -138,6 +143,9 @@ de `xsd`, `semantic` ni `schema-parser` (D13).
 | **DTD.5** | Casos en `tests/cases` (válidos, inválidos, malformados, `<!ENTITY` y `SYSTEM` rechazados), fila en `docs/fase6/mitigaciones.md`, objetivo de fuzzing `esquema_dtd`, carga en Atlas y prueba diferencial contra la misma IR escrita en XSD. | DTD.4 | security-auditor |
 | **DTD.6** | Documentación final: `00-alcance.md`, `docs/README.md`, `informe-final.md` y `arquitectura.md`. | DTD.5 | — |
 
+> **Sustituido por la enmienda E3 de §10:** comparar el JSON v2 no sirve. La comparación pasa a hacerse por
+> veredictos.
+
 Para DTD.5, una prueba diferencial que cuesta poco: escribir el mismo esquema en DTD y en XSD y comprobar que
 la IR exportada (JSON v2) coincide, salvo los orígenes. Eso demuestra la bajada sin otra línea base. La línea
 base con libxml2 (D54) podría además validar con DTD, pero eso exige quitar su capa de política D8 solo para ese
@@ -163,3 +171,122 @@ caso. Se deja fuera.
    CLI y la API.
 4. ¿`NMTOKEN`/`NMTOKENS` fuera de alcance en la primera versión (recomendado) o como `pattern` ASCII?
 5. ¿Pista y responsable? El frontal es de la pista A (compilador) y DTD.4 toca la pista B (servidor y web).
+
+## 10. Enmiendas a D86 (revisión de Leonardo, 22 nov; pendientes del visto bueno de Bayron)
+
+Revisión del commit `27b7a2b` (DTD.0). D86 y §3bis siguen bien la propuesta, pero hay cinco puntos que conviene
+cambiar antes de DTD.1. Para cada uno van el problema y el texto que se propone. Cuando Bayron los apruebe, se
+aplican en `docs/00-alcance.md` §3bis, en la fila de D86 de `tasks/plan-general.md` y en sus líneas de
+`tasks/CHECKLIST.md`. Leonardo no edita esas líneas porque son de Bayron.
+
+### E1. La detección no debe mandar a la DTD un XSD con `<!DOCTYPE` (bloquea DTD.1)
+
+**Problema.** Con la regla de D86 («tras BOM, espacios, una `<?xml …?>` y comentarios, `<!` es DTD»),
+`tests/schemas/xsd/parse-error/doctype.xsd` (`<?xml version="1.0"?>` + `<!DOCTYPE x>` + `<xs:schema>`) deja de
+llegar al frontal XSD. Rompe `crates/cli/tests/check.rs:122-126`, que espera el error léxico de XSD en la
+línea 2, columna 3. La seguridad no se pierde, porque el frontal DTD también lo rechaza, pero cambian el mensaje y la
+prueba.
+
+**Texto propuesto** (final del primer párrafo de §3bis y regla (2) de D86):
+
+> El formato se detecta por contenido (D22 enmendada por D86). Tras el BOM, los espacios, una `<?xml …?>` inicial
+> y los comentarios `<!-- … -->`:
+> - `<!DOCTYPE` (en cualquier caja) es **XSD**, para que el frontal XSD lo rechace como hoy (D8).
+> - Cualquier otro `<!` es **DTD**.
+> - Otro `<` es XSD.
+> - Lo demás, o nada, es JSON.
+>
+> Si la `<?xml` o un comentario no se cierran, es XSD y el error lo da el lexer XML en su posición. El coste es
+> O(prólogo), sin recursión ni reservas.
+
+**Tabla de casos** (para la prueba de E2):
+
+| Entrada | Formato |
+| --- | --- |
+| `<!ELEMENT a EMPTY>` | DTD |
+| `<?xml version="1.0"?>` + `<!-- c -->` + `<!ATTLIST a b CDATA #IMPLIED>` | DTD |
+| `<!ENTITY x "y">` y `<![INCLUDE[` | DTD (y el frontal DTD lo rechaza) |
+| `<?xml version="1.0"?>` + `<!DOCTYPE x>` + `<xs:schema/>` | XSD |
+| `<!doctype x><xs:schema/>` | XSD |
+| `<!-- c --><xs:schema/>` | XSD |
+| `<!-- sin cerrar` | XSD |
+| BOM + espacios + `{}` | JSON |
+| vacío | JSON |
+
+### E2. Dónde vive la detección, y la web
+
+**Problema.** D86 dice «una sola función que usan CLI, servidor y web». La web es TypeScript
+(`formatoProbable`, `web/src/api.ts:195`) y no puede llamar a Rust. Tampoco puede leer el formato del servidor:
+`format` vale `"xml"` para XSD y para DTD (`server/src/compilar.rs:36-40`), y añadir `"dtd"` cambiaría la API
+(D82).
+
+**Texto propuesto** (regla (2) de D86):
+
+> Una sola función en Rust, `dtd::formato(&[u8]) -> Formato { Json, Xsd, Dtd }` en `crates/dtd`, que usan
+> `schemac` (sustituye a `formato` de `crates/cli/src/main.rs:148`) y el servidor (sustituye a la «copia literal»
+> de `server/src/compilar.rs:48`).
+> - Va en `dtd` porque el CLI y el servidor ya dependen de ese crate. No va en `ir`, que es interfaz compartida,
+>   ni en `lexer`, que se incrusta en el validador generado.
+> - La web mantiene su copia en TypeScript (`formatoProbable` pasa a devolver `"json" | "xsd" | "dtd"`, solo para la
+>   etiqueta «Formato detectado»).
+> - Las dos se prueban con la **misma tabla de casos**, `tests/schemas/formato.json` (la de E1), con `cargo test`
+>   y `vitest`.
+> - El campo `format` de la API sigue siendo el de la IR (`"xml"` para XSD y DTD): no cambia la API.
+
+### E3. La diferencial de DTD.5 se hace por veredictos, no comparando el JSON v2
+
+**Problema** (error de la propuesta original, §7). La bajada de XSD crea nodos sintéticos
+(`#/simpleContent/xs:string`, `#/builtin/string`), y el orden de los `NodeId` depende de los tipos con nombre y
+anónimos (`docs/fase3/xsd.md` §4). Una DTD equivalente no produce el mismo JSON v2, ni siquiera quitando los
+orígenes.
+
+**Texto propuesto** (línea DTD.5 del checklist; la frase de D86 no cambia):
+
+> … diferencial DTD frente a XSD **por veredictos**. Para 2-3 pares (DTD, XSD) equivalentes, se generan payloads
+> válidos (`bench::generar_xml_valido`), inválidos (`generar_xml_invalido`) y malformados (`malformar`) desde las
+> dos IR, y los dos autómatas tienen que dar el mismo veredicto y la misma clase de error (`clase_dpda`).
+
+### E4. `SYSTEM` y `PUBLIC` no son palabras prohibidas (bloquea DTD.1)
+
+**Problema.** §3bis.3 dice que los identificadores externos (`SYSTEM`, `PUBLIC`) «son errores léxicos». Esas
+palabras solo aparecen dentro de `<!ENTITY`, `<!DOCTYPE` y `<!NOTATION`, que ya se rechazan en su `<!`. Si el lexer
+las tratara como error, rechazaría `<!ELEMENT SYSTEM EMPTY>`, que es XML válido. Lo mismo pasaría con un `%` dentro
+de un valor por defecto entre comillas: en un `AttValue`, XML no reconoce referencias de parámetro, así que ahí
+`%` es un carácter más.
+
+**Texto propuesto** (§3bis.3):
+
+> Son errores léxicos, en el `<!` de la declaración o en el `%`/`&` de la referencia:
+> - `<!ENTITY …>`, tanto generales como de parámetro;
+> - `<!DOCTYPE` dentro del archivo DTD;
+> - las secciones condicionales `<![INCLUDE[`/`<![IGNORE[`;
+> - una referencia de parámetro `%nombre;` fuera de un literal;
+> - dentro de un literal, `&nombre;` que no sea una de las cinco predefinidas ni una referencia de carácter.
+>
+> Los identificadores externos (`SYSTEM`, `PUBLIC`) solo pueden ir dentro de esas declaraciones (o de
+> `<!NOTATION`, §3bis.2), así que quedan excluidos sin prohibir las palabras: `SYSTEM` y `PUBLIC` son nombres válidos
+> de elemento y de atributo. Nada abre archivos ni red y nada se expande: la IR sigue siendo lineal en el tamaño
+> del esquema.
+
+### E5. Solo se despliega desde `main`
+
+**Problema.** D86 protege `main` («no se toca hasta cerrar»), pero el despliegue no mira la rama.
+`infra/desplegar.ps1` construye las imágenes con el árbol **local** y en la EC2 hace `git pull --ff-only` sobre la
+rama que tenga (línea 60). Además, en el remoto `origin` la rama por defecto es `DTD` (`origin/HEAD -> origin/DTD`).
+Si alguien despliega desde la rama `DTD`, el trabajo a medias llega a la URL pública de la demo.
+
+**Texto propuesto** (añadir a D86):
+
+> Mientras la rama `DTD` esté abierta, solo se despliega desde `main`: la copia local y la de la EC2, en `main`
+> antes de ejecutar `infra/desplegar.ps1`.
+
+Mejor aún: que el script lo compruebe. Si `git rev-parse --abbrev-ref HEAD` no es `main`, el script termina. Es un
+cambio de la pista B y lo decide Bayron.
+
+### Registro (no bloquea)
+
+- DTD.1-DTD.3 dicen «Pista: A», pero las lleva Bayron. El acuerdo S1 del 13 nov es pista A = Leonardo y pista
+  B = Bayron, y el «Retomar aquí» de DTD.0 solo se actualizó en la línea de la pista B. Propuesta: «Pista: B
+  (excepción, D86)» en DTD.1-DTD.6, para que «Retomar aquí» y el checklist cuenten lo mismo.
+- En la copia de Leonardo, `origin/DTD` seguía en `114c40d` al revisar: falta `git push` de `07c806a` y `27b7a2b`
+  (o un `fetch`).
