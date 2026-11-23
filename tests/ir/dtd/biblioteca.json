@@ -1,0 +1,144 @@
+{
+  "irVersion": 2,
+  "format": "xml",
+  "targetNamespace": null,
+  "nodeCount": 11,
+  "edgeCount": 21,
+  "classCount": {"a": 9, "b": 2, "c": 0},
+  "nodes": [
+    {
+      "id": 0,
+      "sort": "element",
+      "span": {"line": 4, "column": 1, "start": 173, "end": 414},
+      "parent": null,
+      "step": null,
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "content", "span": {"line": 4, "column": 1, "start": 173, "end": 414}, "class": "a", "strategy": "transition", "particles": [{"term": "choice", "children": [1, 2, 3, 4, 5, 6, 7], "min": 1, "max": 1, "span": {"line": 4, "column": 1, "start": 173, "end": 414}}, {"term": "element", "name": "biblioteca", "type": 1, "min": 1, "max": 1, "span": {"line": 4, "column": 1, "start": 173, "end": 203}}, {"term": "element", "name": "libro", "type": 2, "min": 1, "max": 1, "span": {"line": 5, "column": 1, "start": 204, "end": 257}}, {"term": "element", "name": "titulo", "type": 3, "min": 1, "max": 1, "span": {"line": 6, "column": 1, "start": 258, "end": 285}}, {"term": "element", "name": "autor", "type": 4, "min": 1, "max": 1, "span": {"line": 7, "column": 1, "start": 286, "end": 312}}, {"term": "element", "name": "seccion", "type": 5, "min": 1, "max": 1, "span": {"line": 8, "column": 1, "start": 313, "end": 362}}, {"term": "element", "name": "parrafo", "type": 6, "min": 1, "max": 1, "span": {"line": 9, "column": 1, "start": 363, "end": 391}}, {"term": "element", "name": "anexo", "type": 7, "min": 1, "max": 1, "span": {"line": 10, "column": 1, "start": 392, "end": 414}}]}
+      ]
+    },
+    {
+      "id": 1,
+      "sort": "element",
+      "span": {"line": 4, "column": 1, "start": 173, "end": 203},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "biblioteca"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "content", "span": {"line": 4, "column": 22, "start": 194, "end": 202}, "class": "a", "strategy": "transition", "particles": [{"term": "sequence", "children": [1], "min": 1, "max": 1, "span": {"line": 4, "column": 22, "start": 194, "end": 202}}, {"term": "element", "name": "libro", "type": 2, "min": 0, "max": null, "span": {"line": 4, "column": 23, "start": 195, "end": 200}}]}
+      ]
+    },
+    {
+      "id": 2,
+      "sort": "element",
+      "span": {"line": 5, "column": 1, "start": 204, "end": 257},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "libro"},
+      "class": "b",
+      "strategies": ["transition", "register"],
+      "rules": [
+        {"rule": "content", "span": {"line": 5, "column": 17, "start": 220, "end": 256}, "class": "a", "strategy": "transition", "particles": [{"term": "sequence", "children": [1, 2, 3], "min": 1, "max": 1, "span": {"line": 5, "column": 17, "start": 220, "end": 256}}, {"term": "element", "name": "titulo", "type": 3, "min": 1, "max": 1, "span": {"line": 5, "column": 18, "start": 221, "end": 227}}, {"term": "element", "name": "autor", "type": 4, "min": 1, "max": null, "span": {"line": 5, "column": 26, "start": 229, "end": 234}}, {"term": "choice", "children": [4, 5], "min": 0, "max": null, "span": {"line": 5, "column": 34, "start": 237, "end": 254}}, {"term": "element", "name": "seccion", "type": 5, "min": 1, "max": 1, "span": {"line": 5, "column": 35, "start": 238, "end": 245}}, {"term": "element", "name": "anexo", "type": 7, "min": 1, "max": 1, "span": {"line": 5, "column": 45, "start": 248, "end": 253}}]},
+        {"rule": "attributes", "span": {"line": 11, "column": 17, "start": 431, "end": 475}, "class": "b", "strategy": "register", "attributes": [{"name": "isbn", "required": true, "type": 8, "default": null, "fixed": null, "span": {"line": 11, "column": 17, "start": 431, "end": 435}}, {"name": "idioma", "required": false, "type": 9, "default": null, "fixed": null, "span": {"line": 12, "column": 17, "start": 469, "end": 475}}]}
+      ]
+    },
+    {
+      "id": 3,
+      "sort": "element",
+      "span": {"line": 6, "column": 1, "start": 258, "end": 285},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "titulo"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 6, "column": 1, "start": 258, "end": 285}, "class": "a", "strategy": "transition", "target": 8}
+      ]
+    },
+    {
+      "id": 4,
+      "sort": "element",
+      "span": {"line": 7, "column": 1, "start": 286, "end": 312},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "autor"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 7, "column": 1, "start": 286, "end": 312}, "class": "a", "strategy": "transition", "target": 8}
+      ]
+    },
+    {
+      "id": 5,
+      "sort": "element",
+      "span": {"line": 8, "column": 1, "start": 313, "end": 362},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "seccion"},
+      "class": "b",
+      "strategies": ["transition", "register"],
+      "rules": [
+        {"rule": "content", "span": {"line": 8, "column": 19, "start": 331, "end": 361}, "class": "a", "strategy": "transition", "particles": [{"term": "sequence", "children": [1, 2], "min": 1, "max": 1, "span": {"line": 8, "column": 19, "start": 331, "end": 361}}, {"term": "element", "name": "titulo", "type": 3, "min": 1, "max": 1, "span": {"line": 8, "column": 20, "start": 332, "end": 338}}, {"term": "choice", "children": [3, 4], "min": 0, "max": null, "span": {"line": 8, "column": 28, "start": 340, "end": 359}}, {"term": "element", "name": "parrafo", "type": 6, "min": 1, "max": 1, "span": {"line": 8, "column": 29, "start": 341, "end": 348}}, {"term": "element", "name": "seccion", "type": 5, "min": 1, "max": 1, "span": {"line": 8, "column": 39, "start": 351, "end": 358}}]},
+        {"rule": "attributes", "span": {"line": 13, "column": 19, "start": 515, "end": 520}, "class": "b", "strategy": "register", "attributes": [{"name": "nivel", "required": false, "type": 10, "default": "1", "fixed": null, "span": {"line": 13, "column": 19, "start": 515, "end": 520}}]}
+      ]
+    },
+    {
+      "id": 6,
+      "sort": "element",
+      "span": {"line": 9, "column": 1, "start": 363, "end": 391},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "parrafo"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 9, "column": 1, "start": 363, "end": 391}, "class": "a", "strategy": "transition", "target": 8}
+      ]
+    },
+    {
+      "id": 7,
+      "sort": "element",
+      "span": {"line": 10, "column": 1, "start": 392, "end": 414},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "anexo"},
+      "class": "a",
+      "strategies": [],
+      "rules": []
+    },
+    {
+      "id": 8,
+      "sort": "text",
+      "span": {"line": 11, "column": 17, "start": 431, "end": 435},
+      "parent": 0,
+      "step": {"keyword": "builtin", "entry": "string"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 11, "column": 17, "start": 431, "end": 435}, "class": "a", "strategy": "transition", "lexical": "string"}
+      ]
+    },
+    {
+      "id": 9,
+      "sort": "text",
+      "span": {"line": 12, "column": 17, "start": 469, "end": 475},
+      "parent": 2,
+      "step": {"keyword": "attribute", "entry": "idioma"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 12, "column": 17, "start": 469, "end": 475}, "class": "a", "strategy": "transition", "lexical": "string"},
+        {"rule": "enum", "span": {"line": 12, "column": 17, "start": 469, "end": 475}, "class": "a", "strategy": "transition", "values": [[["string", "es"]], [["string", "en"]], [["string", "fr"]]]}
+      ]
+    },
+    {
+      "id": 10,
+      "sort": "text",
+      "span": {"line": 13, "column": 19, "start": 515, "end": 520},
+      "parent": 5,
+      "step": {"keyword": "attribute", "entry": "nivel"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 13, "column": 19, "start": 515, "end": 520}, "class": "a", "strategy": "transition", "lexical": "string"},
+        {"rule": "enum", "span": {"line": 13, "column": 19, "start": 515, "end": 520}, "class": "a", "strategy": "transition", "values": [[["string", "1"]], [["string", "2"]], [["string", "3"]]]}
+      ]
+    }
+  ]
+}

@@ -24,7 +24,7 @@ use crate::lexer::{self as lx, DtdLexer, Event, Sink};
 /// Paréntesis anidados como máximo en un modelo de contenido (`docs/00-alcance.md` §4, D7).
 pub const MAX_DEPTH: usize = 256;
 
-/// Clase de un error del frontal DTD hasta la Fase 2.
+/// Clase de un error del frontal DTD (Fases 1-3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ErrorKind {
     /// Error léxico (Fase 1), con su clase.
@@ -35,26 +35,53 @@ pub enum ErrorKind {
     OutOfScope,
     /// Se pasó un límite (§4).
     Limit,
+    /// Fase 3: un elemento, un atributo o un valor de enumeración repetido.
+    Duplicate,
+    /// Fase 3: un nombre sin su `<!ELEMENT>` (§3bis.4, desviación 1).
+    Unresolved,
+    /// Fase 3: modelo de contenido no determinista (XML 1.0, apéndice E).
+    NonDeterministic,
+    /// Fase 3: valor por defecto o `#FIXED` fuera de su enumeración.
+    InvalidValue,
+    /// Fase 3: la DTD no declara ningún elemento.
+    NoElements,
+}
+
+impl ErrorKind {
+    /// Código estable para la CLI y el servidor.
+    pub fn code(self) -> &'static str {
+        match self {
+            ErrorKind::Lexical(_) => "lexical",
+            ErrorKind::Syntax => "syntax",
+            ErrorKind::OutOfScope => "unsupported",
+            ErrorKind::Limit => "limit",
+            ErrorKind::Duplicate => "duplicate-name",
+            ErrorKind::Unresolved => "unresolved",
+            ErrorKind::NonDeterministic => "content-model",
+            ErrorKind::InvalidValue => "value",
+            ErrorKind::NoElements => "empty-schema",
+        }
+    }
 }
 
 /// Error con su posición y un mensaje para el usuario.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ParseError {
+pub struct DtdError {
     pub kind: ErrorKind,
     pub at: Pos,
     pub message: String,
 }
 
-impl fmt::Display for ParseError {
+impl fmt::Display for DtdError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}: {}", self.at.line, self.at.column, self.message)
     }
 }
 
-impl std::error::Error for ParseError {}
+impl std::error::Error for DtdError {}
 
 /// Analiza una DTD completa.
-pub fn parse(input: &[u8]) -> Result<Dtd, ParseError> {
+pub fn parse(input: &[u8]) -> Result<Dtd, DtdError> {
     let (toks, fin) = tokens(input)?;
     Parser { toks, i: 0, fin }.dtd()
 }
@@ -173,13 +200,13 @@ impl Sink for Tokens {
 }
 
 /// Tokeniza toda la entrada; devuelve también la posición del final.
-fn tokens(input: &[u8]) -> Result<(Vec<Token>, Pos), ParseError> {
+fn tokens(input: &[u8]) -> Result<(Vec<Token>, Pos), DtdError> {
     let mut lx = DtdLexer::new();
     let mut t = Tokens::default();
     let r = lx.feed(input, &mut t).and_then(|()| lx.finish(&mut t));
     match r {
         Ok(()) => Ok((t.v, lx.position())),
-        Err(lx::Error::Lex(e)) => Err(ParseError {
+        Err(lx::Error::Lex(e)) => Err(DtdError {
             kind: ErrorKind::Lexical(e.kind),
             at: e.at,
             message: e.kind.message().to_owned(),
@@ -269,12 +296,12 @@ impl Parser {
         t.map_or(self.fin, |t| t.span.start)
     }
 
-    fn error(&self, kind: ErrorKind, at: Pos, message: String) -> ParseError {
-        ParseError { kind, at, message }
+    fn error(&self, kind: ErrorKind, at: Pos, message: String) -> DtdError {
+        DtdError { kind, at, message }
     }
 
     /// Error sintáctico en el token `t` (o en el fin de la entrada).
-    fn esperaba(&self, que: &str, t: Option<&Token>) -> ParseError {
+    fn esperaba(&self, que: &str, t: Option<&Token>) -> DtdError {
         self.error(
             ErrorKind::Syntax,
             self.pos(t),
@@ -283,7 +310,7 @@ impl Parser {
     }
 
     // dtd -> item dtd | ε ;  item -> PI | elementdecl | attlistdecl
-    fn dtd(mut self) -> Result<Dtd, ParseError> {
+    fn dtd(mut self) -> Result<Dtd, DtdError> {
         let mut dtd = Dtd::default();
         let mut primero = true;
         while let Some(t) = self.next() {
@@ -329,7 +356,7 @@ impl Parser {
     }
 
     /// `<?xml … encoding="…"?>`: solo UTF-8 (`docs/00-alcance.md` §1.2).
-    fn declaracion_xml(&self, content: &str, span: Span) -> Result<(), ParseError> {
+    fn declaracion_xml(&self, content: &str, span: Span) -> Result<(), DtdError> {
         let Some(k) = content.find("encoding") else {
             return Ok(());
         };
@@ -349,7 +376,7 @@ impl Parser {
     }
 
     /// Un `Name` en posición de nombre de elemento o de atributo.
-    fn nombre(&mut self, que: &str) -> Result<Name, ParseError> {
+    fn nombre(&mut self, que: &str) -> Result<Name, DtdError> {
         let t = self.next();
         let Some(Token {
             tok: Tok::Name(text),
@@ -364,7 +391,7 @@ impl Parser {
 
     /// `Name` de XML: no empieza por dígito, `-` ni `.` (eso es un *nmtoken*),
     /// y sin `:` (espacios de nombres, §3bis.2).
-    fn validar_nombre(&self, text: &str, span: Span) -> Result<(), ParseError> {
+    fn validar_nombre(&self, text: &str, span: Span) -> Result<(), DtdError> {
         if text.starts_with(|c: char| c.is_ascii_digit() || c == '-' || c == '.') {
             return Err(self.error(
                 ErrorKind::Syntax,
@@ -389,7 +416,7 @@ impl Parser {
     }
 
     /// Consume el `>` de la declaración; su rango cubre la declaración entera.
-    fn cierre(&mut self, que: &str) -> Result<Span, ParseError> {
+    fn cierre(&mut self, que: &str) -> Result<Span, DtdError> {
         let t = self.next();
         match t {
             Some(Token {
@@ -401,7 +428,7 @@ impl Parser {
     }
 
     // elementdecl -> DECL_ELEMENT NAME contentspec GT
-    fn elementdecl(&mut self, abre: Span) -> Result<ElementDecl, ParseError> {
+    fn elementdecl(&mut self, abre: Span) -> Result<ElementDecl, DtdError> {
         let name = self.nombre("el nombre del elemento")?;
         let content = self.contentspec()?;
         let cierre = self.cierre("«>» al final de <!ELEMENT")?;
@@ -416,7 +443,7 @@ impl Parser {
     }
 
     // contentspec -> K_EMPTY | K_ANY | LPAR group_body
-    fn contentspec(&mut self) -> Result<ContentSpec, ParseError> {
+    fn contentspec(&mut self) -> Result<ContentSpec, DtdError> {
         let t = self.next();
         match t.as_ref().map(|t| &t.tok) {
             Some(Tok::Name(n)) if n == "EMPTY" => Ok(ContentSpec::Empty),
@@ -438,7 +465,7 @@ impl Parser {
     }
 
     // group_body -> K_PCDATA mixed | cp children_rest RPAR occ
-    fn group_body(&mut self, abre: Span) -> Result<ContentSpec, ParseError> {
+    fn group_body(&mut self, abre: Span) -> Result<ContentSpec, DtdError> {
         let Some(Token {
             tok: Tok::Hash(h),
             span,
@@ -490,7 +517,7 @@ impl Parser {
 
     /// `cp children_rest RPAR occ` tras el primer `(`, con la recursión de
     /// `cp -> LPAR cp children_rest RPAR occ` en una pila explícita.
-    fn children(&mut self, abre: Span) -> Result<Particle, ParseError> {
+    fn children(&mut self, abre: Span) -> Result<Particle, DtdError> {
         let mut pila = vec![Grupo::new(abre)];
         loop {
             // Se espera un cp.
@@ -589,7 +616,7 @@ impl Parser {
     }
 
     // attlistdecl -> DECL_ATTLIST NAME attdefs GT ;  attdefs -> attdef attdefs | ε
-    fn attlistdecl(&mut self, abre: Span) -> Result<AttlistDecl, ParseError> {
+    fn attlistdecl(&mut self, abre: Span) -> Result<AttlistDecl, DtdError> {
         let element = self.nombre("el nombre del elemento de <!ATTLIST")?;
         let mut defs = Vec::new();
         loop {
@@ -623,7 +650,7 @@ impl Parser {
     }
 
     // atttype -> T_CDATA | T_TOKENIZED | K_NOTATION LPAR NAME enum_rest | LPAR NAME enum_rest
-    fn atttype(&mut self) -> Result<AttType, ParseError> {
+    fn atttype(&mut self) -> Result<AttType, DtdError> {
         let t = self.next();
         let fuera = |motivo: &str| {
             Err(self.error(
@@ -668,7 +695,7 @@ impl Parser {
     }
 
     // defaultdecl -> K_REQUIRED | K_IMPLIED | K_FIXED LITERAL | LITERAL
-    fn defaultdecl(&mut self) -> Result<DefaultDecl, ParseError> {
+    fn defaultdecl(&mut self) -> Result<DefaultDecl, DtdError> {
         let t = self.next();
         match t.as_ref().map(|t| &t.tok) {
             Some(Tok::Hash(h)) if h == "REQUIRED" => Ok(DefaultDecl::Required),

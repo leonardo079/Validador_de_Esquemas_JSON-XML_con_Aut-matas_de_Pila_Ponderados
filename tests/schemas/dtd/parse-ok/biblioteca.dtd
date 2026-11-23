@@ -1,0 +1,13 @@
+<!-- Biblioteca (DTD.3): recursión productiva (una sección contiene
+     secciones), grupos anidados con `*`, y varias <!ATTLIST> del mismo
+     elemento que se unen. -->
+<!ELEMENT biblioteca (libro*)>
+<!ELEMENT libro (titulo, autor+, (seccion | anexo)*)>
+<!ELEMENT titulo (#PCDATA)>
+<!ELEMENT autor (#PCDATA)>
+<!ELEMENT seccion (titulo, (parrafo | seccion)*)>
+<!ELEMENT parrafo (#PCDATA)>
+<!ELEMENT anexo EMPTY>
+<!ATTLIST libro isbn CDATA #REQUIRED>
+<!ATTLIST libro idioma (es|en|fr) #IMPLIED>
+<!ATTLIST seccion nivel (1|2|3) "1">

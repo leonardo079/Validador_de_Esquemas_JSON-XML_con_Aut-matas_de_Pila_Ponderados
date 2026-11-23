@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Pedido de una tienda (DTD.3): secuencia con `+` y `?`, una elección,
+     texto, elemento vacío, atributo requerido, enumeración con valor por
+     defecto y un `#FIXED`. -->
+<!ELEMENT pedido (cliente, (tarjeta | efectivo), item+, nota?)>
+<!ELEMENT cliente (#PCDATA)>
+<!ELEMENT tarjeta (#PCDATA)>
+<!ELEMENT efectivo EMPTY>
+<!ELEMENT item (#PCDATA)>
+<!ELEMENT nota (#PCDATA)>
+<!ATTLIST pedido id CDATA #REQUIRED
+                 estado (nuevo|pagado|enviado) "nuevo">
+<!ATTLIST item sku CDATA #REQUIRED
+               moneda CDATA #FIXED "COP">

@@ -820,8 +820,12 @@ dependencies = [
 name = "dtd"
 version = "0.1.0"
 dependencies = [
+ "automaton",
+ "ir",
  "lexer",
  "proptest",
+ "serde_json",
+ "xsd",
 ]
 
 [[package]]

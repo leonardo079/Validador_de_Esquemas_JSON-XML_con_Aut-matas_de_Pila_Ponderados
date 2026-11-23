@@ -1026,11 +1026,40 @@ el orquestador, sin agentes (decisión del usuario).
   256 grupos sí y 257 no, un millón de `(` en un hilo con 256 KiB de pila, e ida y vuelta con 2 000 DTD aleatorias.
 - [x] `docs/fase2/gramatica-dtd.md` §5-§7. `lint OK`; 32 pruebas de `dtd` en verde.
 
-**Pendiente para DTD.3:**
+**Pendiente para DTD.3:** resuelto en DTD.3 (abajo).
 
-- tabla de símbolos de elementos: declaraciones repetidas, nombres sin `<!ELEMENT>` (`unresolved`) y atributos
-  repetidos;
-- determinismo de cada modelo (Glushkov, apéndice E), con las dos partículas en conflicto;
-- valores por defecto y `#FIXED` dentro de la enumeración;
-- tope de 4 096 partículas por modelo (D26);
-- bajada a la IR y `verify`, con IR doradas.
+## Tarea DTD.3: análisis, determinismo y bajada a la IR — HECHA (23 nov)
+
+- [x] `crates/dtd/src/check.rs` (`dtd::analyze`). Reúne **todos** los errores, ordenados por posición, con los
+  códigos del frontal XSD:
+  - DTD sin elementos (`empty-schema`);
+  - elemento repetido, atributo repetido (las `<!ATTLIST>` del mismo elemento se unen) y valor repetido en una
+    enumeración (`duplicate-name`);
+  - `<!ATTLIST>` o nombre del modelo sin `<!ELEMENT>` (`unresolved`);
+  - valor por defecto o `#FIXED` fuera de su enumeración (`value`);
+  - más de 4 096 partículas (`limit`, D26);
+  - modelo no determinista (`content-model`).
+- [x] Determinismo por Glushkov sobre la arena en preorden, de atrás hacia adelante, sin recursión y con mapas de
+  bits. El error nombra las dos partículas en conflicto. Diferencial con `xsd::analyze` (UPA) en 3 000 modelos al
+  azar: coinciden. `xsd` solo es dependencia de las pruebas.
+- [x] `crates/dtd/src/lower.rs` (`dtd::lower`), con la forma de XSD (`docs/fase3/ir.md` §5.2) y sin campos nuevos:
+  - el documento es una elección entre todos los elementos declarados;
+  - cada elemento es un nodo `Element`: `EMPTY` sin contenido, `#PCDATA` con `SimpleContent` a `builtin/string` y
+    los modelos con `Content`;
+  - `ATTLIST` es `Attributes`; las enumeraciones son nodos `Text` con `Enum`.
+
+  La IR siempre se verifica (D15). `dtd::compile` encadena toda la tubería.
+- [x] `tests/schemas/dtd/parse-ok/{pedido,biblioteca}.dtd` y sus doradas `tests/ir/dtd/*.json`, revisadas a mano.
+  Se regeneran con `DTD_DORADAS=escribir`.
+- [x] De extremo a extremo: `automaton::build` sobre la IR de la DTD y `automaton::validate` con bloques de 1, 7 y
+  4 096 bytes. Acepta los válidos y la recursión; rechaza un requerido que falta, un valor fuera de su
+  enumeración, un `#FIXED` distinto, el orden equivocado, texto en `EMPTY` y lo no declarado.
+- [x] `docs/fase3/dtd.md`. `lint OK`; 45 pruebas de `dtd`; `xsd`, `automaton` y `cli` en verde (5 suites
+  bloqueadas por Smart App Control en debug, verdes en `--release`).
+
+**Pendiente para DTD.4:**
+
+- `dtd::formato(&[u8]) -> Formato { Json, Xsd, Dtd }` con la regla de E1;
+- usarla en `schemac` (`check`, `ir`, `automaton`, `compile`) y en el servidor, llamando a `dtd::compile`;
+- la copia en TypeScript de la web y la tabla común `tests/schemas/formato.json`;
+- el ejemplo DTD en la web.

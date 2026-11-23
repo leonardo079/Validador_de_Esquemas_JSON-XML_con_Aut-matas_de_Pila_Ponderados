@@ -1,0 +1,119 @@
+{
+  "irVersion": 2,
+  "format": "xml",
+  "targetNamespace": null,
+  "nodeCount": 9,
+  "edgeCount": 19,
+  "classCount": {"a": 7, "b": 2, "c": 0},
+  "nodes": [
+    {
+      "id": 0,
+      "sort": "element",
+      "span": {"line": 5, "column": 1, "start": 222, "end": 421},
+      "parent": null,
+      "step": null,
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "content", "span": {"line": 5, "column": 1, "start": 222, "end": 421}, "class": "a", "strategy": "transition", "particles": [{"term": "choice", "children": [1, 2, 3, 4, 5, 6], "min": 1, "max": 1, "span": {"line": 5, "column": 1, "start": 222, "end": 421}}, {"term": "element", "name": "pedido", "type": 1, "min": 1, "max": 1, "span": {"line": 5, "column": 1, "start": 222, "end": 285}}, {"term": "element", "name": "cliente", "type": 2, "min": 1, "max": 1, "span": {"line": 6, "column": 1, "start": 286, "end": 314}}, {"term": "element", "name": "tarjeta", "type": 3, "min": 1, "max": 1, "span": {"line": 7, "column": 1, "start": 315, "end": 343}}, {"term": "element", "name": "efectivo", "type": 4, "min": 1, "max": 1, "span": {"line": 8, "column": 1, "start": 344, "end": 369}}, {"term": "element", "name": "item", "type": 5, "min": 1, "max": 1, "span": {"line": 9, "column": 1, "start": 370, "end": 395}}, {"term": "element", "name": "nota", "type": 6, "min": 1, "max": 1, "span": {"line": 10, "column": 1, "start": 396, "end": 421}}]}
+      ]
+    },
+    {
+      "id": 1,
+      "sort": "element",
+      "span": {"line": 5, "column": 1, "start": 222, "end": 285},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "pedido"},
+      "class": "b",
+      "strategies": ["transition", "register"],
+      "rules": [
+        {"rule": "content", "span": {"line": 5, "column": 18, "start": 239, "end": 284}, "class": "a", "strategy": "transition", "particles": [{"term": "sequence", "children": [1, 2, 5, 6], "min": 1, "max": 1, "span": {"line": 5, "column": 18, "start": 239, "end": 284}}, {"term": "element", "name": "cliente", "type": 2, "min": 1, "max": 1, "span": {"line": 5, "column": 19, "start": 240, "end": 247}}, {"term": "choice", "children": [3, 4], "min": 1, "max": 1, "span": {"line": 5, "column": 28, "start": 249, "end": 269}}, {"term": "element", "name": "tarjeta", "type": 3, "min": 1, "max": 1, "span": {"line": 5, "column": 29, "start": 250, "end": 257}}, {"term": "element", "name": "efectivo", "type": 4, "min": 1, "max": 1, "span": {"line": 5, "column": 39, "start": 260, "end": 268}}, {"term": "element", "name": "item", "type": 5, "min": 1, "max": null, "span": {"line": 5, "column": 50, "start": 271, "end": 275}}, {"term": "element", "name": "nota", "type": 6, "min": 0, "max": 1, "span": {"line": 5, "column": 57, "start": 278, "end": 282}}]},
+        {"rule": "attributes", "span": {"line": 11, "column": 18, "start": 439, "end": 481}, "class": "b", "strategy": "register", "attributes": [{"name": "id", "required": true, "type": 7, "default": null, "fixed": null, "span": {"line": 11, "column": 18, "start": 439, "end": 441}}, {"name": "estado", "required": false, "type": 8, "default": "nuevo", "fixed": null, "span": {"line": 12, "column": 18, "start": 475, "end": 481}}]}
+      ]
+    },
+    {
+      "id": 2,
+      "sort": "element",
+      "span": {"line": 6, "column": 1, "start": 286, "end": 314},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "cliente"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 6, "column": 1, "start": 286, "end": 314}, "class": "a", "strategy": "transition", "target": 7}
+      ]
+    },
+    {
+      "id": 3,
+      "sort": "element",
+      "span": {"line": 7, "column": 1, "start": 315, "end": 343},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "tarjeta"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 7, "column": 1, "start": 315, "end": 343}, "class": "a", "strategy": "transition", "target": 7}
+      ]
+    },
+    {
+      "id": 4,
+      "sort": "element",
+      "span": {"line": 8, "column": 1, "start": 344, "end": 369},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "efectivo"},
+      "class": "a",
+      "strategies": [],
+      "rules": []
+    },
+    {
+      "id": 5,
+      "sort": "element",
+      "span": {"line": 9, "column": 1, "start": 370, "end": 395},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "item"},
+      "class": "b",
+      "strategies": ["transition", "register"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 9, "column": 1, "start": 370, "end": 395}, "class": "a", "strategy": "transition", "target": 7},
+        {"rule": "attributes", "span": {"line": 13, "column": 16, "start": 529, "end": 570}, "class": "b", "strategy": "register", "attributes": [{"name": "sku", "required": true, "type": 7, "default": null, "fixed": null, "span": {"line": 13, "column": 16, "start": 529, "end": 532}}, {"name": "moneda", "required": false, "type": 7, "default": null, "fixed": "COP", "span": {"line": 14, "column": 16, "start": 564, "end": 570}}]}
+      ]
+    },
+    {
+      "id": 6,
+      "sort": "element",
+      "span": {"line": 10, "column": 1, "start": 396, "end": 421},
+      "parent": 0,
+      "step": {"keyword": "element", "entry": "nota"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "simpleContent", "span": {"line": 10, "column": 1, "start": 396, "end": 421}, "class": "a", "strategy": "transition", "target": 7}
+      ]
+    },
+    {
+      "id": 7,
+      "sort": "text",
+      "span": {"line": 11, "column": 18, "start": 439, "end": 441},
+      "parent": 0,
+      "step": {"keyword": "builtin", "entry": "string"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 11, "column": 18, "start": 439, "end": 441}, "class": "a", "strategy": "transition", "lexical": "string"}
+      ]
+    },
+    {
+      "id": 8,
+      "sort": "text",
+      "span": {"line": 12, "column": 18, "start": 475, "end": 481},
+      "parent": 1,
+      "step": {"keyword": "attribute", "entry": "estado"},
+      "class": "a",
+      "strategies": ["transition"],
+      "rules": [
+        {"rule": "lexical", "span": {"line": 12, "column": 18, "start": 475, "end": 481}, "class": "a", "strategy": "transition", "lexical": "string"},
+        {"rule": "enum", "span": {"line": 12, "column": 18, "start": 475, "end": 481}, "class": "a", "strategy": "transition", "values": [[["string", "nuevo"]], [["string", "pagado"]], [["string", "enviado"]]]}
+      ]
+    }
+  ]
+}
