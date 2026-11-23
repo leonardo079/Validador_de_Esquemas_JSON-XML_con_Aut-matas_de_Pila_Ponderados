@@ -887,9 +887,9 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario).
 - [x] **22 nov:** EC2 `t3.micro` (Ubuntu 24.04, us-east-1) con Elastic IP 54.157.96.49, IP añadida en Atlas, `ec2-preparar.sh` y `desplegar.ps1` (dos veces: la segunda con la corrección de §19 de E3).
 - [x] Comprobado en **https://54-157-96-49.sslip.io**: web 200 con CSP, HSTS, `nosniff` y `X-Frame-Options`; `http://` → 308; `/api/health` con `database: true`; `/api/tests/run` 86/86 (tras recargar Atlas); `/api/automaton`; `/api/code` (ZIP de 136 KB); `/ws/validate` por bloques a través de Caddy; `/api/validate` 503 `no-sandbox` (esperado).
 - [x] **Sandbox en la EC2 (D85, a pedido del usuario):** cliente de Docker en la imagen del servidor, `infra/docker-compose.sandbox.yml` (socket, `DOCKER_GID`, `SANDBOX=docker`, tmpfs) y `desplegar.ps1 -Sandbox` (construye `validador-sandbox:1` en la EC2). Probado en local con el servidor en contenedor: C y Rust con `agree: true` en un válido y un inválido; sin contenedores sueltos.
-- [ ] EC2 a `t3.small`, desplegar con `-Sandbox` y comprobar `/api/validate` en la URL pública.
+- [x] EC2 a `t3.small` (2 vCPU, 1,9 GiB), desplegado con `-Sandbox`. En la URL pública: `/api/health` con `sandbox: true`; `/api/validate` con C y Rust, válido e inválido (3 violaciones): `status: ok` y `agree: true` en 1,7-2,0 s; 86/86 casos de Atlas; sin contenedores del sandbox sueltos en la EC2.
 
-**Estado (22 nov):** hecha; falta desplegar el sandbox (D85).
+**Estado (22 nov):** hecha, con el sandbox en producción (D85).
 
 # Tarea F7.2: casos de prueba en MongoDB Atlas (pista B, Bayron; 20 nov, D72)
 

@@ -97,7 +97,11 @@ La imagen del servidor lleva el cliente estático de Docker 27.5.1 (`COPY --from
 un contenedor hermano con las restricciones de `sandbox.md`: sin red, usuario 10001, solo lectura, 512 MiB,
 un núcleo, 64 procesos, entrada por tar y sin montajes. El semáforo de un trabajo a la vez es el de D83.
 
-Probado en local el 22 nov con el servidor en su contenedor, como en la EC2. `/api/health` dio `sandbox: true`. Para
+**Desplegado el 22 nov en la `t3.small`:** `/api/health` da `sandbox: true`. `/api/validate` con C y Rust, para un
+válido y un inválido con 3 violaciones, da `status: ok` y `agree: true`, con el sandbox en 1,7-2,0 s. Los 86 casos
+de Atlas siguen pasando, y en la EC2 no quedan contenedores del sandbox.
+
+Antes se probó en local, con el servidor en su contenedor como en la EC2. `/api/health` dio `sandbox: true`. Para
 un objeto válido y otro con 3 violaciones, C (4-6 s) y Rust (2-6 s) dieron `status: ok` y `agree: true`, y no
 quedaron contenedores sueltos.
 
