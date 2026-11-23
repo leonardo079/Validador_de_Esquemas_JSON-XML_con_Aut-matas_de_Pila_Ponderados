@@ -1,0 +1,20 @@
+[package]
+name = "dtd"
+description = "Frontal DTD (D86): lexer AFD de declaraciones DTD externas; parser LL(1), análisis y bajada a la IR en DTD.2-DTD.3"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+# D86 (como D21 para XSD): el frontal DTD depende solo de `lexer` (para `Pos`,
+# `Span`, el decodificador UTF-8 y el exportador DOT) e `ir` (desde DTD.3).
+# No depende de `xsd`, `semantic` ni `schema-parser` (D13).
+[dependencies]
+lexer.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+proptest = "1.12.0"

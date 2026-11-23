@@ -32,7 +32,7 @@ comandos:
                          --limit cambia un límite (F6.2): maxDepth, maxString,
                          maxLexeme, maxKeys, keyPool, maxUnique, maxXmlRefs,
                          maxPayload o maxTimeMs
-  dot <utf8|json|xml>    escribe el AFD indicado en formato DOT (Graphviz)
+  dot <utf8|json|xml|dtd> escribe el AFD indicado en formato DOT (Graphviz)
   version                muestra la versión
 
 el formato del esquema sale de su contenido, no de su nombre: si su primer
@@ -83,6 +83,7 @@ fn main() -> ExitCode {
                 "utf8" => lexer::utf8::write_dot(&mut out),
                 "json" => lexer::json::write_dot(&mut out),
                 "xml" => lexer::xml::write_dot(&mut out),
+                "dtd" => dtd::lexer::write_dot(&mut out),
                 _ => return error(&format!("AFD desconocido: {afd}")),
             };
             res.expect("escribir en un String no falla");

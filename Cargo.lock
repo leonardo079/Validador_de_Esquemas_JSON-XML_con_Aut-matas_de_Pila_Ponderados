@@ -486,6 +486,7 @@ version = "0.1.0"
 dependencies = [
  "automaton",
  "codegen",
+ "dtd",
  "ir",
  "lexer",
  "libc",
@@ -813,6 +814,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "dtd"
+version = "0.1.0"
+dependencies = [
+ "lexer",
+ "proptest",
 ]
 
 [[package]]

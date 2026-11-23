@@ -17,6 +17,7 @@ schema-parser.workspace = true
 semantic.workspace = true
 ir.workspace = true
 xsd.workspace = true
+dtd.workspace = true
 automaton.workspace = true
 codegen.workspace = true
 

@@ -966,3 +966,45 @@ Hecha directamente por el orquestador, sin agentes (decisión del usuario). Los 
 - [x] Pruebas ajustadas y nuevas; servidor en verde.
 
 **Estado (21 nov):** hecha.
+
+# DTD como tercer lenguaje de esquema (rama `DTD`, D86; Bayron)
+
+Propuesta de Leonardo en `tasks/propuesta-dtd.md`, con sus enmiendas E1-E5 (§10) aprobadas. Hecho directamente por
+el orquestador, sin agentes (decisión del usuario).
+
+## Tarea DTD.0: D86 y alcance — HECHA (22 nov)
+
+- [x] D86 en `tasks/plan-general.md`, con las tres decisiones de §9 (detección por contenido, raíz = cualquier
+  elemento declarado, sin `NMTOKEN`) y las enmiendas E1-E5.
+- [x] `docs/00-alcance.md` §3bis (soportado, fuera de alcance, prohibido, desviaciones) y la aclaración de §1.2.
+- [x] Tareas DTD.0-DTD.6 en `tasks/CHECKLIST.md` («Pista: B (excepción, D86)»).
+- [x] E5: `infra/desplegar.ps1` termina si la rama local no es `main`, y en la EC2 hace `git switch main`. Probado:
+  desde `DTD` sale con código 1.
+
+## Tarea DTD.1: lexer DTD y gramática LL(1) — HECHA (23 nov)
+
+- [x] Crate `crates/dtd` (depende solo de `lexer`), con `src/lexer.rs`:
+  - AFD de tabla con salida en producto con el AFD UTF-8, en streaming (`feed`/`finish`) y sin reservas;
+  - 26 estados y 28 clases (25 columnas distintas);
+  - eventos para `<!`, nombres, `#`, puntuación, literales con referencias resueltas, `>` e instrucciones; los
+    comentarios se descartan.
+- [x] Errores léxicos de seguridad, con posición: `<!ENTITY` y `<!DOCTYPE` en cualquier caja (en su `<`), `<![`,
+  `%` fuera de un literal y `&nombre;` no predefinida. `SYSTEM`/`PUBLIC` son nombres válidos, y `%` dentro de un
+  literal es un carácter (E4).
+- [x] Espacio obligatorio entre tokens, como en XML: `a(b)`, `CDATA"x"`, `"x"c` y `(b)c` son error.
+- [x] `schemac dot dtd`, `docs/fase1/afd-dtd.dot` y `.svg`; `make docs` y `make docs-check` incluyen el AFD y la
+  gramática.
+- [x] `docs/fase1/lexico-dtd.md`: clases, expresiones regulares, gramática regular del literal, estados,
+  prohibiciones, complejidad y verificación.
+- [x] `docs/fase2/dtd.ll1` (sin conflictos), `gramatica-dtd.md` (palabras clave contextuales; lo que está en la
+  gramática para rechazarlo por alcance) y `ll1-dtd.md`, generado con `scripts/ll1.py` en Docker (aquí no hay
+  Python). Las otras cuatro tablas LL(1) salen idénticas en el contenedor.
+- [x] 22 pruebas en `crates/dtd/tests`:
+  - `lexer.rs`: tokens, errores con su byte, rangos, bloques de 1/7/4096, y un oráculo sin tabla con 20 000 casos
+    al azar y 20 000 declaraciones válidas. El oráculo encontró una incoherencia (U+FFFE al inicio), ya corregida;
+  - `tabla.rs`: las cifras del documento, el `.dot` versionado, el sumidero de error y las clases.
+- [x] `lint OK`; pruebas de `dtd` y `cli` en verde.
+
+**Pendiente para DTD.2:** el parser LL(1) iterativo con tope de 256 paréntesis, el AST, la clasificación contextual
+de palabras clave (`gramatica-dtd.md` §2), los rechazos por alcance (`ANY`, contenido mixto, tipos tokenizados,
+`NOTATION`) y la comprobación de `<?xml …?>` al inicio y en UTF-8.

@@ -1,0 +1,37 @@
+# GLC del subconjunto DTD (docs/00-alcance.md §3bis; D86) en forma LL(1),
+# sobre los tokens del lexer DTD (crates/dtd/src/lexer.rs) agrupados así:
+#   DECL_ELEMENT = DeclOpen + nombre "ELEMENT"   DECL_ATTLIST = … "ATTLIST"
+#   NAME    = NameBegin NameChar+ (nombre o nmtoken)
+#   LITERAL = LiteralBegin LiteralChar* LiteralEnd
+#   PI      = PiOpen NameChar+ PiChar* PiClose (los comentarios ya se descartaron)
+#   LPAR RPAR PIPE COMMA OPT STAR PLUS GT = ( ) | , ? * + >
+# Las palabras clave son contextuales (gramatica-dtd.md §2): el parser
+# clasifica un NAME por su posición. En el modelo de contenido, EMPTY y ANY
+# son K_EMPTY y K_ANY; tras `#`, PCDATA REQUIRED IMPLIED FIXED son K_PCDATA,
+# K_REQUIRED, K_IMPLIED y K_FIXED; en el tipo de un atributo, CDATA es T_CDATA,
+# ID IDREF IDREFS ENTITY ENTITIES NMTOKEN NMTOKENS son T_TOKENIZED y NOTATION
+# es K_NOTATION. En cualquier otra posición son NAME: `<!ELEMENT EMPTY EMPTY>`
+# declara un elemento llamado EMPTY.
+# Otras declaraciones (`<!NOTATION`) no tienen fila: son celdas vacías con su
+# propio mensaje. ANY, el contenido mixto y los tipos T_TOKENIZED/K_NOTATION
+# están en la gramática para que el error sea de alcance (D86 §3bis.2), no
+# sintáctico.
+dtd           -> item dtd | ε
+item          -> PI | elementdecl | attlistdecl
+elementdecl   -> DECL_ELEMENT NAME contentspec GT
+contentspec   -> K_EMPTY | K_ANY | LPAR group_body
+group_body    -> K_PCDATA mixed | cp children_rest RPAR occ
+children_rest -> COMMA cp seq_rest | PIPE cp choice_rest | ε
+seq_rest      -> COMMA cp seq_rest | ε
+choice_rest   -> PIPE cp choice_rest | ε
+cp            -> NAME occ | LPAR cp children_rest RPAR occ
+occ           -> OPT | STAR | PLUS | ε
+mixed         -> RPAR mixed_star | PIPE NAME mixed_names
+mixed_names   -> PIPE NAME mixed_names | RPAR STAR
+mixed_star    -> STAR | ε
+attlistdecl   -> DECL_ATTLIST NAME attdefs GT
+attdefs       -> attdef attdefs | ε
+attdef        -> NAME atttype defaultdecl
+atttype       -> T_CDATA | T_TOKENIZED | K_NOTATION LPAR NAME enum_rest | LPAR NAME enum_rest
+enum_rest     -> PIPE NAME enum_rest | RPAR
+defaultdecl   -> K_REQUIRED | K_IMPLIED | K_FIXED LITERAL | LITERAL

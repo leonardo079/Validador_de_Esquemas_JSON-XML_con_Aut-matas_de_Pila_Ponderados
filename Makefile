@@ -107,7 +107,7 @@ AUT_DOT_XSD := valid-xml-pedido-01
 # `arbol --dot`) se dibuja en docs/fase5/arbol-<archivo>.dot.
 DERIV_DOT := pedido.json pedido.xml
 docs:
-	for a in utf8 json xml; do \
+	for a in utf8 json xml dtd; do \
 		cargo run -q -p cli -- dot $$a > docs/fase1/afd-$$a.dot && \
 		dot -Tsvg docs/fase1/afd-$$a.dot -o docs/fase1/afd-$$a.svg; \
 	done
@@ -135,6 +135,7 @@ docs:
 	python3 scripts/ll1.py docs/fase2/xml.ll1 > docs/fase2/ll1-xml.md
 	python3 scripts/ll1.py docs/fase2/esquema.ll1 > docs/fase2/ll1-esquema.md
 	python3 scripts/ll1.py docs/fase2/xsd.ll1 > docs/fase2/ll1-xsd.md
+	python3 scripts/ll1.py docs/fase2/dtd.ll1 > docs/fase2/ll1-dtd.md
 	python3 scripts/ll1.py docs/fase2/json-izquierda.ll1 > docs/fase2/ll1-json-izquierda.md || true
 
 # Comprueba que los artefactos deterministas de `make docs` coinciden con los
@@ -152,7 +153,7 @@ DOCS_TMP := target/docs-check
 docs-check:
 	@rm -rf $(DOCS_TMP) && mkdir -p $(DOCS_TMP)
 	@fallo=0; \
-	for a in utf8 json xml; do \
+	for a in utf8 json xml dtd; do \
 		cargo run -q -p cli -- dot $$a > $(DOCS_TMP)/afd-$$a.dot || exit 1; \
 		diff -u docs/fase1/afd-$$a.dot $(DOCS_TMP)/afd-$$a.dot || fallo=1; \
 	done; \
@@ -176,7 +177,7 @@ docs-check:
 		cargo run -q -p derivation --bin arbol -- --dot docs/fase5/ejemplos/$$e > $(DOCS_TMP)/arbol-$$e.dot || exit 1; \
 		diff -u docs/fase5/arbol-$$e.dot $(DOCS_TMP)/arbol-$$e.dot || fallo=1; \
 	done; \
-	for g in json xml esquema xsd; do \
+	for g in json xml esquema xsd dtd; do \
 		python3 scripts/ll1.py docs/fase2/$$g.ll1 > $(DOCS_TMP)/ll1-$$g.md || exit 1; \
 		diff -u docs/fase2/ll1-$$g.md $(DOCS_TMP)/ll1-$$g.md || fallo=1; \
 	done; \
