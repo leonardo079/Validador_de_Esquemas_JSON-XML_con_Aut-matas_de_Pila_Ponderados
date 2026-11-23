@@ -26,7 +26,7 @@ línea, columna y JSON Pointer o ruta XML) y la regla incumplida.
 | Tamaño de M | de 13 estados y 43 transiciones a 216 y 10 054 (XSD del pedido) | §2.1 |
 | Explosión al determinizar | acotada: `limit` antes de crear el estado 4 097 o de pasar 2²⁰ entradas | §2.2 |
 | Corrección | 86 casos del corpus; intérprete = Rust generado = C generado (con ASan/UBSan); veredicto = línea base | §6 |
-| Pruebas | 854 en `make test`, 7 del lema de bombeo, fuzzing con cuatro objetivos | §5, §6 |
+| Pruebas | 856 en `make test`, 7 del lema de bombeo, fuzzing con cuatro objetivos | §5, §6 |
 
 ## 1. Análisis de complejidad
 
@@ -379,7 +379,7 @@ es E3 (§6.3). Lo que se encontró y cómo se cerró:
     DPDA en más de 500, y 6 de ellos están en el corpus
     ([fase5/generador.md](fase5/generador.md) §6).
 - **Toda la verificación es local** (D32): `make lint` (rustfmt, clippy `-D warnings`, clang-format,
-  `unsafe-check`), `make test` (854 pruebas) y `make docs-check`.
+  `unsafe-check`), `make test` (856 pruebas) y `make docs-check`.
 
 ## 8. Conclusiones
 

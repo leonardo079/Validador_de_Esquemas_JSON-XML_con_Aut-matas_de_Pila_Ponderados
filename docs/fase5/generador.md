@@ -107,12 +107,26 @@ recursivo con un hijo obligatorio no tiene documento finito y da `None`.
 [`crates/bench/tests/generar_xml.rs`](../../crates/bench/tests/generar_xml.rs), con 40 semillas en cada XSD de
 `tests/schemas/xsd/parse-ok`, comprueba:
 
-- el DPDA acepta **todo** documento generado como válido (15 de los 17 XSD dan documentos; los otros dos no
-  tienen elementos globales);
-- los inválidos nunca salen malformados, y el DPDA los rechaza como `schema` en 12 esquemas o más. Un sabotaje
-  puede no romper nada, por ejemplo omitir la rama de un `xs:choice` que tiene otra;
+- el DPDA acepta **todo** documento generado como válido. De los 14 XSD distintos, 12 dan documentos; los otros
+  dos no tienen elementos globales. Las copias de los casos del corpus se cuentan una vez;
+- los inválidos nunca salen malformados, y el DPDA los rechaza como `schema` en 10 de los 14 esquemas. Un
+  sabotaje puede no romper nada, por ejemplo omitir la rama de un `xs:choice` que tiene otra;
 - cada malformación da su clase de error;
-- el generador es determinista con la semilla, y el árbol recursivo da cuatro niveles o más.
+- el generador es determinista con la semilla, y el árbol recursivo llega a cuatro niveles de profundidad o
+  más;
+- da `None` sin colgarse cuando no hay documento finito (un tipo con un hijo obligatorio de su mismo tipo) o
+  cuando costaría demasiado (un `minOccurs` de 4·10⁹);
+- con dos `xs:enumeration` en la cadena de restricciones, solo elige de su intersección.
+
+La revisión de la tarea encontró y se corrigieron:
+- un sabotaje que caía en una rama de `xs:choice` que luego fallaba: la etiqueta decía que estaba, pero el
+  documento no lo llevaba;
+- la primera enumeración de la cadena se tomaba sin cruzarla con las demás;
+- un `minOccurs` enorme en un grupo opcional no se cortaba;
+- un atributo opcional imposible de generar abortaba todo el elemento;
+- el DOCTYPE delante de la declaración y la entidad tras una raíz cerrada sola probaban otra cosa;
+- los blancos de control en los atributos no se escapaban;
+- la partícula raíz contaba como oportunidad de sabotaje y dejaba el documento vacío.
 
 Con la feature `libxml2`, en Docker, `libxml2_da_el_mismo_veredicto` exige que libxml2 2.9.14 dé el mismo
 veredicto que el DPDA en todos los documentos generados (válidos, inválidos y malformados) de cada XSD que

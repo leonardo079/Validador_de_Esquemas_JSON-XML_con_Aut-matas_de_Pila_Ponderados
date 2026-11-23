@@ -696,7 +696,7 @@ JSON/XML)»; casos «recursivos en JSON y XML»).
 - [x] `bench::generar_xml`: válidos (partículas con ocurrencias, `choice`, `all`, atributos con `fixed`, textos por tipo con facetas y `pattern` XSD), inválidos por sabotaje y malformados por mutación de texto; recursión acotada (D7). `generar` delega en él con una IR de XSD.
 - [x] Pruebas (`crates/bench/tests/generar_xml.rs`): el DPDA acepta todo válido generado, los inválidos nunca salen malformados y se rechazan, cada malformación da su clase, determinismo y recursión. Con `--features libxml2` en Docker: libxml2 da el mismo veredicto en más de 500 documentos.
 - [x] Binario `generar_xml --escribir`: 6 casos (válido, inválido y malformado del pedido y del árbol) con solo los campos que comparten el DPDA y libxml2.
-- [x] `make test` (854), `make lint`, `make docs-check` y `make test-baseline-xml` (en Linux, por primera vez) en verde.
+- [x] `make test` (856), `make lint`, `make docs-check` y `make test-baseline-xml` (en Linux, por primera vez) en verde.
 - [ ] Recargar Atlas con los 86 casos (`cargo run -p atlas`, con `MONGODB_URI`).
 
 ## Tarea E7: diapositivas, guion, video y ensayos — EN CURSO (21 nov; los dos)

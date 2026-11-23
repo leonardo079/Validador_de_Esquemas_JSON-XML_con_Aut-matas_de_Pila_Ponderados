@@ -15,7 +15,8 @@ use bench::ir_y_automata;
 const TESTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests");
 const SEMILLAS: u64 = 40;
 
-/// Los XSD de `tests/schemas/xsd/parse-ok` que tienen M.
+/// Los XSD distintos de `tests/schemas/xsd/parse-ok` que tienen M (las
+/// copias de los casos del corpus repiten contenido: cuenta una vez).
 fn esquemas() -> Vec<(String, Vec<u8>)> {
     let mut v: Vec<(String, Vec<u8>)> =
         std::fs::read_dir(Path::new(TESTS).join("schemas/xsd/parse-ok"))
@@ -31,7 +32,29 @@ fn esquemas() -> Vec<(String, Vec<u8>)> {
             .filter(|(_, x)| ir_y_automata(x).is_ok())
             .collect();
     v.sort();
+    let mut vistos = std::collections::HashSet::new();
+    v.retain(|(_, x)| vistos.insert(x.clone()));
     v
+}
+
+/// Profundidad de anidamiento de elementos de un documento bien formado.
+fn profundidad(d: &str) -> usize {
+    let (mut p, mut max) = (0usize, 0usize);
+    let mut resto = d;
+    while let Some(i) = resto.find('<') {
+        let fin = i + resto[i..].find('>').unwrap();
+        let t = &resto[i..=fin];
+        if t.starts_with("</") {
+            p -= 1;
+        } else if !t.starts_with("<?") && !t.ends_with("/>") {
+            p += 1;
+            max = max.max(p);
+        } else if t.ends_with("/>") {
+            max = max.max(p + 1);
+        }
+        resto = &resto[fin + 1..];
+    }
+    max
 }
 
 /// Todo documento que el generador construye como válido lo acepta el DPDA,
@@ -59,7 +82,9 @@ fn validos_los_acepta_el_dpda() {
             con_documentos += 1;
         }
     }
-    assert!(con_documentos >= 14, "{con_documentos}");
+    // 14 XSD distintos con M; dan documentos todos salvo `vacio` y
+    // `tipo-simple-con-nombre`, que no tienen elementos globales (12).
+    assert!(con_documentos >= 12, "{con_documentos}");
 }
 
 /// Misma semilla, mismo documento; y los tipos recursivos dan anidamiento.
@@ -75,10 +100,56 @@ fn determinista_y_recursivo() {
     }
     let hondo = (0..SEMILLAS)
         .filter_map(|s| generar_xml(&ir, s))
-        .map(|d| d.matches("<nodo").count())
+        .map(|d| profundidad(&d))
         .max()
         .unwrap();
     assert!(hondo >= 4, "{hondo}");
+}
+
+/// Lo que no tiene documento finito, o costaría recorrer, da `None` sin
+/// colgarse (D7): un tipo con un hijo obligatorio de su mismo tipo y un
+/// `minOccurs` enorme en un grupo de partículas opcionales.
+#[test]
+fn sin_documento_finito_da_none() {
+    let x = |cuerpo: &str| {
+        format!("<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'>{cuerpo}</xs:schema>")
+    };
+    let recursivo = x(
+        "<xs:element name='n' type='N'/><xs:complexType name='N'><xs:sequence>\
+        <xs:element name='n' type='N'/></xs:sequence></xs:complexType>",
+    );
+    let enorme = x(
+        "<xs:element name='r'><xs:complexType><xs:sequence minOccurs='4000000000' \
+        maxOccurs='unbounded'><xs:element name='a' type='xs:int' minOccurs='0'/></xs:sequence>\
+        </xs:complexType></xs:element>",
+    );
+    for esquema in [recursivo, enorme] {
+        let Ok((ir, _)) = ir_y_automata(esquema.as_bytes()) else {
+            continue; // fuera del subconjunto: nada que generar
+        };
+        for s in 0..5 {
+            assert_eq!(generar_xml(&ir, s), None, "{esquema}");
+        }
+    }
+}
+
+/// Dos `xs:enumeration` en la cadena de restricciones: solo la intersección.
+#[test]
+fn enumeraciones_encadenadas() {
+    let x = "<xs:schema xmlns:xs='http://www.w3.org/2001/XMLSchema'>\
+        <xs:simpleType name='A'><xs:restriction base='xs:string'>\
+        <xs:enumeration value='uno'/><xs:enumeration value='dos'/><xs:enumeration value='tres'/>\
+        </xs:restriction></xs:simpleType>\
+        <xs:simpleType name='B'><xs:restriction base='A'>\
+        <xs:enumeration value='dos'/><xs:enumeration value='tres'/></xs:restriction></xs:simpleType>\
+        <xs:simpleType name='C'><xs:restriction base='B'><xs:maxLength value='3'/></xs:restriction>\
+        </xs:simpleType><xs:element name='e' type='C'/></xs:schema>";
+    let (ir, m) = ir_y_automata(x.as_bytes()).unwrap();
+    for s in 0..SEMILLAS {
+        let d = generar_xml(&ir, s).unwrap();
+        assert!(d.contains("<e>dos</e>"), "{d}");
+        assert_eq!(clase_dpda(&m, d.as_bytes()), None, "{d}");
+    }
 }
 
 /// Los inválidos quedan bien formados: el DPDA los rechaza como `schema` o
@@ -107,7 +178,9 @@ fn invalidos_bien_formados_y_rechazados() {
         .iter()
         .filter(|(_, r)| *r > 0)
         .count();
-    assert!(con_rechazo >= 12, "{rechazados_por_esquema:?}");
+    // 10 de los 14: los demás no tienen elementos globales o no ofrecen
+    // ninguna oportunidad que rompa algo.
+    assert!(con_rechazo >= 10, "{rechazados_por_esquema:?}");
 }
 
 /// Cada malformación da su clase de error en todos los esquemas.

@@ -143,9 +143,14 @@ impl<'a> GenXml<'a> {
                         } else if !self.g.azar.moneda() {
                             continue;
                         }
-                        let valor = match &a.fixed {
-                            Some(f) => f.clone(),
-                            None => self.texto(a.ty)?,
+                        let valor = match (&a.fixed, a.required) {
+                            (Some(f), _) => f.clone(),
+                            (None, true) => self.texto(a.ty)?,
+                            // Uno opcional que no se sabe generar se omite.
+                            (None, false) => match self.texto(a.ty) {
+                                Some(v) => v,
+                                None => continue,
+                            },
                         };
                         atributos.push_str(&format!(" {}=\"{}\"", a.name, escapar(&valor, true)));
                     }
@@ -182,12 +187,21 @@ impl<'a> GenXml<'a> {
         let p = m.particles.get(i)?;
         let min = p.occurs.min;
         let max = p.occurs.max.unwrap_or(min + 2).min(min + 2).max(min);
+        // Un `minOccurs` enorme (el XSD es entrada del usuario) no se
+        // recorre: cada vuelta puede no crear ningún elemento (un grupo de
+        // partículas opcionales), así que el tope de elementos no lo corta.
+        if min > MAX_ELEMENTOS as u64 {
+            return None;
+        }
         let mut veces = if prof >= PROFUNDIDAD {
             min
         } else {
             self.g.azar.rango(min, max)
         };
-        if min >= 1 && self.oportunidad(Sabotaje::FaltaHijo) {
+        // La partícula raíz del documento no es una oportunidad: sin ella el
+        // documento queda vacío, que no es un inválido sino nada.
+        let raiz = prof == 0 && nivel == 0;
+        if min >= 1 && !raiz && self.oportunidad(Sabotaje::FaltaHijo) {
             veces = min - 1;
         }
         let mut out = String::new();
@@ -206,10 +220,14 @@ impl<'a> GenXml<'a> {
                     self.barajar(&mut orden);
                     let mut hecho = None;
                     for h in orden {
+                        // Lo que haga una rama que falla se deshace: si el
+                        // sabotaje cayó en ella, el documento no lo llevaría.
+                        let antes = (self.oportunidades, self.hecho, self.elementos);
                         if let Some(s) = self.particula(m, h, prof, nivel + 1) {
                             hecho = Some(s);
                             break;
                         }
+                        (self.oportunidades, self.hecho, self.elementos) = antes;
                     }
                     out.push_str(&hecho?);
                 }
@@ -249,15 +267,28 @@ impl<'a> GenXml<'a> {
         // Las enumeraciones que cumplen las demás facetas de la cadena de
         // restricciones (una derivada puede acotar las de su base:
         // `PocoPorcentaje` de `tipos-simples.xsd`).
-        let enumeracion: Vec<String> = reglas
+        // Si varias restricciones de la cadena enumeran, vale la intersección.
+        let listas: Vec<Vec<String>> = reglas
             .iter()
-            .find_map(|r| match r {
+            .filter_map(|r| match r {
                 Rule::Enum(ls) => Some(ls.iter().filter_map(|l| texto_literal(&l.0)).collect()),
                 _ => None,
             })
-            .unwrap_or_else(Vec::new)
+            .collect();
+        let igual = |a: &str, b: &str| {
+            if lexico.is_numeric() {
+                ir::num::compare(a, b) == std::cmp::Ordering::Equal
+            } else {
+                a == b
+            }
+        };
+        let enumeracion: Vec<String> = listas
+            .first()
+            .cloned()
+            .unwrap_or_default()
             .into_iter()
-            .filter(|v: &String| cumple_facetas(v, lexico, &reglas))
+            .filter(|v| listas[1..].iter().all(|l| l.iter().any(|w| igual(v, w))))
+            .filter(|v| cumple_facetas(v, lexico, &reglas))
             .collect();
         let con_enum = reglas.iter().any(|r| matches!(r, Rule::Enum(_)));
         if con_enum && enumeracion.is_empty() {
@@ -347,6 +378,11 @@ fn escapar(s: &str, atributo: bool) -> String {
             '<' => o.push_str("&lt;"),
             '>' => o.push_str("&gt;"),
             '"' if atributo => o.push_str("&quot;"),
+            // Un atributo normaliza los blancos a espacio y un texto `\r` a
+            // `\n`: como referencias de carácter llegan tal cual.
+            '\t' if atributo => o.push_str("&#9;"),
+            '\n' if atributo => o.push_str("&#10;"),
+            '\r' => o.push_str("&#13;"),
             c => o.push(c),
         }
     }
@@ -484,13 +520,26 @@ pub fn malformar(doc: &str, mal: Malformacion, azar: &mut Azar) -> Option<String
             None
         }
         Malformacion::EntidadDesconocida => {
-            // Dentro del texto de un elemento: después de un `>` que no
-            // cierre una declaración.
-            let i = doc.find("?>").map_or(0, |k| k + 2);
-            let j = i + doc[i..].find('>')? + 1;
-            Some(format!("{}&desconocida;{}", &doc[..j], &doc[j..]))
+            // Dentro del contenido de un elemento: tras el `>` de la primera
+            // etiqueta de apertura que no se cierre sola.
+            let mut desde = doc.find("?>").map_or(0, |k| k + 2);
+            loop {
+                let i = desde + doc[desde..].find('<')?;
+                let fin = i + doc[i..].find('>')?;
+                let etiqueta = &doc[i..=fin];
+                if !etiqueta.starts_with("</") && !etiqueta.ends_with("/>") {
+                    let j = fin + 1;
+                    return Some(format!("{}&desconocida;{}", &doc[..j], &doc[j..]));
+                }
+                desde = fin + 1;
+            }
         }
-        Malformacion::Doctype => Some(format!("<!DOCTYPE r>{doc}")),
+        Malformacion::Doctype => {
+            // Después de la declaración, si la hay: delante de ella, la
+            // declaración fuera de sitio ya lo haría malformado.
+            let j = doc.find("?>").map_or(0, |k| k + 2);
+            Some(format!("{}<!DOCTYPE r>{}", &doc[..j], &doc[j..]))
+        }
     }
 }
 
