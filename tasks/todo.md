@@ -1005,6 +1005,32 @@ el orquestador, sin agentes (decisión del usuario).
   - `tabla.rs`: las cifras del documento, el `.dot` versionado, el sumidero de error y las clases.
 - [x] `lint OK`; pruebas de `dtd` y `cli` en verde.
 
-**Pendiente para DTD.2:** el parser LL(1) iterativo con tope de 256 paréntesis, el AST, la clasificación contextual
-de palabras clave (`gramatica-dtd.md` §2), los rechazos por alcance (`ANY`, contenido mixto, tipos tokenizados,
-`NOTATION`) y la comprobación de `<?xml …?>` al inicio y en UTF-8.
+**Pendiente para DTD.2:** resuelto en DTD.2 (abajo).
+
+## Tarea DTD.2: parser LL(1) y AST — HECHA (23 nov)
+
+- [x] `crates/dtd/src/ast.rs`: AST propio del subconjunto (D3), con `Span` en cada nodo. `ElementDecl` con `Empty`,
+  `Pcdata` o `Children(Particle)`; partículas `Name`, `Seq` o `Choice` con `Occurs`; `AttlistDecl` con `CDATA` o
+  enumeración y `#REQUIRED`/`#IMPLIED`/`#FIXED`/valor.
+- [x] `crates/dtd/src/parser.rs`: una función por no terminal de `docs/fase2/dtd.ll1`, con las palabras clave
+  contextuales por posición. Los grupos anidados van en una pila explícita con tope de 256 (D7): el paréntesis 257
+  es `Limit`.
+- [x] Errores con clase, posición y motivo: `Lexical` (incluye lo prohibido por seguridad), `Syntax` («se esperaba
+  X, pero se encontró Y»), `OutOfScope` (`ANY`, contenido mixto, `ID`/`IDREF(S)`, `ENTITY`/`ENTITIES`,
+  `NMTOKEN(S)`, `NOTATION`, nombres con `:`, `encoding` distinto de UTF-8) y `Limit`.
+- [x] `<?xml …?>` solo al inicio; las demás instrucciones se ignoran. Un `Name` no puede empezar como un
+  *nmtoken*, salvo en las enumeraciones.
+- [x] Cambio en el lexer de DTD.1: `DeclClose` cubre solo el `>`, para que un error en el `>` se marque en él. El
+  parser arma el rango de la declaración, de `<!` a `>`.
+- [x] 10 pruebas en `crates/dtd/tests/parser.rs`: el AST y sus posiciones, cada rechazo y cada error con su byte,
+  256 grupos sí y 257 no, un millón de `(` en un hilo con 256 KiB de pila, e ida y vuelta con 2 000 DTD aleatorias.
+- [x] `docs/fase2/gramatica-dtd.md` §5-§7. `lint OK`; 32 pruebas de `dtd` en verde.
+
+**Pendiente para DTD.3:**
+
+- tabla de símbolos de elementos: declaraciones repetidas, nombres sin `<!ELEMENT>` (`unresolved`) y atributos
+  repetidos;
+- determinismo de cada modelo (Glushkov, apéndice E), con las dos partículas en conflicto;
+- valores por defecto y `#FIXED` dentro de la enumeración;
+- tope de 4 096 partículas por modelo (D26);
+- bajada a la IR y `verify`, con IR doradas.

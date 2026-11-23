@@ -199,8 +199,8 @@ fn rangos_de_los_eventos() {
     };
     assert_eq!(rango(Event::DeclOpen, 0), (0, 2));
     assert_eq!(rango(Event::LParen, 0), (12, 13));
-    assert_eq!(rango(Event::DeclClose, 0), (0, 16));
-    assert_eq!(rango(Event::DeclClose, 1), (17, 41));
+    assert_eq!(rango(Event::DeclClose, 0), (15, 16));
+    assert_eq!(rango(Event::DeclClose, 1), (40, 41));
     assert_eq!(rango(Event::LiteralEnd, 0), (37, 40));
     let ultimo = ev
         .iter()

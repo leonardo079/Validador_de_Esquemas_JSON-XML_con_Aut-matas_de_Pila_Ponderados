@@ -1,11 +1,12 @@
-# Fase 2 — Gramática de DTD (DTD.1, D86)
+# Fase 2 — Gramática y parser de DTD (DTD.1-DTD.2, D86)
 
 La sintaxis del subconjunto DTD de `docs/00-alcance.md` §3bis es una **gramática libre de contexto LL(1)** sobre
 los tokens del lexer ([../fase1/lexico-dtd.md](../fase1/lexico-dtd.md)). Está en [dtd.ll1](dtd.ll1). Su tabla
 LL(1), con FIRST, FOLLOW y la comprobación de conflictos, la genera `scripts/ll1.py` en [ll1-dtd.md](ll1-dtd.md)
 (`make docs`; `make docs-check` comprueba que la versionada coincide). **No tiene conflictos.**
 
-El parser descendente que la ejecuta, con su AST propio (D3), es la tarea DTD.2.
+El parser descendente que la ejecuta y su AST propio (D3) son de la tarea DTD.2: `crates/dtd/src/parser.rs` y
+`ast.rs` (§6).
 
 ## 1. La gramática
 
@@ -85,6 +86,64 @@ parser al aplicar `item → PI`, igual que en XML.
 
 ## 5. Profundidad
 
-Los grupos se anidan (`cp → LPAR cp …`), así que la pila del parser crece con la profundidad de paréntesis. El
-parser de DTD.2 será **iterativo**, con la pila de la tabla LL(1) en el heap, y con un tope de 256 paréntesis
-anidados (`docs/00-alcance.md` §4, D7). Más que eso es un error `limit` en el paréntesis 257.
+Los grupos se anidan (`cp → LPAR cp …`), así que lo que el parser tiene pendiente crece con la profundidad de
+paréntesis. Es la **única** producción recursiva de la gramática. El parser la recorre con una **pila explícita**
+de grupos abiertos, en el heap, en lugar de llamarse a sí mismo (D7). La pila tiene un tope de 256 grupos
+(`MAX_DEPTH`, `docs/00-alcance.md` §4): el paréntesis 257 es un error `Limit` en su byte.
+
+Así ningún esquema puede desbordar la pila del hilo. La prueba
+`un_millon_de_parentesis_no_desborda_la_pila` analiza un millón de `(` en un hilo con 256 KiB de pila y recibe el
+`Limit` en el 257.
+
+## 6. El parser (DTD.2)
+
+**Entrada.** Los eventos del lexer se agrupan en tokens de la gramática (`Decl` con su palabra clave, `Name`,
+`Hash`, puntuación, `Literal`, `Close`, `Pi`). Cada token lleva su `Span`. El lexer se para en el primer error
+léxico, y el parser lo devuelve como `Lexical` con su clase y su posición.
+
+**Una función por no terminal.** Siguen la tabla de [ll1-dtd.md](ll1-dtd.md): `dtd`, `elementdecl`, `contentspec`,
+`group_body`, `occ`, `attlistdecl`, `atttype` y `defaultdecl`. `cp`, `children_rest`, `seq_rest` y `choice_rest`
+van juntos en el bucle de `children`, con la pila de §5:
+
+- tras un `cp`, `,` o `|` fijan el separador del grupo, que no se puede mezclar;
+- `)` cierra el grupo, lee su sufijo y lo añade al grupo padre, o lo devuelve si era el exterior.
+
+Cada decisión mira un solo token, clasificado por su posición (§2). El parser se para en el **primer** error.
+
+**El AST** (`crates/dtd/src/ast.rs`) solo representa el subconjunto:
+
+- `ElementDecl` con `ContentSpec::{Empty, Pcdata, Children(Particle)}`;
+- la partícula es `Name`, `Seq` (`(a)` es una secuencia de uno) o `Choice` (dos opciones o más), con su `Occurs`;
+- `AttlistDecl` con `AttDef { name, ty: Cdata | Enumeration, default: Required | Implied | Fixed | Default }`.
+
+`(#PCDATA)*` es lo mismo que `(#PCDATA)`. Lo de fuera del subconjunto no tiene nodo: el parser lo rechaza antes.
+
+**Errores.** Cuatro clases (`dtd::ErrorKind`), cada una con su posición y un mensaje:
+
+| Clase | Cuándo | Ejemplo |
+| --- | --- | --- |
+| `Lexical` | Fase 1, con lo prohibido por seguridad | `<!ENTITY x 'y'>`, en el `<` |
+| `Syntax` | Fuera de la gramática; el mensaje dice qué se esperaba y qué llegó | `<!ELEMENT a b>`: «se esperaba EMPTY, ANY o «(» tras el nombre del elemento, pero se encontró el nombre «b»» |
+| `OutOfScope` | Sintaxis XML fuera de §3bis.2, con el motivo | `ANY`, `(#PCDATA\|b)*`, `ID`, `IDREF(S)`, `ENTITY`, `NMTOKEN(S)`, `NOTATION`, nombres con `:`, `encoding` distinto de UTF-8 |
+| `Limit` | Más de 256 paréntesis anidados | el `(` número 257 |
+
+También son `Syntax`:
+
+- un `Name` que empieza por dígito, `-` o `.` en posición de nombre de elemento o de atributo (los *nmtokens*
+  solo valen en las enumeraciones);
+- `<?xml …?>` que no va al inicio.
+
+Las demás instrucciones de procesamiento se ignoran.
+
+## 7. Verificación (`crates/dtd/tests/parser.rs`)
+
+- El AST del pedido completo (`<?xml?>`, comentario, elementos, listas de atributos, instrucción final) y sus
+  posiciones.
+- Grupos anidados con sufijos, el grupo de uno y las palabras clave contextuales (`<!ELEMENT EMPTY EMPTY>`, un
+  atributo llamado `CDATA`, `SYSTEM` y `PUBLIC`, enumeraciones de *nmtokens*).
+- Cada rechazo por alcance y cada error sintáctico, con su clase y su byte. Lo prohibido por seguridad llega como
+  `Lexical`.
+- El tope de profundidad: 256 grupos anidados se analizan enteros, el 257 es `Limit`, y un millón tampoco desborda.
+- **Ida y vuelta** (*proptest*, 2 000 casos): DTD aleatorias con modelos anidados hasta 4 niveles, enumeraciones y
+  literales con `<`, `&`, comillas, `%` y no ASCII se analizan; el AST escrito como texto y vuelto a analizar da
+  el mismo AST.

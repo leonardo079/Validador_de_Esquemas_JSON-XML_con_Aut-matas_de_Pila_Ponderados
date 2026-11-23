@@ -62,7 +62,7 @@ pub enum Event {
     LiteralChar(char),
     /// Comilla de cierre; el `Span` cubre el literal con sus comillas.
     LiteralEnd,
-    /// `>` de una declaración; el `Span` cubre la declaración completa.
+    /// `>` de una declaración (el rango es solo el `>`: un error ahí se marca en él).
     DeclClose,
     /// `<?` (el destino llega como `NameChar`).
     PiOpen,
@@ -706,7 +706,7 @@ impl DtdLexer {
             A_KW_END => self.check_keyword(),
             A_KW_CLOSE => {
                 self.check_keyword()?;
-                self.emit(sink, Event::DeclClose, self.tok_start)
+                self.emit(sink, Event::DeclClose, here)
             }
             A_NAME_BEGIN => {
                 self.emit_until(sink, Event::NameBegin, here, here.offset)?;
@@ -725,7 +725,7 @@ impl DtdLexer {
                 self.emit(sink, Event::LiteralBegin, here)
             }
             A_LIT_END => self.emit(sink, Event::LiteralEnd, self.lit_start),
-            A_DECL_CLOSE => self.emit(sink, Event::DeclClose, self.tok_start),
+            A_DECL_CLOSE => self.emit(sink, Event::DeclClose, here),
             A_REF_START => {
                 self.ref_ret = state as u8;
                 self.char_start = here;

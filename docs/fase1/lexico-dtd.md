@@ -59,7 +59,7 @@ Con `L` = letra ASCII, `_` o `:`, `N` = `L` ∪ dígito ∪ `-` ∪ `.` ∪ no A
 | puntuación | `(` \| `)` \| `\|` \| `,` \| `?` \| `*` \| `+` | uno por símbolo |
 | literal | `"` ([^"<&] \| ref)* `"` \| `'` ([^'<&] \| ref)* `'` | `LiteralBegin`, `LiteralChar`…, `LiteralEnd` |
 | referencia (en literal) | `&` (`lt` \| `gt` \| `amp` \| `quot` \| `apos`) `;` \| `&#` [0-9]+ `;` \| `&#x` [0-9a-fA-F]+ `;` | el carácter resuelto |
-| cierre | `>` | `DeclClose` (rango: la declaración completa) |
+| cierre | `>` | `DeclClose` (rango: el `>`; el parser arma el de la declaración, de `<!` a `>`) |
 | instrucción | `<?` `L` `N`* (`S` ([^?] \| `?`+[^?>])* `?`*)? `?>` | `PiOpen`, `NameChar`…, `PiChar`…, `PiClose` |
 | comentario | `<!--` ([^-] \| `-`[^-])* `-->` | ninguno: se descarta |
 | separador | `S`+ | ninguno |
