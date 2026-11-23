@@ -1,0 +1,16 @@
+{
+  "_id": "invalid-xml-arbol-recursivo-01",
+  "category": "invalid",
+  "format": "xml",
+  "description": "Árbol recursivo en XSD con un valor no entero en el tercer nivel: el error lleva la ruta del nodo anidado.",
+  "phase": 4,
+  "schema": "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\n  <xs:element name=\"nodo\" type=\"Nodo\"/>\n  <xs:complexType name=\"Nodo\">\n    <xs:sequence>\n      <xs:element name=\"valor\" type=\"xs:int\"/>\n      <xs:element name=\"nodo\" type=\"Nodo\" minOccurs=\"0\" maxOccurs=\"unbounded\"/>\n    </xs:sequence>\n    <xs:attribute name=\"id\" type=\"xs:positiveInteger\" use=\"required\"/>\n  </xs:complexType>\n</xs:schema>",
+  "payload": "<nodo id=\"1\">\n  <valor>10</valor>\n  <nodo id=\"2\">\n    <valor>20</valor>\n    <nodo id=\"4\"><valor>cuarenta</valor></nodo>\n  </nodo>\n</nodo>",
+  "expected": {
+    "valid": false,
+    "errorKind": "schema",
+    "violations": 1,
+    "pointer": "/nodo/nodo/nodo/valor",
+    "offset": 104
+  }
+}

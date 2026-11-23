@@ -1,0 +1,10 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="nodo" type="Nodo"/>
+  <xs:complexType name="Nodo">
+    <xs:sequence>
+      <xs:element name="valor" type="xs:int"/>
+      <xs:element name="nodo" type="Nodo" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:positiveInteger" use="required"/>
+  </xs:complexType>
+</xs:schema>

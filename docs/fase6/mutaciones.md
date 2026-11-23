@@ -80,6 +80,7 @@ orden con `--escribir`; la salida es idéntica byte a byte.
 
 ## 6. Límites
 
-- Solo JSON, como F5.4: el generador XML es F5.4-P1.
+- Solo JSON. Los inválidos y malformados XML los produce el generador XML de F5.4-P1 por sabotaje y mutación
+  de texto ([../fase5/generador.md](../fase5/generador.md) §6).
 - Los casos en que los dos validadores no coinciden se descartan en silencio. Esas divergencias conocidas están
   en `linea-base.md`.

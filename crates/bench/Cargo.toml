@@ -19,6 +19,12 @@ baseline.workspace = true
 # asignaciones, bytes y el pico sin `unsafe` en este crate (D52).
 dhat = "=0.3.3"
 
+[features]
+default = []
+# F5.4-P1: comparar el generador XML con la línea base libxml2 (en Docker,
+# `docs/fase5/generador.md` §6). Apagada por defecto, como en `baseline`.
+libxml2 = ["baseline/libxml2"]
+
 [dev-dependencies]
 # Sin `plotters` ni `rayon`: solo el arnés de `cargo bench` (F6.6, D1).
 criterion = { version = "=0.5.1", default-features = false, features = ["cargo_bench_support"] }
@@ -52,6 +58,12 @@ path = "src/bin/generar.rs"
 [[bin]]
 name = "mutar"
 path = "src/bin/mutar.rs"
+
+# F5.4-P1: documentos XML válidos, inválidos y malformados desde la IR de un
+# XSD. `cargo run -p bench --release --bin generar_xml -- --escribir`.
+[[bin]]
+name = "generar_xml"
+path = "src/bin/generar_xml.rs"
 
 # E1: gráficas de bombeo en SVG a partir del CSV de `metricas --bombeo-fino`.
 # `cargo run -p bench --release --bin graficas -- <csv> docs/fase6/graficas`.

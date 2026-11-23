@@ -46,7 +46,8 @@ Media hora antes:
 
 - [ ] La URL pública responde (`GET /api/health`) y la web carga. Poner la URL en la diapositiva 17 (hoy dice
   `[URL PÚBLICA]`).
-- [ ] Atlas tiene los 78 casos: la pestaña «Casos de prueba (Atlas)» los lista.
+- [ ] Atlas tiene los 86 casos (los 8 XML del 22 nov se cargan con `cargo run -p atlas`): la pestaña «Casos de
+  prueba (Atlas)» los lista.
 - [ ] Hacer una compilación de calentamiento (paso 1) para que la primera respuesta no sea la más lenta.
 - [ ] Tener abiertos en el portátil, para copiar y pegar:
   - [`tests/schemas/xsd/parse-ok/valid-xml-pedido-01.xsd`](../../tests/schemas/xsd/parse-ok/valid-xml-pedido-01.xsd)
@@ -80,7 +81,7 @@ pestañas es el que esté en el editor.
    pequeño (p. ej. 16 bytes) para que se vea avanzar la barra, y señalar que el veredicto es el mismo. En la EC2 la
    validación con el código compilado en el sandbox está apagada a propósito: si preguntan, se explica que exige
    montar el socket de Docker, que equivale a dar root sobre la máquina.
-6. **Casos de prueba (Atlas) (1 min).** Ejecutar los 78 casos: 78 de 78. Decir que son las cinco categorías del
+6. **Casos de prueba (Atlas) (1 min).** Ejecutar los 86 casos: 86 de 86. Decir que son las cinco categorías del
    enunciado (válidos, inválidos, malformados, fuera del DPDA puro y extremos) y que cada uno guarda su resultado
    esperado.
 

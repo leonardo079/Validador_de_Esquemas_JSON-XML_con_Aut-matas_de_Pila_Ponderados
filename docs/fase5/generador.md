@@ -65,14 +65,74 @@ idéntica mientras no cambien la IR ni la semilla.
 
 ## 4. Límites
 
-- **Solo JSON.** Con una IR de XSD, `generar` devuelve `None`. El generador XML queda abierto (§5).
+- Con una IR de XSD, `generar` delega en el generador XML (§6).
 - Un `const` o `enum` compuesto (objeto o arreglo) se copia bien, pero M todavía no lo cubre (F4.5b, recorte 2),
   así que esos esquemas no entran al corpus.
 - La distribución no es uniforme: el generador busca casos válidos y variados, no hace muestreo estadístico.
 
 ## 5. Pendientes
 
-- **F5.4-P1 (XML).** Generar documentos XML válidos desde la IR de un XSD: recorrer el Glushkov con contadores
-  del modelo de contenido igual que el de `pattern`, más atributos y textos con su tipo. Va como criterio
-  opcional de F6.3, o se recorta si no hay tiempo; el corpus ya tiene casos XML escritos a mano.
+- **F5.4-P1 (XML).** Resuelto el 22 nov: §6.
 - **F5.4-P2.** F6.3 parte de estos válidos para mutarlos (inválidos y malformados).
+
+## 6. Documentos XML: válidos, inválidos y malformados (F5.4-P1, 22 nov)
+
+El enunciado pide un «generador de payloads válidos e inválidos (serialización JSON/XML) a partir del esquema».
+[`crates/bench/src/generar_xml.rs`](../../crates/bench/src/generar_xml.rs) hace la parte XML con la IR de un XSD:
+
+- **Válidos** (`generar_xml`). El documento elige un elemento global. Cada elemento escribe sus atributos (los
+  requeridos siempre, los opcionales a veces, el valor `fixed` si lo hay) y después su contenido:
+  - `xs:sequence` en orden, `xs:choice` con una rama y `xs:all` en un orden al azar;
+  - cada partícula entre `minOccurs` y `minOccurs` + 2 veces;
+  - o el texto de su `xs:simpleContent`.
+
+  Los textos salen del tipo predefinido, con sus facetas, con las rutinas de números y cadenas de §1 y `pattern`
+  en el dialecto XSD. Una enumeración solo se elige si cumple las demás facetas de la cadena de restricciones:
+  en `tipos-simples.xsd`, `PocoPorcentaje` hereda {0, 5.50, 10, 50} y la acota a ≤ 10. La primera versión no lo
+  miraba y el DPDA rechazó, con razón, los documentos con 50.
+- **Inválidos** (`generar_xml_invalido`). La misma generación con un sabotaje en una de sus oportunidades,
+  elegida con la semilla: un hijo obligatorio de menos, un atributo requerido de menos o un texto fuera de su
+  tipo. El documento queda bien formado.
+- **Malformados** (`malformar`). Cinco mutaciones de texto de un válido:
+  - truncarlo (`lexical` si corta un token, `syntax` si no);
+  - cambiar el nombre de la última etiqueta de cierre (`syntax`);
+  - repetir un atributo (`syntax`);
+  - una entidad no declarada (`lexical`);
+  - un `<!DOCTYPE` delante (`lexical`).
+
+La recursión está acotada: 18 elementos anidados, 64 grupos y 400 elementos por documento (D7). Un tipo
+recursivo con un hijo obligatorio no tiene documento finito y da `None`.
+
+**Dos oráculos independientes.** El generador sigue la semántica del XSD, no el autómata.
+[`crates/bench/tests/generar_xml.rs`](../../crates/bench/tests/generar_xml.rs), con 40 semillas en cada XSD de
+`tests/schemas/xsd/parse-ok`, comprueba:
+
+- el DPDA acepta **todo** documento generado como válido (15 de los 17 XSD dan documentos; los otros dos no
+  tienen elementos globales);
+- los inválidos nunca salen malformados, y el DPDA los rechaza como `schema` en 12 esquemas o más. Un sabotaje
+  puede no romper nada, por ejemplo omitir la rama de un `xs:choice` que tiene otra;
+- cada malformación da su clase de error;
+- el generador es determinista con la semilla, y el árbol recursivo da cuatro niveles o más.
+
+Con la feature `libxml2`, en Docker, `libxml2_da_el_mismo_veredicto` exige que libxml2 2.9.14 dé el mismo
+veredicto que el DPDA en todos los documentos generados (válidos, inválidos y malformados) de cada XSD que
+compila: más de 500 documentos, todos de acuerdo.
+
+```text
+make test-baseline-xml                                          # imagen y pruebas de la línea base XML
+docker run --rm -v "$PWD":/src:ro -v validador-cargo-registry:/usr/local/cargo/registry \
+  -v validador-baseline-xml-target:/target -w /src --network none validador-baseline-xml:1 \
+  cargo test -p bench --features libxml2 --test generar_xml --locked --offline
+```
+
+**Corpus.** `cargo run -p bench --release --bin generar_xml -- --escribir` escribe seis casos para el pedido y
+el árbol recursivo: `valid-gen-xml-*`, `invalid-mut-xml-*` y `malformed-xml-mut-*`, con la copia de su XSD en
+`parse-ok`. El `expected` fija solo lo que comparten el DPDA y libxml2:
+
+- el veredicto, la clase y el puntero;
+- en los inválidos, una violación. Se elige un sabotaje con una sola violación, porque con un hijo de menos
+  libxml2 se detiene en el primer error del modelo y cuenta menos que la conformidad total.
+
+El offset de los malformados no se fija, porque libxml2 da el final de la etiqueta y no el principio.
+`make test-baseline-xml` pasa con ellos.
+

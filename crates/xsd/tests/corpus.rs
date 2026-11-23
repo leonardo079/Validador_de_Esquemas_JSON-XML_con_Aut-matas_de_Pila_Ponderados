@@ -69,7 +69,6 @@ fn c_solo_por_pattern(nombre: &str, ir: &VerifiedIr) {
 struct Caso {
     path: PathBuf,
     id: String,
-    category: String,
     /// El texto del esquema tal como está en el caso.
     schema: Vec<u8>,
 }
@@ -101,7 +100,6 @@ fn casos_xml() -> Vec<Caso> {
                 .to_vec();
             v.push(Caso {
                 id: case["_id"].as_str().unwrap().to_owned(),
-                category: case["category"].as_str().unwrap().to_owned(),
                 schema,
                 path,
             });
@@ -150,7 +148,8 @@ fn cumple_la_definicion(nombre: &str, ir: &VerifiedIr) -> Vec<NodeClass> {
 /// `atributos-ajenos` y `tipos-simples`) y los dos de `tests/cases` pasan el
 /// análisis y salen clasificados según la definición, con nodos (c) solo
 /// por `pattern`. El pedido (`valid-xml-pedido-01`) tiene exactamente un nodo (b),
-/// el tipo anónimo de `pedido`, por su `Attributes` (`id` requerido), y los
+/// el tipo anónimo de `pedido`, por su `Attributes` (`id` requerido); los dos
+/// del árbol recursivo, el tipo `Nodo`, por lo mismo; y los
 /// demás (`malformed-xml-billion-laughs-01` y los de F4.6), ninguno. Los casos usan el
 /// texto de su campo `schema`, que es el de la copia en `parse-ok`.
 #[test]
@@ -180,10 +179,18 @@ fn corpus_clasificado() {
     assert_eq!(
         ids,
         [
+            "invalid-mut-xml-arbol-01",
+            "invalid-mut-xml-pedido-01",
+            "invalid-xml-arbol-recursivo-01",
             "invalid-xml-missing-child-01",
             "invalid-xml-range-01",
             "malformed-xml-billion-laughs-01",
+            "malformed-xml-mut-arbol-01",
+            "malformed-xml-mut-pedido-01",
             "malformed-xml-unclosed-01",
+            "valid-gen-xml-arbol-01",
+            "valid-gen-xml-pedido-01",
+            "valid-xml-arbol-recursivo-01",
             "valid-xml-pedido-01"
         ],
         "casos XSD de tests/cases"
@@ -209,10 +216,22 @@ fn corpus_clasificado() {
         let b: Vec<usize> = (0..clases.len())
             .filter(|&i| clases[i].class == Class::B)
             .collect();
-        match caso.category.as_str() {
-            "valid" => {
+        // El nodo (b) de los casos con un atributo requerido: el tipo
+        // anónimo de `pedido` y el tipo recursivo `Nodo` del árbol.
+        // Los generados por F5.4-P1 (`*-xml-pedido-01`, `*-xml-arbol-01`)
+        // usan el mismo XSD que su origen.
+        let id = caso.id.as_str();
+        let con_b = if id.contains("pedido") {
+            Some("#/element/pedido")
+        } else if id.contains("arbol") {
+            Some("#/complexType/Nodo")
+        } else {
+            None
+        };
+        match con_b {
+            Some(ubicacion) => {
                 assert_eq!(b, [1], "{nombre}: nodos (b)");
-                assert_eq!(ir.location(ir::NodeId::new(1)), "#/element/pedido");
+                assert_eq!(ir.location(ir::NodeId::new(1)), ubicacion);
                 // Lo sube a (b) su `Attributes`, y solo él.
                 let reglas_b: Vec<RuleKind> = ir.nodes()[1]
                     .rules
@@ -222,7 +241,7 @@ fn corpus_clasificado() {
                     .collect();
                 assert_eq!(reglas_b, [RuleKind::Attributes], "{nombre}");
             }
-            _ => assert!(b.is_empty(), "{nombre}: nodos (b) {b:?}"),
+            None => assert!(b.is_empty(), "{nombre}: nodos (b) {b:?}"),
         }
     }
 }

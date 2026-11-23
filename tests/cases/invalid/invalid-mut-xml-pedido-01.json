@@ -1,0 +1,10 @@
+{
+  "_id": "invalid-mut-xml-pedido-01",
+  "category": "invalid",
+  "format": "xml",
+  "description": "Documento generado desde la IR de «valid-xml-pedido-01» con la semilla 2 y el sabotaje «falta-hijo» (F5.4-P1).",
+  "phase": 5,
+  "schema": "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\u000a  <xs:element name=\"pedido\">\u000a    <xs:complexType>\u000a      <xs:sequence>\u000a        <xs:element name=\"cliente\" type=\"xs:string\"/>\u000a        <xs:element name=\"nota\" type=\"xs:string\" minOccurs=\"0\"/>\u000a        <xs:element name=\"total\" type=\"xs:decimal\"/>\u000a      </xs:sequence>\u000a      <xs:attribute name=\"id\" type=\"xs:positiveInteger\" use=\"required\"/>\u000a    </xs:complexType>\u000a  </xs:element>\u000a</xs:schema>",
+  "payload": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\u000a<pedido id=\"1\"/>",
+  "expected": { "valid": false, "errorKind": "schema", "violations": 1, "pointer": "/pedido" }
+}

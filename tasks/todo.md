@@ -687,6 +687,18 @@ Criterios propuestos y aplicados por Claude con la delegación del usuario («to
 - [x] Verificación con las sondas de la auditoría C: §18 (716 → 242 MB) y §21 (cierre a los 120 s) cumplen. §19 no cumplía: el presupuesto de respuestas se soltaba al entregar el cuerpo entero en un *frame*, y 122 ZIP sin leer llegaban a 889 MB. Corregido con `ConReserva` por trozos de 64 KiB: unos 150 MB con 10 o con 122 intentos. — `server/src/api.rs`, `api::tests::reserva_hasta_el_ultimo_trozo`; `docs/fase7/pendientes.md` §18, §19, §21
 - [x] Visto bueno de los endpoints de F7.1, F7.2 y F7.5 (D82; F7.6 ya tenía D70), con seis cambios pequeños para Bayron (`docs/fase7/pendientes.md` §25); fila de 1 MiB en `docs/00-alcance.md` §4.
 
+## Tarea F5.4b: generador XML (F5.4-P1) y casos XML recursivos — HECHA (22 nov)
+
+Pedido en la validación contra el enunciado (fase 5: «generador de payloads válidos e inválidos (serialización
+JSON/XML)»; casos «recursivos en JSON y XML»).
+
+- [x] Casos `valid-xml-arbol-recursivo-01` e `invalid-xml-arbol-recursivo-01` (tipo complejo que se contiene a sí mismo; el inválido con el puntero `/nodo/nodo/nodo/valor`), con su copia en `parse-ok`.
+- [x] `bench::generar_xml`: válidos (partículas con ocurrencias, `choice`, `all`, atributos con `fixed`, textos por tipo con facetas y `pattern` XSD), inválidos por sabotaje y malformados por mutación de texto; recursión acotada (D7). `generar` delega en él con una IR de XSD.
+- [x] Pruebas (`crates/bench/tests/generar_xml.rs`): el DPDA acepta todo válido generado, los inválidos nunca salen malformados y se rechazan, cada malformación da su clase, determinismo y recursión. Con `--features libxml2` en Docker: libxml2 da el mismo veredicto en más de 500 documentos.
+- [x] Binario `generar_xml --escribir`: 6 casos (válido, inválido y malformado del pedido y del árbol) con solo los campos que comparten el DPDA y libxml2.
+- [x] `make test` (854), `make lint`, `make docs-check` y `make test-baseline-xml` (en Linux, por primera vez) en verde.
+- [ ] Recargar Atlas con los 86 casos (`cargo run -p atlas`, con `MONGODB_URI`).
+
 ## Tarea E7: diapositivas, guion, video y ensayos — EN CURSO (21 nov; los dos)
 
 - [x] Diapositivas: 18, con notas del orador por diapositiva (quién habla y qué dice), en una presentación de claude.ai que se descarga en PowerPoint o PDF. Cifras del informe final.

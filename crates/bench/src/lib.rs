@@ -20,6 +20,7 @@ use ir::VerifiedIr;
 use runtime_rs::{Flow, JsonValidator, Mode, Options, XmlValidator};
 
 pub mod generar;
+pub mod generar_xml;
 pub mod graficas;
 pub mod mutar;
 

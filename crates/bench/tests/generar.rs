@@ -89,9 +89,15 @@ fn azar_es_reproducible_y_respeta_el_rango() {
     }
 }
 
+/// Con la IR de un XSD, `generar` delega en el generador XML (F5.4-P1):
+/// un documento con el elemento global.
 #[test]
-fn xsd_no_se_genera() {
+fn xsd_lo_genera_el_generador_xml() {
     let x = r#"<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"><xs:element name="a" type="xs:string"/></xs:schema>"#;
     let (ir, _) = ir_y_automata(x.as_bytes()).expect("tiene M");
-    assert_eq!(generar(&ir, 1), None);
+    let d = generar(&ir, 1).expect("un documento");
+    assert!(
+        d.contains("<a") && d == bench::generar_xml::generar_xml(&ir, 1).unwrap(),
+        "{d}"
+    );
 }

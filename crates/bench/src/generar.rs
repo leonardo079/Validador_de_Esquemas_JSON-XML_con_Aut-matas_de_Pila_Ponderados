@@ -14,8 +14,9 @@
 //!
 //! La profundidad del valor está acotada ([`PROFUNDIDAD`]): pasado el tope se
 //! eligen arreglos y objetos mínimos, así que la recursión de [`Gen::valor`]
-//! es como mucho de ese orden, nunca proporcional a la entrada (D7). Solo
-//! JSON: la IR de XSD (documento, contenido, atributos) queda fuera.
+//! es como mucho de ese orden, nunca proporcional a la entrada (D7). Los
+//! documentos XML los genera [`crate::generar_xml`] (F5.4-P1) con las mismas
+//! rutinas de números y cadenas.
 
 use std::collections::BTreeMap;
 
@@ -65,20 +66,22 @@ impl Azar {
 
 /// Las reglas que se aplican a una instancia (la conjunción).
 #[derive(Default)]
-struct Conj<'a> {
+pub(crate) struct Conj<'a> {
     nodos: Vec<&'a Node>,
-    rechaza: bool,
+    pub(crate) rechaza: bool,
 }
 
-struct Gen<'a> {
-    ir: &'a VerifiedIr,
-    azar: Azar,
+pub(crate) struct Gen<'a> {
+    pub(crate) ir: &'a VerifiedIr,
+    pub(crate) azar: Azar,
+    /// Dialecto de `pattern`: ECMA en JSON Schema, XSD (anclado) en XSD.
+    pub(crate) dialecto: ir::regex::Dialect,
 }
 
 impl<'a> Gen<'a> {
     /// Junta los nodos que se aplican a la misma instancia, sin recursión:
     /// `$ref` y `allOf` enteros, una rama de `anyOf`/`oneOf`.
-    fn conj(&mut self, raices: &[NodeId]) -> Conj<'a> {
+    pub(crate) fn conj(&mut self, raices: &[NodeId]) -> Conj<'a> {
         let mut c = Conj::default();
         let mut pila: Vec<NodeId> = raices.to_vec();
         let mut vistos = std::collections::HashSet::new();
@@ -105,7 +108,7 @@ impl<'a> Gen<'a> {
         c
     }
 
-    fn reglas<'b>(c: &'b Conj<'a>) -> impl Iterator<Item = &'a Rule> + 'b {
+    pub(crate) fn reglas<'b>(c: &'b Conj<'a>) -> impl Iterator<Item = &'a Rule> + 'b {
         c.nodos.iter().flat_map(|n| n.rules.iter().map(|r| &r.rule))
     }
 
@@ -200,7 +203,7 @@ impl<'a> Gen<'a> {
         self.azar.elegir(&permitidos).copied()
     }
 
-    fn numero(&mut self, c: &Conj<'a>, entero: bool) -> Option<String> {
+    pub(crate) fn numero(&mut self, c: &Conj<'a>, entero: bool) -> Option<String> {
         let (mut lo, mut hi) = (f64::NEG_INFINITY, f64::INFINITY);
         let (mut lo_ex, mut hi_ex) = (false, false);
         let mut multiplo: Option<(f64, usize)> = None;
@@ -273,7 +276,7 @@ impl<'a> Gen<'a> {
         None
     }
 
-    fn cadena(&mut self, c: &Conj<'a>) -> Option<String> {
+    pub(crate) fn cadena(&mut self, c: &Conj<'a>) -> Option<String> {
         let mut min = 0u64;
         let mut max: Option<u64> = None;
         let mut patrones = Vec::new();
@@ -281,9 +284,7 @@ impl<'a> Gen<'a> {
             match r {
                 Rule::MinLength(n) => min = min.max(*n),
                 Rule::MaxLength(n) => max = Some(max.map_or(*n, |m| m.min(*n))),
-                Rule::Pattern(p) => {
-                    patrones.push(ir::regex::parse(p, ir::regex::Dialect::Ecma).ok()?)
-                }
+                Rule::Pattern(p) => patrones.push(ir::regex::parse(p, self.dialecto).ok()?),
                 _ => {}
             }
         }
@@ -616,13 +617,19 @@ pub fn literal_json(l: &Literal) -> String {
 
 /// Un payload generado con `semilla` (sin comprobar su validez). `None` si
 /// el generador no supo construir uno (rango vacío, `pattern` sin acierto…).
+///
+/// Con la IR de un XSD, el documento lo genera [`crate::generar_xml`]
+/// (F5.4-P1).
 pub fn generar(ir: &VerifiedIr, semilla: u64) -> Option<String> {
-    if ir.node(NodeId::ROOT).sort != Sort::Json {
-        return None;
+    match ir.node(NodeId::ROOT).sort {
+        Sort::Json => {}
+        Sort::Element => return crate::generar_xml::generar_xml(ir, semilla),
+        Sort::Text => return None,
     }
     let mut g = Gen {
         ir,
         azar: Azar::new(semilla),
+        dialecto: ir::regex::Dialect::Ecma,
     };
     g.valor(&[NodeId::ROOT], 0)
 }

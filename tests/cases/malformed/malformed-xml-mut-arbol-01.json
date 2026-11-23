@@ -1,0 +1,10 @@
+{
+  "_id": "malformed-xml-mut-arbol-01",
+  "category": "malformed",
+  "format": "xml",
+  "description": "El válido de «valid-xml-arbol-recursivo-01» con la malformación «cierre-distinto» (F5.4-P1).",
+  "phase": 5,
+  "schema": "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\u000a  <xs:element name=\"nodo\" type=\"Nodo\"/>\u000a  <xs:complexType name=\"Nodo\">\u000a    <xs:sequence>\u000a      <xs:element name=\"valor\" type=\"xs:int\"/>\u000a      <xs:element name=\"nodo\" type=\"Nodo\" minOccurs=\"0\" maxOccurs=\"unbounded\"/>\u000a    </xs:sequence>\u000a    <xs:attribute name=\"id\" type=\"xs:positiveInteger\" use=\"required\"/>\u000a  </xs:complexType>\u000a</xs:schema>",
+  "payload": "<nodo id=\"90\">\u000a  <valor>-2146817338</valor>\u000a  <nodo id=\"80\">\u000a    <valor>-2146947489</valor>\u000a  </nodo>\u000a</nodox>",
+  "expected": { "valid": false, "errorKind": "syntax" }
+}

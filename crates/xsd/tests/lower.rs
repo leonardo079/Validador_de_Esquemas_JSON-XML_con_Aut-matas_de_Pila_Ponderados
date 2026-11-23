@@ -458,7 +458,7 @@ fn casos_xml() -> Vec<(String, Vec<u8>)> {
 #[test]
 fn esquemas_de_los_casos_bajan() {
     let casos = casos_xml();
-    assert_eq!(casos.len(), 5, "{casos:?}");
+    assert_eq!(casos.len(), 13, "{casos:?}");
     for (nombre, bytes) in casos {
         let v = compilar(&bytes).unwrap_or_else(|e| panic!("{nombre}: {e:?}"));
         let orden: Vec<String> = (0..v.nodes().len()).map(|i| v.location(id(i))).collect();
@@ -485,6 +485,12 @@ fn esquemas_de_los_casos_bajan() {
                 orden,
                 ["#", "#/simpleContent/xs:string", "#/builtin/string"]
             );
+        } else if nombre.contains("arbol") {
+            // El tipo recursivo es un solo nodo: el hijo `nodo` vuelve a él
+            // por una arista, sin copiarlo.
+            assert_eq!(orden[1], "#/complexType/Nodo", "{nombre}");
+            let n = orden.iter().filter(|l| *l == "#/complexType/Nodo").count();
+            assert_eq!(n, 1, "{nombre}: {orden:?}");
         } else {
             assert_eq!(orden[1], "#/element/persona", "{nombre}");
         }

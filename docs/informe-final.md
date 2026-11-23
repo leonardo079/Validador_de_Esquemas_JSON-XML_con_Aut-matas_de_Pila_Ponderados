@@ -25,8 +25,8 @@ línea, columna y JSON Pointer o ruta XML) y la regla incumplida.
 | Memoria | 72-78 KiB fijos, una sola reserva, para cualquier n (la línea base DOM: 64,4 MiB con 10⁵ objetos) | §1.3 |
 | Tamaño de M | de 13 estados y 43 transiciones a 216 y 10 054 (XSD del pedido) | §2.1 |
 | Explosión al determinizar | acotada: `limit` antes de crear el estado 4 097 o de pasar 2²⁰ entradas | §2.2 |
-| Corrección | 78 casos del corpus; intérprete = Rust generado = C generado (con ASan/UBSan); veredicto = línea base | §6 |
-| Pruebas | 850 en `make test`, 7 del lema de bombeo, fuzzing con cuatro objetivos | §5, §6 |
+| Corrección | 86 casos del corpus; intérprete = Rust generado = C generado (con ASan/UBSan); veredicto = línea base | §6 |
+| Pruebas | 854 en `make test`, 7 del lema de bombeo, fuzzing con cuatro objetivos | §5, §6 |
 
 ## 1. Análisis de complejidad
 
@@ -353,11 +353,16 @@ es E3 (§6.3). Lo que se encontró y cómo se cerró:
 
 ## 7. Verificación
 
-- **Corpus** ([`tests/README.md`](../tests/README.md)): 78 casos con esquema, payload y resultado esperado: 22
-  válidos, 30 inválidos, 16 malformados, 8 fuera del DPDA puro y 2 extremos. El intérprete da exactamente lo
-  esperado. El veredicto coincide con la línea base JSON en todos los casos JSON; la clase del error difiere en
-  uno (`extreme-big-number-01`). Están cargados en MongoDB Atlas (F7.2), y `POST /api/tests/run` da 78/78. La
-  carpeta `pumping` del corpus está vacía: el bombeo se genera en `crates/bench` (§5).
+- **Corpus** ([`tests/README.md`](../tests/README.md)): 86 casos con esquema, payload y resultado esperado: 25
+  válidos, 33 inválidos, 18 malformados, 8 fuera del DPDA puro y 2 extremos. De ellos, 15 son XML, con un árbol
+  recursivo. El intérprete da exactamente lo esperado.
+  - **Línea base JSON:** el veredicto coincide en todos los casos JSON; la clase del error difiere en uno
+    (`extreme-big-number-01`).
+  - **Línea base XML (libxml2, en Docker):** coincide en todos los XML.
+  - **Atlas (F7.2):** hay 78 casos cargados y `POST /api/tests/run` da 78/78. Los 8 casos XML añadidos el 22 nov
+    se cargan con `cargo run -p atlas`.
+
+  La carpeta `pumping` del corpus está vacía: el bombeo se genera en `crates/bench` (§5).
 - **Prueba diferencial** (F5.3, [fase5/codegen-c.md](fase5/codegen-c.md)): el intérprete, el Rust generado y el
   C generado (con ASan/UBSan) dan el mismo reporte en el corpus, en las mutaciones de F6.3, en payloads sintéticos
   y en lo que encuentra el fuzzer, con bloques de 1, 7 y 4 096 y los dos modos.
@@ -368,10 +373,13 @@ es E3 (§6.3). Lo que se encontró y cómo se cerró:
   objetivo del 21 nov. En esta última fueron 55 669, 132 773, 226 223 y 221 592 ejecuciones, y quedaron corpus de
   1 060, 724, 2 412 y 2 345 entradas. Los payloads del corpus (hasta 1 000 por formato) se reprodujeron después en
   la prueba diferencial, con el mismo reporte en el intérprete, el Rust y el C.
-- **Generación:** 20 válidos generados desde la IR (F5.4) y 30 inválidos o malformados por mutación (F6.3), todos
-  con doble oráculo: el DPDA y la línea base.
+- **Generación:** cada payload generado tiene doble oráculo, el DPDA y la línea base.
+  - **JSON:** 20 válidos desde la IR (F5.4) y 30 inválidos o malformados por mutación (F6.3).
+  - **XML** (F5.4-P1): documentos válidos, inválidos y malformados desde la IR de un XSD. libxml2 coincide con el
+    DPDA en más de 500, y 6 de ellos están en el corpus
+    ([fase5/generador.md](fase5/generador.md) §6).
 - **Toda la verificación es local** (D32): `make lint` (rustfmt, clippy `-D warnings`, clang-format,
-  `unsafe-check`), `make test` (850 pruebas) y `make docs-check`.
+  `unsafe-check`), `make test` (854 pruebas) y `make docs-check`.
 
 ## 8. Conclusiones
 

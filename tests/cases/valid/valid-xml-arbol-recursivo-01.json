@@ -1,0 +1,13 @@
+{
+  "_id": "valid-xml-arbol-recursivo-01",
+  "category": "valid",
+  "format": "xml",
+  "description": "Árbol recursivo en XSD: un tipo complejo que se contiene a sí mismo (tres niveles, hermanos y atributo requerido en cada nodo).",
+  "phase": 4,
+  "schema": "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\n  <xs:element name=\"nodo\" type=\"Nodo\"/>\n  <xs:complexType name=\"Nodo\">\n    <xs:sequence>\n      <xs:element name=\"valor\" type=\"xs:int\"/>\n      <xs:element name=\"nodo\" type=\"Nodo\" minOccurs=\"0\" maxOccurs=\"unbounded\"/>\n    </xs:sequence>\n    <xs:attribute name=\"id\" type=\"xs:positiveInteger\" use=\"required\"/>\n  </xs:complexType>\n</xs:schema>",
+  "payload": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<nodo id=\"1\">\n  <valor>10</valor>\n  <nodo id=\"2\">\n    <valor>20</valor>\n    <nodo id=\"4\"><valor>40</valor></nodo>\n    <nodo id=\"5\"><valor>50</valor></nodo>\n  </nodo>\n  <nodo id=\"3\">\n    <valor>30</valor>\n  </nodo>\n</nodo>",
+  "expected": {
+    "valid": true,
+    "violations": 0
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "_id": "invalid-mut-xml-arbol-01",
+  "category": "invalid",
+  "format": "xml",
+  "description": "Documento generado desde la IR de «valid-xml-arbol-recursivo-01» con la semilla 1 y el sabotaje «texto-fuera-de-tipo» (F5.4-P1).",
+  "phase": 5,
+  "schema": "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\u000a  <xs:element name=\"nodo\" type=\"Nodo\"/>\u000a  <xs:complexType name=\"Nodo\">\u000a    <xs:sequence>\u000a      <xs:element name=\"valor\" type=\"xs:int\"/>\u000a      <xs:element name=\"nodo\" type=\"Nodo\" minOccurs=\"0\" maxOccurs=\"unbounded\"/>\u000a    </xs:sequence>\u000a    <xs:attribute name=\"id\" type=\"xs:positiveInteger\" use=\"required\"/>\u000a  </xs:complexType>\u000a</xs:schema>",
+  "payload": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\u000a<nodo id=\"80\">\u000a  <valor>-2146817338</valor>\u000a  <nodo id=\"53\">\u000a    <valor>no-es-un-valor</valor>\u000a  </nodo>\u000a</nodo>",
+  "expected": { "valid": false, "errorKind": "schema", "violations": 1, "pointer": "/nodo/nodo/valor" }
+}

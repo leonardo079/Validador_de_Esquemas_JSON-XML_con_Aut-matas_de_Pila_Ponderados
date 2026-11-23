@@ -639,6 +639,9 @@ remite a ellas.
   `scripts/test-baseline-xml.ps1`, que hace lo mismo flag por flag. Leonardo debe
   correr `make test-baseline-xml` en su máquina Linux y confirmarlo en el punto de
   control tras F6.7a y F6.7b (con SELinux, montaje `:ro,z`, §7.3).
+  **Confirmado el 22 nov:** `make test-baseline-xml` corre en verde en Linux (Debian 13,
+  sin SELinux): construye la imagen y pasa las pruebas y clippy de la línea base XML,
+  también con los 8 casos XML nuevos del corpus (F5.4-P1).
 - **Arreglo propuesto:** incluirlo en la confirmación de U2, U8 y U10 con Leonardo
   (punto de control tras F6.7a y F6.7b de `tasks/todo.md`) y registrar B27-B38 en el
   plan general al cerrar, como D50.
