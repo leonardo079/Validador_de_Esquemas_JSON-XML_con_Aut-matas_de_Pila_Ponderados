@@ -61,7 +61,8 @@ export function Generado({ esquema, payload, alCambiarPayload }: Props) {
     setError(null);
     setFlujo({});
     const final = await validarEnFlujo(esquema, payload, Math.max(1, bloque), (m) =>
-      setFlujo((f) => (m.type === "ready" ? { ...f, listo: m } : { ...f, ultimo: m })),
+      // Solo los `progress` mueven la barra: el `report` final no la vacía.
+      setFlujo((f) => (m.type === "ready" ? { ...f, listo: m } : m.type === "progress" ? { ...f, ultimo: m } : f)),
     );
     setFlujo((f) => ({ ...f, final }));
     setCargando("");

@@ -59,6 +59,18 @@ describe("elementos de Cytoscape", () => {
     expect(el.find((e) => e.data.id === "q1")!.classes).toContain("acepta");
     expect(el.find((e) => e.data.id === "desapila")!.classes).toContain("especial");
   });
+
+  it("junta las transiciones paralelas en una arista y nombra como mucho cuatro", () => {
+    const edges = ["a", "b", "c", "d", "e", "f"].map((l, i) => ({ id: `p${i}`, source: "q0", target: "q1", label: l }));
+    const r = interpretarGrafo(200, JSON.stringify({ ...GRAFO, edges: [...GRAFO.edges, ...edges] }));
+    if (!r.ok) throw new Error("grafo");
+    const aristas = elementos(r.datos).filter((e) => e.data.source !== undefined);
+    expect(aristas).toHaveLength(2);
+    const par = aristas.find((e) => e.data.target === "q1")!;
+    expect(par.data.cuantas).toBe(7);
+    expect(par.data.label).toBe("{ / apila\na\nb\nc\n+3 más");
+    expect(par.data.todas).toBe("{ / apila · a · b · c · d · e · f");
+  });
 });
 
 const ARBOL = {
