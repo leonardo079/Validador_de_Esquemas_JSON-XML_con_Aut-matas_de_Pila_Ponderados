@@ -676,8 +676,13 @@ fn cero_reservas_en_todo_el_corpus_y_en_profundidad() {
             continue;
         };
         let texto = String::from_utf8(c.schema_text.clone()).unwrap();
+        // Un caso XML trae un XSD o una DTD: lo decide `dtd::formato` (D86),
+        // como en `tests/corpus.rs`.
         let ir = match c.format {
             Format::Json => ir_de(&texto),
+            Format::Xml if dtd::formato(&c.schema_text) == dtd::Formato::Dtd => {
+                dtd::compile(&c.schema_text).unwrap_or_else(|e| panic!("{e:?}"))
+            }
             Format::Xml => xsd_de(&texto),
         };
         let Ok(a) = automaton::build(&ir) else {
