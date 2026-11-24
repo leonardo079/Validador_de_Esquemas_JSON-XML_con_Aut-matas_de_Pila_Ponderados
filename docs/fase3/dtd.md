@@ -236,5 +236,5 @@ AFD, gramáticas e índice. También en [../arquitectura.md](../arquitectura.md)
 
 Falta, fuera del código:
 
-- fusionar la rama `DTD` con `main`, desplegar y cargar Atlas con los 94 casos, en ese orden;
+- (hecho el 24 nov) la rama `DTD` se fusionó con `main`, se desplegó y Atlas tiene los 94 casos: 94/94 en producción;
 - correr el fuzzing `esquema_dtd` (*nightly*).

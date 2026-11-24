@@ -1117,8 +1117,7 @@ el orquestador, sin agentes (decisión del usuario).
   (`tests/schemas/dtd/xsd-equivalente`). 2 422 documentos generados desde las dos IR, con el mismo veredicto y la
   misma clase de error.
 - [x] `docs/fase3/dtd.md` §6. `lint OK`.
-- [ ] **Atlas:** cargar los 94 casos (`cargo run -p atlas`) **después** de fusionar con `main` y desplegar. Hacerlo
-  antes rompería el 86/86 de la demo, porque la EC2 ejecuta el servidor de `main`.
+- [x] **Atlas (24 nov):** tras la fusión en `main` (Leonardo, `4dd713d`) y el despliegue, `cargo run -p atlas` cargó 8 casos nuevos, 0 actualizados y 86 sin cambios: 94 en Atlas. En producción, `POST /api/tests/run` da 94/94, y `/api/validate` con la DTD del pedido (C y Rust en el sandbox de la EC2) coincide con el intérprete.
 
 **Pendiente para DTD.6:** resuelto en DTD.6 (abajo).
 
