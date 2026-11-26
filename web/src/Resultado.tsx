@@ -38,7 +38,7 @@ export function Resultado({ resultado, cargando, alElegirError, formato }: Props
 
   if (cargando) return <p className="estado">Compilando…</p>;
   if (resultado === null) {
-    return <p className="estado">Escribe o carga un esquema y pulsa «Compilar».</p>;
+    return <p className="estado vacio">Escribe o carga un esquema y pulsa «Compilar». El servidor lo analiza, lo traduce a la IR y construye su autómata de pila M.</p>;
   }
 
   if (resultado.tipo === "fallo") {
@@ -84,6 +84,20 @@ export function Resultado({ resultado, cargando, alElegirError, formato }: Props
   return (
     <div className="caja ok">
       <h2>Esquema válido ({etiqueta(resultado.format, formato)})</h2>
+      <ol className="tuberia" aria-label="Lo que hizo el compilador">
+        <li>
+          <span className="rotulo">esquema</span>
+          <b>{etiqueta(resultado.format, formato)}</b>
+        </li>
+        <li>
+          <span className="rotulo">IR v2</span>
+          <b>{resultado.irBytes != null ? `${resultado.irBytes} bytes` : "verificada"}</b>
+        </li>
+        <li>
+          <span className="rotulo">autómata M</span>
+          <b>{a.status === "ok" ? `${a.summary.states} estados` : a.status === "limit" ? "límite" : "pendiente"}</b>
+        </li>
+      </ol>
       <p>{resultado.summary}</p>
       <p className="tenue id">
         id <code>{resultado.id}</code>

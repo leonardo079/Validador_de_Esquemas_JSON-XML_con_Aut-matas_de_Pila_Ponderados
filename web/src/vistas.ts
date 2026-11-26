@@ -78,12 +78,37 @@ export type VeredictoLineaBase =
     }
   | { disponible: false; motivo: string };
 
+/** Lo medido en vivo de un validador (`server::medir`, binario `medir`). */
+export interface Medido {
+  valido: boolean;
+  violaciones: number | null;
+  segundos: number;
+  mbPorSegundo: number;
+  nsPorByte: number;
+  asignaciones: number;
+  picoBytes: number;
+  repeticiones: number;
+}
+
+/** Medición en vivo del panel de comparación, o por qué no la hay. */
+export type Medicion =
+  | {
+      disponible: true;
+      bytes: number;
+      profundidad: number;
+      dpda: Medido;
+      lineaBase: Medido | null;
+      motivoLineaBase: string | null;
+    }
+  | { disponible: false; motivo: string };
+
 export interface Comparacion {
   format: string;
   payloadBytes: number;
   dpda: VeredictoDpda;
   baseline: VeredictoLineaBase;
   agree: boolean | null;
+  medicion: Medicion;
 }
 
 /** Un fallo de cualquier vista, con un mensaje para mostrar. */
@@ -178,6 +203,35 @@ export function interpretarArbol(estado: number, cuerpo: string): Respuesta<Nodo
   return { ok: true, datos: v };
 }
 
+function interpretarMedido(m: unknown): Medido | null {
+  if (!esObjeto(m) || typeof m.valido !== "boolean") return null;
+  return {
+    valido: m.valido,
+    violaciones: numeroONulo(m.violaciones),
+    segundos: numero(m.segundos),
+    mbPorSegundo: numero(m.mbPorSegundo),
+    nsPorByte: numero(m.nsPorByte),
+    asignaciones: numero(m.asignaciones),
+    picoBytes: numero(m.picoBytes),
+    repeticiones: numero(m.repeticiones),
+  };
+}
+
+/** El campo `measurement` de `POST /api/compare` (todo texto o número). */
+export function interpretarMedicion(m: unknown): Medicion {
+  if (!esObjeto(m)) return { disponible: false, motivo: "el servidor no envió la medición en vivo" };
+  const dpda = interpretarMedido(m.dpda);
+  if (!dpda) return { disponible: false, motivo: texto(m.error, "medición en vivo no disponible") };
+  return {
+    disponible: true,
+    bytes: numero(m.bytes),
+    profundidad: numero(m.profundidad),
+    dpda,
+    lineaBase: interpretarMedido(m.lineaBase),
+    motivoLineaBase: textoONulo(m.motivoLineaBase),
+  };
+}
+
 export function interpretarComparacion(estado: number, cuerpo: string): Respuesta<Comparacion> {
   const v = leer(cuerpo);
   if (estado !== 200 || !esObjeto(v) || !esObjeto(v.dpda)) return { ok: false, fallo: fallo(estado, v) };
@@ -222,6 +276,7 @@ export function interpretarComparacion(estado: number, cuerpo: string): Respuest
       },
       baseline: linea,
       agree: typeof v.agree === "boolean" ? v.agree : null,
+      medicion: interpretarMedicion(v.measurement),
     },
   };
 }

@@ -11,8 +11,8 @@ WORKDIR /src
 COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    cargo build --release --locked -p server \
-    && cp target/release/server /usr/local/bin/server
+    cargo build --release --locked -p server --bin server -p bench --bin medir \
+    && cp target/release/server target/release/medir /usr/local/bin/
 
 # Etapa 2: solo el binario sobre Debian 13 slim (la misma base que la etapa 1,
 # así la glibc coincide). Usuario sin privilegios; el sistema de archivos lo
@@ -20,6 +20,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM debian:trixie-slim
 RUN useradd --uid 10002 --no-create-home --shell /usr/sbin/nologin servidor
 COPY --from=compilar /usr/local/bin/server /usr/local/bin/server
+# Medición en vivo del panel de comparación (`server::medir`): proceso aparte
+# con `dhat` como asignador, junto al servidor.
+COPY --from=compilar /usr/local/bin/medir /usr/local/bin/medir
 # D85: el cliente de Docker (binario estático) para el sandbox de F7.3. Solo
 # se usa si Compose monta el socket (`docker-compose.sandbox.yml`); sin él,
 # `SANDBOX` no está puesto y `/api/validate` responde 503.

@@ -90,6 +90,12 @@ export function Automata({ esquema }: Props) {
     }
   };
 
+  // Se dibuja al abrir la pestaña y cada vez que cambia el esquema (p. ej., al
+  // elegir otro ejemplo): el botón queda para volver a construirlo.
+  useEffect(() => {
+    void cargar();
+  }, [esquema]);
+
   useEffect(() => {
     if (!grafo || !contenedor.current) return;
     const p = paleta(oscuro);
@@ -107,7 +113,7 @@ export function Automata({ esquema }: Props) {
             "text-wrap": "wrap",
             "text-max-width": "110px",
             "font-size": 11,
-            "font-family": '"IBM Plex Sans", system-ui, sans-serif',
+            "font-family": '"Manrope Variable", system-ui, sans-serif',
             color: p.tinta,
             "text-valign": "bottom",
             "text-margin-y": 4,
@@ -220,7 +226,7 @@ export function Automata({ esquema }: Props) {
     <div className="vista">
       <div className="barra">
         <button type="button" className="principal" onClick={cargar} disabled={cargando}>
-          {cargando ? "Construyendo…" : "Dibujar el autómata del esquema"}
+          {cargando ? "Construyendo…" : "Volver a dibujar"}
         </button>
         {grafo && (
           <>
@@ -244,7 +250,7 @@ export function Automata({ esquema }: Props) {
         )}
       </div>
       {error && <p className="error">{error.mensaje}</p>}
-      {!grafo && !error && <p className="tenue">Compila el esquema del editor y dibuja su DPDA (M).</p>}
+      {!grafo && !error && <p className="tenue">{cargando ? "Construyendo M…" : "Elige o escribe un esquema en «Esquema»."}</p>}
       <div className="grafo">
         <div ref={contenedor} className="lienzo" aria-label="Grafo del autómata" />
         {grafo && (

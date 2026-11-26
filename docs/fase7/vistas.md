@@ -24,7 +24,7 @@ el visto bueno el 20 nov (D42, D70).** Los tres pasan por el mismo camino que `P
 | --- | --- | --- | --- |
 | `POST /api/automaton` | El esquema crudo (JSON Schema, XSD o DTD; D22, D86) | `{format, states, transitions, start, groups, truncated, nodes, edges}` | 422 `schema` (como `/api/schemas`); 422 `automaton` con `status` `pending` o `limit` |
 | `POST /api/derivation` | El payload crudo (JSON o XML) | El árbol de F5.5: `{name, kind, start, end, lexeme?, pointer?, children?}` | 422 `derivation` con `kind` (`lexical`, `syntax`, `too-many-nodes`, `too-deep`), `offset` y `message` |
-| `POST /api/compare` | `{"schema": "…", "payload": "…"}` (JSON con dos cadenas) | `{format, payloadBytes, dpda, baseline, agree}` | 400 `request` (cuerpo que no es ese JSON); 422 como `/api/automaton` |
+| `POST /api/compare` | `{"schema": "…", "payload": "…"}` (JSON con dos cadenas) | `{format, payloadBytes, dpda, baseline, agree, measurement}` | 400 `request` (cuerpo que no es ese JSON); 422 como `/api/automaton` |
 
 **Grafo.** Sale de `Automaton::write_dot` (`crates/automaton`, determinista). El servidor lo traduce a nodos y
 aristas, sin duplicar la forma de las etiquetas del constructor:
@@ -46,17 +46,33 @@ Se envían como mucho 400 nodos y 1 500 aristas, con `truncated: true` si M es m
   con puntero, el error de lectura y los tiempos. Para XSD no hay línea base en el servidor, porque la de XML
   necesita libxml2 (D54). Entonces `baseline` es `{"error": …}` y `agree` es `null`.
 
-Los tiempos son de **una sola** medición, solo orientativos. Las medidas con repeticiones (MB/s, ns/byte, pico,
-asignaciones) del corpus y del bombeo están en [../fase6/metricas.md](../fase6/metricas.md).
+`compileNs` y `validateNs` son de **una sola** pasada, solo orientativos. La medición con repeticiones va en
+`measurement` (enunciado, objetivo 3: «medir en vivo rendimiento, memoria y asignaciones frente a validadores
+basados en AST»):
+
+- la hace el binario `medir` (`crates/bench/src/bin/medir.rs`), que usa `dhat` como asignador global y corre
+  como **proceso aparte** (`server/src/medir.rs`): cada medición tiene su propio montón y el servidor no necesita
+  asignador global ni `unsafe` (D52). La imagen Docker lo copia junto al servidor;
+- devuelve `{bytes, profundidad, dpda, lineaBase, motivoLineaBase}`; `dpda` y `lineaBase` llevan `valido`,
+  `violaciones`, `segundos` (mediana de 3 a 15 repeticiones en unos 400 ms), `mbPorSegundo`, `nsPorByte`,
+  `asignaciones` y `picoBytes`. Para XML `lineaBase` es `null` y `motivoLineaBase` dice por qué (D54);
+- tiene un tope de 7 s, menor que el plazo de la petición; si falta el binario o se pasa del tope,
+  `measurement` es `{"error": …}` y el resto de la respuesta no cambia.
+
+Con 10 000 objetos (la «prueba de carga» de la web, 800 KB) el DPDA hace 1 asignación con 74 KiB de pico; la
+línea base, unas 70 000 asignaciones y unos 7 MiB. En rendimiento la línea base es más rápida (unos 70 MB/s
+frente a unos 35 MB/s en la máquina de pruebas): la ventaja del DPDA es la memoria fija y el streaming. Las medidas del corpus y del bombeo siguen en
+[../fase6/metricas.md](../fase6/metricas.md).
 
 Código: `server/src/vistas.rs` y `server/src/api.rs` (`procesar`, que ahora comparte `POST /api/schemas`).
-Pruebas: `server/tests/vistas.rs`, 10 pruebas:
+Pruebas: `server/tests/vistas.rs`, 11 pruebas:
 
 - el grafo contiene todos los estados y cada arista une nodos enviados;
 - el XSD se recorta;
 - el árbol de JSON y de XML;
 - los errores con su offset;
 - la comparación válida, inválida (2 = 2), malformada y XSD sin línea base;
+- la medición en vivo: el DPDA hace como mucho 2 asignaciones y la línea base más de 2 000 con 2 000 objetos;
 - un cuerpo mal formado da 400;
 - el tope de subida en las tres rutas;
 - un `GET` da 405.

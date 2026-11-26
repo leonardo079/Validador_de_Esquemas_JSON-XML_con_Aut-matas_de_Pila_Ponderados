@@ -326,6 +326,12 @@ pub fn comparar(cuerpo: &[u8]) -> Result<String, Fallo> {
         "dpda": dpda,
         "baseline": linea_base,
         "agree": coinciden,
+        // Medición en vivo, en un proceso aparte (`medir.rs`): tiempo con
+        // repeticiones, MB/s, pico de memoria y asignaciones de los dos.
+        "measurement": crate::medir::medir(
+            std::str::from_utf8(esquema).unwrap_or_default(),
+            std::str::from_utf8(payload).unwrap_or_default(),
+        ),
     })
     .to_string())
 }

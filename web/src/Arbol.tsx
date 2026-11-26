@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { hierarchy, tree, type HierarchyPointNode } from "d3-hierarchy";
 import { pedirArbol, type FalloVista, type NodoArbol } from "./vistas";
+import { CampoPayload } from "./CampoPayload";
+import type { Muestra } from "./ejemplos";
 
 // Vista «árbol de derivación» (F7.6 sobre F5.5): el árbol de
 // `POST /api/derivation` con el diseño de `d3-hierarchy` (`tree`) dibujado en
@@ -44,9 +46,11 @@ const corto = (s: string, n = 14) => (s.length > n ? `${s.slice(0, n - 1)}…` :
 interface Props {
   payload: string;
   alCambiarPayload: (p: string) => void;
+  /** Muestras del ejemplo elegido en «Esquema» (válido, con violaciones, malformado). */
+  muestras?: Muestra[];
 }
 
-export function Arbol({ payload, alCambiarPayload }: Props) {
+export function Arbol({ payload, alCambiarPayload, muestras }: Props) {
   const [raiz, setRaiz] = useState<NodoArbol | null>(null);
   const [error, setError] = useState<FalloVista | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -66,18 +70,31 @@ export function Arbol({ payload, alCambiarPayload }: Props) {
     }
   };
 
+  // Al abrir la pestaña se deriva el payload actual.
+  useEffect(() => {
+    void cargar();
+  }, []);
+
   return (
     <div className="vista">
-      <label className="payload">
-        Payload (JSON o XML):
-        <textarea value={payload} onChange={(e) => alCambiarPayload(e.target.value)} rows={4} spellCheck={false} />
-      </label>
+      <CampoPayload payload={payload} alCambiar={alCambiarPayload} muestras={muestras} filas={4} />
       <div className="barra">
         <button type="button" className="principal" onClick={cargar} disabled={cargando}>
-          {cargando ? "Derivando…" : "Árbol de derivación"}
+          Actualizar el árbol de derivación
         </button>
-        {diseno && <span className="tenue">{diseno.nodos.length} nodos (gramática LL(1) de la Fase 2)</span>}
+        {cargando ? <span className="tenue">Derivando…</span> : diseno && <span className="tenue">{diseno.nodos.length} nodos · gramática LL(1) de la Fase 2 · pulsa un nodo para ver sus bytes</span>}
       </div>
+      <ul className="leyenda-arbol" aria-label="Leyenda">
+        <li>
+          <span className="forma no-terminal" /> no terminal (una producción de la gramática)
+        </li>
+        <li>
+          <span className="forma terminal" /> terminal, con su lexema
+        </li>
+        <li>
+          <span className="forma vacio">ε</span> producción vacía
+        </li>
+      </ul>
       {error && (
         <p className="error">
           {error.mensaje}

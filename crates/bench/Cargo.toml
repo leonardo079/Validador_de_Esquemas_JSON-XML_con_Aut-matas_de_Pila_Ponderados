@@ -19,6 +19,8 @@ baseline.workspace = true
 # Solo el binario `metricas` lo usa como asignador global (F6.5): cuenta
 # asignaciones, bytes y el pico sin `unsafe` en este crate (D52).
 dhat = "=0.3.3"
+# `medir` (panel de comparación en vivo) lee y escribe JSON.
+serde_json = "1.0.154"
 
 [features]
 default = []

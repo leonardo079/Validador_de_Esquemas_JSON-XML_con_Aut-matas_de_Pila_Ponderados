@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bytes, duracion, interpretarArbol, interpretarComparacion, interpretarGrafo } from "./vistas";
+import { bytes, duracion, interpretarArbol, interpretarComparacion, interpretarGrafo, interpretarMedicion } from "./vistas";
 import { elementos } from "./Automata";
 import { disenar } from "./Arbol";
 
@@ -176,6 +176,34 @@ describe("interpretarComparacion", () => {
     expect(r.datos.dpda.violations).toBeNull();
     expect(r.datos.baseline).toEqual({ disponible: false, motivo: "sin libxml2" });
     expect(r.datos.agree).toBeNull();
+  });
+  it("lee la medición en vivo, o su motivo si falta", () => {
+    const medido = {
+      valido: false, violaciones: 1, segundos: 0.002, mbPorSegundo: 29.5, nsPorByte: 33.9,
+      asignaciones: 1, picoBytes: 75776, repeticiones: 15,
+    };
+    const r = interpretarComparacion(
+      200,
+      JSON.stringify({
+        ...cuerpo,
+        measurement: {
+          bytes: 17, profundidad: 2, dpda: medido,
+          lineaBase: { ...medido, asignaciones: 40015, picoBytes: 13_700_000 }, motivoLineaBase: null,
+        },
+      }),
+    );
+    if (!r.ok) throw new Error("comparación");
+    const m = r.datos.medicion;
+    expect(m.disponible).toBe(true);
+    if (!m.disponible) return;
+    expect(m.dpda.asignaciones).toBe(1);
+    expect(m.lineaBase?.asignaciones).toBe(40015);
+    expect(m.profundidad).toBe(2);
+    expect(interpretarMedicion({ error: "falta el binario `medir`" })).toEqual({
+      disponible: false,
+      motivo: "falta el binario `medir`",
+    });
+    expect(interpretarMedicion(undefined).disponible).toBe(false);
   });
   it("un 400 da su mensaje", () => {
     const r = interpretarComparacion(400, JSON.stringify({ error: "request", message: "faltan `schema` o `payload`" }));

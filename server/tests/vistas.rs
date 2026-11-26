@@ -177,3 +177,35 @@ async fn get_en_una_vista_da_405() {
     let r = app().oneshot(req).await.unwrap();
     assert_eq!(r.status(), StatusCode::METHOD_NOT_ALLOWED);
 }
+
+/// Medición en vivo (objetivo 3 del enunciado): con el binario `medir`
+/// compilado (`cargo build -p bench --bin medir`), el panel trae el pico de
+/// memoria y las asignaciones reales de los dos validadores. El DPDA reserva
+/// una vez su memoria fija; la línea base, un nodo por valor. Sin el
+/// binario, el campo es un error y el resto de la respuesta no cambia.
+#[tokio::test]
+async fn comparar_trae_la_medicion_en_vivo() {
+    let payload = format!("[{}]", vec![r#"{"a":1}"#; 2000].join(","));
+    let esquema =
+        r#"{"type":"array","items":{"type":"object","properties":{"a":{"type":"integer"}}}}"#;
+    let (estado, v) = pedir(
+        &app(),
+        "/api/compare",
+        json!({"schema": esquema, "payload": payload}).to_string(),
+    )
+    .await;
+    assert_eq!(estado, StatusCode::OK, "{v}");
+    let m = &v["measurement"];
+    if server::medir::binario().is_none() {
+        assert!(m["error"].is_string(), "{m}");
+        return;
+    }
+    assert_eq!(m["bytes"], payload.len(), "{m}");
+    let (d, lb) = (&m["dpda"], &m["lineaBase"]);
+    assert_eq!(d["valido"], true);
+    assert_eq!(lb["valido"], true);
+    assert!(d["asignaciones"].as_u64().unwrap() <= 2, "{d}");
+    assert!(lb["asignaciones"].as_u64().unwrap() > 2000, "{lb}");
+    assert!(d["picoBytes"].as_u64().unwrap() < 128 << 10, "{d}");
+    assert!(d["mbPorSegundo"].as_f64().unwrap() > 0.0);
+}

@@ -15,6 +15,7 @@ pub mod casos;
 pub mod compilar;
 pub mod flujo;
 pub mod generado;
+pub mod medir;
 pub mod sandbox;
 pub mod vistas;
 pub mod zip;

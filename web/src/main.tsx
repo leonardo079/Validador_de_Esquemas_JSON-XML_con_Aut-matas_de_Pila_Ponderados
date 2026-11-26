@@ -2,14 +2,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./monaco";
 import { App } from "./App";
-// IBM Plex (Sans, Serif y Mono), empaquetada con la app: la CSP no admite
-// fuentes de otro origen.
-import "@fontsource/ibm-plex-sans/400.css";
-import "@fontsource/ibm-plex-sans/500.css";
-import "@fontsource/ibm-plex-sans/600.css";
-import "@fontsource/ibm-plex-serif/500.css";
-import "@fontsource/ibm-plex-serif/400-italic.css";
+// Fuentes empaquetadas con la app (la CSP no admite otro origen): Manrope
+// (variable) para la interfaz y las cifras, e IBM
+// Plex Mono para el código, los bytes y los punteros.
+import "@fontsource-variable/manrope/wght.css";
 import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
 import "./estilos.css";
 
 createRoot(document.getElementById("raiz")!).render(

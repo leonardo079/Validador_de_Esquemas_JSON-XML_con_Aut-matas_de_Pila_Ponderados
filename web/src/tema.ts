@@ -31,29 +31,29 @@ export interface Paleta {
   trazos: string[];
 }
 
-const TRAZOS_CLARO = ["#0d7377", "#2e7d4f", "#9a6b00", "#a3416e", "#4a55a8", "#167a6e", "#b0452c", "#7048a0"];
-const TRAZOS_OSCURO = ["#4cbfba", "#5cc98a", "#e0b04a", "#e07aa6", "#8f9bf0", "#52c7b5", "#ff8a73", "#b896ea"];
+const TRAZOS_CLARO = ["#1f5fae", "#1d7a5f", "#5b4fb0", "#0e7c8c", "#3d6a99", "#7a5c9e", "#2f7d8a", "#566b84"];
+const TRAZOS_OSCURO = ["#6da7ee", "#4cc3a0", "#a99cf0", "#4fc3d4", "#86aedb", "#bb9ee0", "#6cc7c9", "#9fb0c6"];
 
 export function paleta(oscuro: boolean): Paleta {
   return oscuro
     ? {
-        panel: "#13181f",
-        tinta: "#e3e8ee",
-        grafito: "#95a1b0",
-        acento: "#4cbfba",
-        ok: "#5cc98a",
-        error: "#ff8a73",
-        grupos: ["#173338", "#1f3328", "#3a311a", "#3a2230", "#25294a", "#1d3a3a", "#3d2421", "#2f2540"],
+        panel: "#0f1621",
+        tinta: "#e2e8f0",
+        grafito: "#8b98aa",
+        acento: "#6da7ee",
+        ok: "#4cc3a0",
+        error: "#f08a75",
+        grupos: ["#13233a", "#10291f", "#1f1c3a", "#0f2a30", "#172537", "#251c33", "#122b2e", "#1a222e"],
         trazos: TRAZOS_OSCURO,
       }
     : {
         panel: "#ffffff",
-        tinta: "#18202b",
-        grafito: "#5d6877",
-        acento: "#0d7377",
-        ok: "#2e7d4f",
-        error: "#b8321a",
-        grupos: ["#e3f1f1", "#e5f2e9", "#f7efd9", "#f5e4ec", "#e6e8f7", "#dff3f0", "#f7e3df", "#ede6f5"],
+        tinta: "#0f1b2d",
+        grafito: "#5d6b7e",
+        acento: "#1f5fae",
+        ok: "#1d7a5f",
+        error: "#c2412d",
+        grupos: ["#e9f0f9", "#e5f3ee", "#eeebfa", "#e2f3f5", "#e8eef6", "#f1ebf7", "#e3f2f3", "#edf0f4"],
         trazos: TRAZOS_CLARO,
       };
 }

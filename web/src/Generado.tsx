@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { CampoPayload } from "./CampoPayload";
+import type { Muestra } from "./ejemplos";
 import {
   bytes,
   descargarCodigo,
@@ -30,9 +32,11 @@ interface Props {
   esquema: string;
   payload: string;
   alCambiarPayload: (p: string) => void;
+  /** Muestras del ejemplo elegido en «Esquema» (válido, con violaciones, malformado). */
+  muestras?: Muestra[];
 }
 
-export function Generado({ esquema, payload, alCambiarPayload }: Props) {
+export function Generado({ esquema, payload, alCambiarPayload, muestras }: Props) {
   const [lang, setLang] = useState<Lenguaje>("c");
   const [error, setError] = useState<FalloVista | null>(null);
   const [cargando, setCargando] = useState("");
@@ -72,12 +76,14 @@ export function Generado({ esquema, payload, alCambiarPayload }: Props) {
   const ultimo = flujo?.ultimo?.type === "progress" ? flujo.ultimo : null;
   return (
     <div className="vista">
-      <label className="payload">
-        Payload (JSON o XML):
-        <textarea value={payload} onChange={(e) => alCambiarPayload(e.target.value)} rows={4} spellCheck={false} />
-      </label>
+      <CampoPayload payload={payload} alCambiar={alCambiarPayload} muestras={muestras} filas={4} />
 
-      <h3>Validador generado</h3>
+      <section className="tarjeta">
+        <h3>Validador generado</h3>
+        <p className="tenue explica">
+          M traducido a C11 o a Rust sin dependencias: una tabla de transiciones y una pila de tamaño fijo. Se descarga
+          como ZIP o se compila y ejecuta en un sandbox aislado, comparando su veredicto con el del intérprete.
+        </p>
       <div className="barra">
         <label>
           Lenguaje:{" "}
@@ -126,7 +132,14 @@ export function Generado({ esquema, payload, alCambiarPayload }: Props) {
         </table>
       )}
 
-      <h3>Validación en streaming (WebSocket)</h3>
+      </section>
+
+      <section className="tarjeta">
+        <h3>Validación en streaming (WebSocket)</h3>
+        <p className="tenue explica">
+          El payload viaja en bloques del tamaño que elijas; M avanza con cada bloque sin guardar los anteriores, con
+          la misma memoria fija. Con un bloque de 1 byte el veredicto es el mismo.
+        </p>
       <div className="barra">
         <label>
           Bloque:{" "}
@@ -169,6 +182,7 @@ export function Generado({ esquema, payload, alCambiarPayload }: Props) {
           {flujo.final?.type === "error" && <p className="error">{flujo.final.message}</p>}
         </div>
       )}
+      </section>
       {error && <p className="error">{error.mensaje}</p>}
     </div>
   );
