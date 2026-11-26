@@ -1154,3 +1154,30 @@ el orquestador, sin agentes (decisión del usuario).
 3. cargar Atlas con los 94 casos (`cargo run -p atlas`).
 
 Opcional: un `security-auditor` sobre lo de la DTD y correr `esquema_dtd` (*nightly*).
+
+## Tarea DOC.1: documentación técnica rehecha desde el código — HECHA (25 nov; Leonardo)
+
+Pedida por Leonardo: rehacer el entregable 1 fase por fase según el §3 del enunciado, sacado del **código** y no de
+los documentos viejos, en una carpeta nueva (los `docs/faseN/` no se tocan; decidir después si se borran).
+
+- [x] Índice, mapa del entregable 1 y definición formal del lenguaje. — `docs/tecnica/README.md`
+- [x] Fase 1: AFD de UTF-8, JSON, XML y DTD (estados y clases leídos de las tablas), gramáticas regulares derivadas de
+  los AFD, lexer del esquema, streaming. — `docs/tecnica/fase1-lexico.md`
+- [x] Fase 2: GLC de JSON (con la versión no LL(1)), XML (con la prueba por bombeo de que la igualdad de nombres no es
+  libre de contexto), JSON Schema, XSD y DTD; parsers; árboles de derivación. — `docs/tecnica/fase2-sintactico.md`
+- [x] Fase 3: meta-esquema, `$ref`, ciclos (Tarjan), IR e invariantes I1–I14, clasificación (a)/(b)/(c) de
+  `RuleKind::classification`, `pattern`, frontales XSD y DTD. — `docs/tecnica/fase3-semantico.md`
+- [x] Fase 4: M como tablas, pesos tropicales y costos, construcción por conjuntos canónicos, `objeto-cerrado` estado
+  por estado (pesos comprobados con el validador generado), combinadores con salidas y puertas, Glushkov con
+  contadores, Hopcroft, `determinism::check`, tamaños y topes. — `docs/tecnica/fase4-automata.md`
+- [x] Fase 5: emisores Rust y C, API C-ABI, ejemplo compilado con `gcc` y `rustc`, prueba diferencial, generadores;
+  WASM no hecho (E8). — `docs/tecnica/fase5-codigo.md`
+- [x] Fase 6: streaming, reporte con JSON Pointer, límites, métricas **medidas de nuevo** (corpus y bombeo) y gráficas
+  nuevas, pruebas de bombeo, fuzzing, mitigaciones. — `docs/tecnica/fase6-tiempo-real.md`, `docs/tecnica/graficas/`
+- [x] Fase 7: API, WebSocket, sandbox, web, Atlas, despliegue (`/api/health` comprobado en producción). —
+  `docs/tecnica/fase7-web.md`
+- [x] Arquitectura (dependencias de `cargo metadata`). — `docs/tecnica/arquitectura.md`
+- [x] Los diagramas y tablas LL(1) enlazados se regeneraron y coinciden byte a byte con los del repositorio (sin
+  `make`, a mano); enlaces relativos comprobados.
+
+Sin cambios de código. Sin `/autodev` (a pedido del usuario). `docs/00-alcance.md` no se tocó (interfaz compartida).
