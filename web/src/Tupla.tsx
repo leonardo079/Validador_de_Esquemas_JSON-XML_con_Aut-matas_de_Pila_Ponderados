@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ResumenAutomata } from "./api";
 
-// La definición formal M = (Q, Σ, Γ, δ, q0, Z0, F) de la cabecera, interactiva:
+// La definición formal M = (Q, Σ, Γ, δ, q0, Z0, F, w) del enunciado, interactiva:
 // cada símbolo explica qué es y, si hay un esquema compilado, cuánto vale en el
 // autómata de ese esquema. Al pasar el ratón o enfocar se muestra; al pulsar
 // queda fijo (Esc o un clic fuera lo cierra).
@@ -82,6 +82,13 @@ const SIMBOLOS: Simbolo[] = [
     nombre: "Estados de aceptación",
     texto:
       "Si la entrada termina en uno de ellos con la pila en Z₀, el payload está bien formado; su peso dice si cumple el esquema (0) o cuántas violaciones tiene.",
+  },
+  {
+    id: "w",
+    simbolo: "w",
+    nombre: "Función de peso",
+    texto:
+      "Lo que hace «ponderado» a M: cada transición lleva un peso del semianillo tropical (ℕ ∪ {∞}, mín, +). Cumplir pesa 0, cada restricción incumplida suma 1 y un malformado o un límite vale ∞. El peso final es el número de violaciones.",
   },
 ];
 

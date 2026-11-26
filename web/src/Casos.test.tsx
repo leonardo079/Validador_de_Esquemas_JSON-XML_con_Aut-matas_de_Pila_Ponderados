@@ -57,6 +57,8 @@ describe("Tupla", () => {
     expect(screen.getByRole("tooltip").textContent).toContain("16 estados");
     fireEvent.click(screen.getByRole("button", { name: /^δ:/ }));
     expect(screen.getByRole("tooltip").textContent).toContain("60 transiciones");
+    fireEvent.click(screen.getByRole("button", { name: /^w: Función de peso/ }));
+    expect(screen.getByRole("tooltip").textContent).toContain("semianillo tropical");
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
