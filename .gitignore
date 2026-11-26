@@ -121,13 +121,3 @@ desktop.ini
 
 # ===== Cobertura =====
 lcov.info
-
-# ===== Claude Code =====
-# Se versionan los agentes, los comandos y settings.json (D42); lo local, no.
-.claude/*
-!.claude/agents/
-!.claude/commands/
-!.claude/settings.json
-
-# ===== Contexto por tarea que arma /autodev (local) =====
-tasks/contexto/
